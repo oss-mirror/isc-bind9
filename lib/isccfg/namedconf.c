@@ -2015,6 +2015,7 @@ static cfg_clausedef_t view_clauses[] = {
 	{ "nxdomain-redirect", &cfg_type_astring, 0 },
 	{ "preferred-glue", &cfg_type_astring, 0 },
 	{ "prefetch", &cfg_type_prefetch, 0 },
+	{ "prefetch-additional", &cfg_type_boolean, 0 },
 	{ "provide-ixfr", &cfg_type_boolean, 0 },
 	{ "qname-minimization", &cfg_type_qminmethod, 0 },
 	/*
@@ -2043,6 +2044,8 @@ static cfg_clausedef_t view_clauses[] = {
 	{ "send-cookie", &cfg_type_boolean, 0 },
 	{ "servfail-ttl", &cfg_type_duration, 0 },
 	{ "sortlist", &cfg_type_bracketed_aml, 0 },
+	{ "srv-full-additional", &cfg_type_boolean,
+	  CFG_CLAUSEFLAG_EXPERIMENTAL },
 	{ "stale-answer-enable", &cfg_type_boolean, 0 },
 	{ "stale-answer-ttl", &cfg_type_duration, 0 },
 	{ "suppress-initial-notify", &cfg_type_boolean, CFG_CLAUSEFLAG_NYI },

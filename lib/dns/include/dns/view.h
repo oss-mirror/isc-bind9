@@ -129,6 +129,7 @@ struct dns_view {
 	bool		      synthfromdnssec;
 	bool		      trust_anchor_telemetry;
 	bool		      root_key_sentinel;
+	bool		      srv_full_additional;
 	dns_transfer_format_t transfer_format;
 	dns_acl_t *	      cacheacl;
 	dns_acl_t *	      cacheonacl;
@@ -160,6 +161,7 @@ struct dns_view {
 	char *		      nta_file;
 	dns_ttl_t	      prefetch_trigger;
 	dns_ttl_t	      prefetch_eligible;
+	bool		      prefetch_additional;
 	in_port_t	      dstport;
 	dns_aclenv_t	      aclenv;
 	dns_rdatatype_t	      preferred_glue;

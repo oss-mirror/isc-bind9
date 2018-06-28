@@ -180,6 +180,7 @@ options {\n\
 	notify-source *;\n\
 	notify-source-v6 *;\n\
 	nsec3-test-zone no;\n\
+	prefetch-additional yes;\n\
 	provide-ixfr true;\n\
 	qname-minimization relaxed;\n\
 	query-source address *;\n\
@@ -193,6 +194,7 @@ options {\n\
 #	rfc2308-type1 <obsolete>;\n\
 	root-key-sentinel yes;\n\
 	servfail-ttl 1;\n\
+	srv-full-additional yes;\n\
 #	sortlist <none>\n\
 	stale-answer-enable false;\n\
 	stale-answer-ttl 1; /* 1 second */\n\

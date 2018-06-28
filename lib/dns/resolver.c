@@ -6920,13 +6920,20 @@ check_section(void *arg, const dns_name_t *addname, dns_rdatatype_t type,
 					rtype = rdataset->type;
 				}
 				if (rtype == dns_rdatatype_a ||
-				    rtype == dns_rdatatype_aaaa) {
+				    rtype == dns_rdatatype_aaaa ||
+				    rtype == dns_rdatatype_cname)
+				{
 					mark_related(name, rdataset, external,
 						     gluing);
 				}
 			}
 		} else {
 			result = dns_message_findtype(name, type, 0, &rdataset);
+			if (result == ISC_R_NOTFOUND) {
+				type = dns_rdatatype_cname;
+				result = dns_message_findtype(name, type, 0,
+							      &rdataset);
+			}
 			if (result == ISC_R_SUCCESS) {
 				mark_related(name, rdataset, external, gluing);
 				/*

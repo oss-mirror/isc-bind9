@@ -5343,6 +5343,16 @@ configure_view(dns_view_t *view, dns_viewlist_t *viewlist, cfg_obj_t *config,
 		}
 	}
 
+	obj = NULL;
+	result = named_config_get(maps, "prefetch-additional", &obj);
+	INSIST(result == ISC_R_SUCCESS);
+	view->prefetch_additional = cfg_obj_asboolean(obj);
+
+	obj = NULL;
+	result = named_config_get(maps, "srv-full-additional", &obj);
+	INSIST(result == ISC_R_SUCCESS);
+	view->srv_full_additional = cfg_obj_asboolean(obj);
+
 	/*
 	 * For now, there is only one kind of trusted keys, the
 	 * "security roots".

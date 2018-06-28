@@ -132,11 +132,16 @@
 
 #define REDIRECT(c) (((c)->query.attributes & NS_QUERYATTR_REDIRECT) != 0)
 
+#define FULLADDITIONAL(c) \
+	(((c)->query.attributes & NS_QUERYATTR_FULLADDITIONAL) != 0)
+
 /*% Does the rdataset 'r' have an attached 'No QNAME Proof'? */
 #define NOQNAME(r) (((r)->attributes & DNS_RDATASETATTR_NOQNAME) != 0)
 
 /*% Does the rdataset 'r' contain a stale answer? */
 #define STALE(r) (((r)->attributes & DNS_RDATASETATTR_STALE) != 0)
+
+#define ARRAYSIZE(x) (sizeof(x) / sizeof((x)[0]))
 
 #ifdef WANT_QUERYTRACE
 static inline void
@@ -478,7 +483,17 @@ query_addwildcardproof(query_ctx_t *qctx, bool ispositive, bool nodata);
 static void
 query_addauth(query_ctx_t *qctx);
 
-/*
+static void
+prefetch_done(isc_task_t *task, isc_event_t *event);
+
+static void
+free_devent(ns_client_t *client, isc_event_t **eventp,
+	    dns_fetchevent_t **deventp);
+
+static isc_result_t
+query_additional_cb(void *arg, const dns_name_t *name, dns_rdatatype_t qtype);
+
+/*%
  * Increment query statistics counters.
  */
 static inline void
@@ -522,6 +537,15 @@ inc_stats(ns_client_t *client, isc_statscounter_t counter) {
 static void
 query_send(ns_client_t *client) {
 	isc_statscounter_t counter;
+
+	/*
+	 * If we have a outstanding additional data fetch just return.
+	 */
+	for (size_t i = 0; i < ARRAYSIZE(client->query.addfetchs); i++) {
+		if (client->query.addfetchs[i]) {
+			return;
+		}
+	}
 
 	if ((client->message->flags & DNS_MESSAGEFLAG_AA) == 0) {
 		inc_stats(client, ns_statscounter_nonauthans);
@@ -624,6 +648,12 @@ ns_query_cancel(ns_client_t *client) {
 		dns_resolver_cancelfetch(client->query.fetch);
 
 		client->query.fetch = NULL;
+	}
+	for (size_t i = 0; i < ARRAYSIZE(client->query.addfetchs); i++) {
+		if (client->query.addfetchs[i] != NULL) {
+			dns_resolver_cancelfetch(client->query.addfetchs[i]);
+			client->query.addfetchs[i] = NULL;
+		}
 	}
 	UNLOCK(&client->query.fetchlock);
 }
@@ -770,6 +800,9 @@ ns_query_init(ns_client_t *client) {
 
 	client->query.fetch = NULL;
 	client->query.prefetch = NULL;
+	for (size_t i = 0; i < ARRAYSIZE(client->query.addfetchs); i++) {
+		client->query.addfetchs[i] = NULL;
+	}
 	client->query.authdb = NULL;
 	client->query.authzone = NULL;
 	client->query.authdbset = false;
@@ -1494,7 +1527,7 @@ query_additionalauthfind(dns_db_t *db, dns_dbversion_t *version,
 	result = dns_db_findext(db, name, version, type,
 				client->query.dboptions, client->now, &node,
 				fname, &cm, &ci, rdataset, sigrdataset);
-	if (result != ISC_R_SUCCESS) {
+	if (result != ISC_R_SUCCESS && result != DNS_R_CNAME) {
 		if (dns_rdataset_isassociated(rdataset)) {
 			dns_rdataset_disassociate(rdataset);
 		}
@@ -1546,11 +1579,10 @@ query_additionalauthfind(dns_db_t *db, dns_dbversion_t *version,
  *   - 'rdataset' and 'sigrdataset' will remain disassociated.
  */
 static isc_result_t
-query_additionalauth(query_ctx_t *qctx, const dns_name_t *name,
+query_additionalauth(ns_client_t *client, const dns_name_t *name,
 		     dns_rdatatype_t type, dns_db_t **dbp, dns_dbnode_t **nodep,
 		     dns_name_t *fname, dns_rdataset_t *rdataset,
 		     dns_rdataset_t *sigrdataset) {
-	ns_client_t *client = qctx->client;
 	ns_dbversion_t *dbversion = NULL;
 	dns_dbversion_t *version = NULL;
 	dns_dbnode_t *node = NULL;
@@ -1579,7 +1611,7 @@ query_additionalauth(query_ctx_t *qctx, const dns_name_t *name,
 	result = query_additionalauthfind(db, version, name, type, client,
 					  &node, fname, rdataset, sigrdataset);
 	if (result != ISC_R_SUCCESS &&
-	    qctx->view->minimalresponses == dns_minimal_no &&
+	    client->view->minimalresponses == dns_minimal_no &&
 	    RECURSIONOK(client))
 	{
 		/*
@@ -1615,10 +1647,137 @@ query_additionalauth(query_ctx_t *qctx, const dns_name_t *name,
 	return (result);
 }
 
+static void
+additional_done(isc_task_t *task, isc_event_t *event) {
+	dns_fetchevent_t *devent = (dns_fetchevent_t *)event;
+	ns_client_t *client;
+	bool match = false, done = true;
+
+	UNUSED(task);
+
+	REQUIRE(event->ev_type == DNS_EVENT_FETCHDONE);
+	client = devent->ev_arg;
+	REQUIRE(NS_CLIENT_VALID(client));
+	REQUIRE(task == client->task);
+
+	/*
+	 * Add new fetches before remove this fetch.
+	 */
+	if (devent->result == ISC_R_SUCCESS || devent->result == DNS_R_CNAME) {
+		query_additional_cb(client,
+				    dns_fixedname_name(&devent->foundname),
+				    devent->qtype);
+	}
+
+	LOCK(&client->query.fetchlock);
+	for (size_t i = 0; i < ARRAYSIZE(client->query.addfetchs); i++) {
+		if (devent->fetch == client->query.addfetchs[i]) {
+			client->query.addfetchs[i] = NULL;
+			match = true;
+		} else if (client->query.addfetchs[i] != NULL) {
+			done = false;
+		}
+	}
+	UNLOCK(&client->query.fetchlock);
+
+	if (match && done) {
+		query_send(client);
+	}
+
+	free_devent(client, &event, &devent);
+	isc_nmhandle_unref(client->handle);
+}
+
+/*
+ * Fetch missing additional RRsets.
+ */
+static void
+query_fetch_additional(ns_client_t *client, const dns_name_t *name,
+		       dns_rdatatype_t qtype) {
+	dns_rdataset_t *rdataset = NULL;
+	dns_rdataset_t *sigrdataset = NULL;
+	isc_sockaddr_t *peeraddr;
+	isc_result_t result;
+	dns_fetch_t **fetchp = NULL;
+	isc_taskaction_t action = NULL;
+	size_t i;
+
+	if (!RECURSIONOK(client)) {
+		return;
+	}
+
+	/*
+	 * If we are not doing full additional the prefetch one of
+	 * the missing additional records.
+	 */
+	if (FULLADDITIONAL(client)) {
+		for (i = 0; i < ARRAYSIZE(client->query.addfetchs); i++) {
+			if (client->query.addfetchs[i] == NULL) {
+				fetchp = &client->query.addfetchs[i];
+				break;
+			}
+		}
+		if (fetchp == NULL) {
+			return;
+		}
+		action = additional_done;
+	} else if (client->view->prefetch_additional) {
+		if (client->query.prefetch != NULL) {
+			return;
+		}
+		fetchp = &client->query.prefetch;
+		action = prefetch_done;
+	} else {
+		return;
+	}
+
+	if (client->recursionquota == NULL) {
+		result = isc_quota_attach(&client->sctx->recursionquota,
+					  &client->recursionquota);
+		if (result == ISC_R_SUCCESS && !client->mortal && !TCP(client))
+		{
+			result = ns_client_replace(client);
+		}
+		if (result == ISC_R_SUCCESS) {
+			ns_stats_increment(client->sctx->nsstats,
+					   ns_statscounter_recursclients);
+		}
+	}
+
+	if (client->recursionquota != NULL) {
+		rdataset = ns_client_newrdataset(client);
+		sigrdataset = ns_client_newrdataset(client);
+	}
+	if (rdataset != NULL && sigrdataset != NULL) {
+		if (!TCP(client)) {
+			peeraddr = &client->peeraddr;
+		} else {
+			peeraddr = NULL;
+		}
+		isc_nmhandle_ref(client->handle);
+		result = dns_resolver_createfetch(
+			client->view->resolver, name, qtype, NULL, NULL, NULL,
+			peeraddr, client->message->id,
+			client->query.fetchoptions, 0, NULL, client->task,
+			action, client, rdataset, sigrdataset, fetchp);
+		if (result != ISC_R_SUCCESS) {
+			ns_client_putrdataset(client, &rdataset);
+			ns_client_putrdataset(client, &sigrdataset);
+			isc_nmhandle_unref(client->handle);
+		}
+	} else {
+		if (rdataset != NULL) {
+			ns_client_putrdataset(client, &rdataset);
+		}
+		if (sigrdataset != NULL) {
+			ns_client_putrdataset(client, &sigrdataset);
+		}
+	}
+}
+
 static isc_result_t
 query_additional_cb(void *arg, const dns_name_t *name, dns_rdatatype_t qtype) {
-	query_ctx_t *qctx = arg;
-	ns_client_t *client = qctx->client;
+	ns_client_t *client = arg;
 	isc_result_t result, eresult = ISC_R_SUCCESS;
 	dns_dbnode_t *node = NULL;
 	dns_db_t *db = NULL;
@@ -1683,14 +1842,14 @@ query_additional_cb(void *arg, const dns_name_t *name, dns_rdatatype_t qtype) {
 	 * If we want only minimal responses and are here, then it must
 	 * be for glue.
 	 */
-	if (qctx->view->minimalresponses == dns_minimal_yes) {
+	if (client->view->minimalresponses == dns_minimal_yes) {
 		goto try_glue;
 	}
 
 	/*
 	 * First, look for authoritative additional data.
 	 */
-	result = query_additionalauth(qctx, name, type, &db, &node, fname,
+	result = query_additionalauth(client, name, type, &db, &node, fname,
 				      rdataset, sigrdataset);
 	if (result == ISC_R_SUCCESS) {
 		goto found;
@@ -1699,7 +1858,7 @@ query_additional_cb(void *arg, const dns_name_t *name, dns_rdatatype_t qtype) {
 	/*
 	 * No authoritative data was found.  The cache is our next best bet.
 	 */
-	if (!qctx->view->recursion) {
+	if (!client->view->recursion) {
 		goto try_glue;
 	}
 
@@ -1728,11 +1887,11 @@ query_additional_cb(void *arg, const dns_name_t *name, dns_rdatatype_t qtype) {
 				client->now, &node, fname, &cm, &ci, rdataset,
 				sigrdataset);
 
-	dns_cache_updatestats(qctx->view->cache, result);
+	dns_cache_updatestats(client->view->cache, result);
 	if (!WANTDNSSEC(client)) {
 		ns_client_putrdataset(client, &sigrdataset);
 	}
-	if (result == ISC_R_SUCCESS) {
+	if (result == ISC_R_SUCCESS || result == DNS_R_CNAME) {
 		goto found;
 	}
 
@@ -1746,6 +1905,14 @@ query_additional_cb(void *arg, const dns_name_t *name, dns_rdatatype_t qtype) {
 		dns_db_detachnode(db, &node);
 	}
 	dns_db_detach(&db);
+
+	if (result == DNS_R_DELEGATION || result == ISC_R_NOTFOUND) {
+		query_fetch_additional(client, name, qtype);
+		if (qtype == dns_rdatatype_a) {
+			query_fetch_additional(client, name,
+					       dns_rdatatype_aaaa);
+		}
+	}
 
 try_glue:
 	/*
@@ -1786,8 +1953,9 @@ try_glue:
 				client->query.dboptions | DNS_DBFIND_GLUEOK,
 				client->now, &node, fname, &cm, &ci, rdataset,
 				sigrdataset);
-	if (result != ISC_R_SUCCESS && result != DNS_R_ZONECUT &&
-	    result != DNS_R_GLUE) {
+	if (!(result == ISC_R_SUCCESS || result == DNS_R_ZONECUT ||
+	      result == DNS_R_GLUE))
+	{
 		goto cleanup;
 	}
 
@@ -1804,7 +1972,7 @@ found:
 	 */
 	mname = NULL;
 	if (dns_rdataset_isassociated(rdataset) &&
-	    !query_isduplicate(client, fname, type, &mname))
+	    !query_isduplicate(client, fname, rdataset->type, &mname))
 	{
 		if (mname != NULL) {
 			INSIST(mname != fname);
@@ -1830,6 +1998,11 @@ found:
 	}
 
 	if (qtype == dns_rdatatype_a) {
+		bool have_a = false;
+		bool have_aaaa = false;
+		bool not_a = false;
+		bool not_aaaa = false;
+
 		/*
 		 * We now go looking for A and AAAA records, along with
 		 * their signatures.
@@ -1870,6 +2043,7 @@ found:
 			    dns_rdataset_isassociated(sigrdataset)) {
 				dns_rdataset_disassociate(sigrdataset);
 			}
+			not_a = true;
 		} else if (result == ISC_R_SUCCESS) {
 			bool invalid = false;
 			mname = NULL;
@@ -1940,6 +2114,7 @@ found:
 			    dns_rdataset_isassociated(sigrdataset)) {
 				dns_rdataset_disassociate(sigrdataset);
 			}
+			not_aaaa = true;
 		} else if (result == ISC_R_SUCCESS) {
 			bool invalid = false;
 			mname = NULL;
@@ -1982,6 +2157,80 @@ found:
 				}
 				rdataset = NULL;
 			}
+			goto addname;
+		}
+
+		/*
+		 * If we have a A then there is no point in looking for a
+		 * CNAME.
+		 */
+		if (have_a ||
+		    query_isduplicate(client, fname, dns_rdatatype_cname, NULL))
+		{
+			goto addname;
+		}
+		result = dns_db_findrdataset(
+			db, node, version, dns_rdatatype_cname, 0, client->now,
+			rdataset, sigrdataset);
+		if (result == DNS_R_NCACHENXDOMAIN) {
+			goto addname;
+		} else if (result == DNS_R_NCACHENXRRSET) {
+			dns_rdataset_disassociate(rdataset);
+			if (sigrdataset != NULL &&
+			    dns_rdataset_isassociated(sigrdataset)) {
+				dns_rdataset_disassociate(sigrdataset);
+			}
+		} else if (result == ISC_R_SUCCESS) {
+			bool invalid = false;
+			mname = NULL;
+			if (additionaltype ==
+				    dns_rdatasetadditional_fromcache &&
+			    (DNS_TRUST_PENDING(rdataset->trust) ||
+			     DNS_TRUST_GLUE(rdataset->trust)))
+			{
+				/* validate() may change rdataset->trust */
+				invalid = !validate(client, db, fname, rdataset,
+						    sigrdataset);
+			}
+
+			if (invalid && DNS_TRUST_PENDING(rdataset->trust)) {
+				dns_rdataset_disassociate(rdataset);
+				if (sigrdataset != NULL &&
+				    dns_rdataset_isassociated(sigrdataset)) {
+					dns_rdataset_disassociate(sigrdataset);
+				}
+			} else if (!query_isduplicate(client, fname,
+						      dns_rdatatype_cname,
+						      &mname)) {
+				if (mname != fname) {
+					if (mname != NULL) {
+						ns_client_releasename(client,
+								      &fname);
+						fname = mname;
+					} else {
+						need_addname = true;
+					}
+				}
+				ISC_LIST_APPEND(fname->list, rdataset, link);
+				added_something = true;
+				if (sigrdataset != NULL &&
+				    dns_rdataset_isassociated(sigrdataset)) {
+					ISC_LIST_APPEND(fname->list,
+							sigrdataset, link);
+					sigrdataset = NULL;
+				}
+				trdataset = rdataset;
+				rdataset = NULL;
+			}
+		} else if (result == ISC_R_NOTFOUND) {
+			if (!have_a && !not_a) {
+				query_fetch_additional(client, name,
+						       dns_rdatatype_a);
+			}
+			if (!have_aaaa && !not_aaaa) {
+				query_fetch_additional(client, name,
+						       dns_rdatatype_aaaa);
+			}
 		}
 	}
 
@@ -2023,8 +2272,36 @@ addname:
 		 * as well.
 		 */
 		eresult = dns_rdataset_additionaldata(
-			trdataset, query_additional_cb, qctx);
+			trdataset, query_additional_cb, client);
 	}
+
+	if (trdataset != NULL && trdataset->type == dns_rdatatype_cname) {
+		dns_rdata_t rdata = DNS_RDATA_INIT;
+		dns_rdata_cname_t cname;
+
+		result = dns_rdataset_first(trdataset);
+		if (result == ISC_R_SUCCESS) {
+			dns_rdataset_current(trdataset, &rdata);
+			result = dns_rdata_tostruct(&rdata, &cname, NULL);
+			RUNTIME_CHECK(result == ISC_R_SUCCESS);
+			/* call query_additional_cb with the CNAME target */
+			eresult = query_additional_cb(arg, &cname.cname, qtype);
+		}
+	}
+#if 0
+	if (trdataset != NULL && trdataset->type == dns_rdatatype_dname) {
+		dns_rdata_t rdata = DNS_RDATA_INIT;
+		dns_rdata_dname_t dname;
+
+		result = dns_rdataset_first(trdataset);
+		if (result == ISC_R_SUCCESS) {
+			dns_rdataset_current(trdataset, &rdata);
+			dns_rdata_tostruct(&rdata, &cname);
+			euresult = query_additional_cb(argc, &dname.dname,
+						       qtype);
+		}
+	}
+#endif
 
 cleanup:
 	CTRACE(ISC_LOG_DEBUG(3), "query_additional_cb: cleanup");
@@ -2077,8 +2354,7 @@ query_setorder(query_ctx_t *qctx, dns_name_t *name, dns_rdataset_t *rdataset) {
  * Handle glue and fetch any other needed additional data for 'rdataset'.
  */
 static void
-query_additional(query_ctx_t *qctx, dns_rdataset_t *rdataset) {
-	ns_client_t *client = qctx->client;
+query_additional(ns_client_t *client, dns_rdataset_t *rdataset) {
 	isc_result_t result;
 
 	CTRACE(ISC_LOG_DEBUG(3), "query_additional");
@@ -2090,7 +2366,7 @@ query_additional(query_ctx_t *qctx, dns_rdataset_t *rdataset) {
 	/*
 	 * Try to process glue directly.
 	 */
-	if (qctx->view->use_glue_cache &&
+	if (client->view->use_glue_cache &&
 	    (rdataset->type == dns_rdatatype_ns) &&
 	    (client->query.gluedb != NULL) &&
 	    dns_db_iszone(client->query.gluedb))
@@ -2114,7 +2390,8 @@ regular:
 	 * Add other additional data if needed.
 	 * We don't care if dns_rdataset_additionaldata() fails.
 	 */
-	(void)dns_rdataset_additionaldata(rdataset, query_additional_cb, qctx);
+	(void)dns_rdataset_additionaldata(rdataset, query_additional_cb,
+					  client);
 	CTRACE(ISC_LOG_DEBUG(3), "query_additional: done");
 }
 
@@ -2191,7 +2468,7 @@ query_addrrset(query_ctx_t *qctx, dns_name_t **namep,
 	 */
 	query_addtoname(mname, rdataset);
 	query_setorder(qctx, mname, rdataset);
-	query_additional(qctx, rdataset);
+	query_additional(client, rdataset);
 
 	/*
 	 * Note: we only add SIGs if we've added the type they cover, so
@@ -11276,6 +11553,10 @@ ns_query_start(ns_client_t *client) {
 	{
 		client->query.attributes |= (NS_QUERYATTR_NOAUTHORITY |
 					     NS_QUERYATTR_NOADDITIONAL);
+	}
+
+	if (qtype == dns_rdatatype_srv && client->view->srv_full_additional) {
+		client->query.attributes |= NS_QUERYATTR_FULLADDITIONAL;
 	}
 
 	/*

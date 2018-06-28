@@ -66,6 +66,7 @@ struct ns_query {
 	isc_mutex_t	 fetchlock;
 	dns_fetch_t *	 fetch;
 	dns_fetch_t *	 prefetch;
+	dns_fetch_t *	 addfetchs[16];
 	dns_rpz_st_t *	 rpz_st;
 	isc_bufferlist_t namebufs;
 	ISC_LIST(ns_dbversion_t) activeversions;
@@ -115,6 +116,7 @@ struct ns_query {
 #define NS_QUERYATTR_DNS64EXCLUDE    0x08000
 #define NS_QUERYATTR_RRL_CHECKED     0x10000
 #define NS_QUERYATTR_REDIRECT	     0x20000
+#define NS_QUERYATTR_FULLADDITIONAL  0x40000
 
 typedef struct query_ctx query_ctx_t;
 
