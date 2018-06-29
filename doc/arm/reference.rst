@@ -1750,6 +1750,15 @@ Boolean Options
    ultimate primary should be set to still send NOTIFY messages to all the name servers
    listed in the NS RRset.
 
+``prefetch-additional``
+  When answering a query for which there might have been additional
+  section data (for example, address records associated with MX or
+  SRV responses), but such data was not found in the cache, send a
+  query for the data so it will be available in the cache the next
+  time it is needed.
+
+  The default is ``yes``.
+
 ``recursion``
    If ``yes``, and a DNS query requests recursion, then the server
    attempts to do all the work required to answer the query. If recursion
@@ -1813,6 +1822,14 @@ Boolean Options
    ``nocookie-udp-size`` option.
 
    The default is ``yes``.
+
+``srv-full-additional``
+  If ``yes``, then when answering recursive queries for type SRV,
+  the additional section will be fully populated before a response
+  is returned.  If ``no``, then the additional section is only
+  populated by data already present in the cache.
+
+  The default is ``yes``.
 
 ``stale-answer-enable``
    If ``yes``, enable the returning of "stale" cached answers when the name servers
