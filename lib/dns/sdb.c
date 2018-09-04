@@ -1312,7 +1312,9 @@ static dns_dbmethods_t sdb_methods = {
 	NULL, /* setservestalerefresh */
 	NULL, /* getservestalerefresh */
 	NULL, /* setgluecachestats */
-	NULL  /* adjusthashsize */
+	NULL, /* adjusthashsize */
+	NULL, /* settimeouttime */
+	NULL  /* gettimeouttime */
 };
 
 static isc_result_t

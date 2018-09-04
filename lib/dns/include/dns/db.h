@@ -182,6 +182,10 @@ typedef struct dns_dbmethods {
 	isc_result_t (*getservestalerefresh)(dns_db_t *db, uint32_t *interval);
 	isc_result_t (*setgluecachestats)(dns_db_t *db, isc_stats_t *stats);
 	isc_result_t (*adjusthashsize)(dns_db_t *db, size_t size);
+	isc_result_t (*settimeouttime)(dns_db_t *db, dns_rdataset_t *rdataset,
+				       isc_stdtime_t resign);
+	isc_result_t (*gettimeouttime)(dns_db_t *db, dns_rdataset_t *rdataset,
+				       dns_name_t *name);
 } dns_dbmethods_t;
 
 typedef isc_result_t (*dns_dbcreatefunc_t)(isc_mem_t *	     mctx,
@@ -1781,6 +1785,40 @@ dns_db_setgluecachestats(dns_db_t *db, isc_stats_t *stats);
  * Returns:
  * \li	when available, a pointer to a statistics object created by
  *	dns_rdatasetstats_create(); otherwise NULL.
+ */
+
+isc_result_t
+dns_db_settimeouttime(dns_db_t *db, dns_rdataset_t *rdataset,
+		      isc_stdtime_t timeout);
+/*%<
+ * Sets the timeout time associated with 'rdataset' to 'timeout'.
+ *
+ * Requires:
+ * \li	'db' is a valid zone database.
+ * \li	'rdataset' is or is to be associated with 'db'.
+ * \li  'rdataset' is not pending removed from the heap via an
+ *       uncommitted call to dns_db_timedout().
+ *
+ * Returns:
+ * \li	#ISC_R_SUCCESS
+ * \li	#ISC_R_NOMEMORY
+ * \li	#ISC_R_NOTIMPLEMENTED - Not supported by this DB implementation.
+ */
+
+isc_result_t
+dns_db_gettimeouttime(dns_db_t *db, dns_rdataset_t *rdataset, dns_name_t *name);
+/*%<
+ * Return the rdataset with the earliest timeout time in the zone.
+ * Note: the rdataset is version agnostic.
+ *
+ * Requires:
+ * \li	'db' is a valid zone database.
+ * \li	'rdataset' to be initialized but not associated.
+ * \li	'name' to be NULL or have a buffer associated with it.
+ *
+ * Returns:
+ * \li	#ISC_R_SUCCESS
+ * \li	#ISC_R_NOTFOUND - No dataset exists.
  */
 
 ISC_LANG_ENDDECLS
