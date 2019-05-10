@@ -1601,7 +1601,7 @@ AS_CASE([$with_allocator],
 				       [AC_DEFINE([USE_ALLOCATOR_JEMALLOC], [1], [Define if you want to use jemalloc allocator])])],
 	[tcmalloc*], [PKG_CHECK_MODULES([ALLOCATOR], [lib$with_allocator],
 					[AC_DEFINE([USE_ALLOCATOR_TCMALLOC], [1], [Define if you want to use tcmalloc allocator])])]
-	[:])
+	[AC_DEFINE([USE_ALLOCATOR_CUSTOM], [1], [Define if you want to use custom BIND 9 allocator])])
 
 AC_MSG_NOTICE([Using $with_allocator memory allocator])
 

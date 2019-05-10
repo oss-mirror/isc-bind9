@@ -175,26 +175,13 @@ LIBISC_EXTERNAL_DATA extern unsigned int isc_mem_defaultflags;
  * isc_mem_ routines to work.  mctx implementations must maintain all mctx
  * invariants.
  */
-struct isc_mem {
-	unsigned int impmagic;
-	unsigned int magic;
-};
-
-#define ISCAPI_MCTX_MAGIC    ISC_MAGIC('A', 'm', 'c', 'x')
-#define ISCAPI_MCTX_VALID(m) ((m) != NULL && (m)->magic == ISCAPI_MCTX_MAGIC)
+struct isc_mem;
 
 /*%
  * This is the common prefix of a memory pool context.  The same note as
  * that for the mem structure applies.
  */
-struct isc_mempool {
-	unsigned int impmagic;
-	unsigned int magic;
-};
-
-#define ISCAPI_MPOOL_MAGIC ISC_MAGIC('A', 'm', 'p', 'l')
-#define ISCAPI_MPOOL_VALID(mp) \
-	((mp) != NULL && (mp)->magic == ISCAPI_MPOOL_MAGIC)
+struct isc_mempool;
 
 /*%
  * These functions are actually implemented in isc__mem_<function>
