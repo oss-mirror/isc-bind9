@@ -23,6 +23,7 @@ options {
 	dnssec-validation no;
 	querylog yes;
 	statistics-file "named.stats";
+	responselog no;
 	/*
 	 * test that named loads with root-delegation-only that
 	 * has a exclude list.

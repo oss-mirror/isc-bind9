@@ -23,6 +23,7 @@ options {
 	dnssec-validation yes;
 	querylog yes;
 	prefetch 4 10;
+	responselog yes;
 };
 
 server 10.53.0.7 {
@@ -47,6 +48,8 @@ zone "child.server" {
 zone "delegation-only" {
        type delegation-only;
 };
+
+include "trusted.conf";
 
 key rndc_key {
         secret "1234abcd8765";
