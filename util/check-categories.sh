@@ -33,7 +33,7 @@ do
 	done
 	if test $ok = no
 	then
-		echo "$i missing from documentation."
+		echo "$i missing from doc/arm/logging-categories.rst."
 		status=1
 	fi
 done
@@ -49,7 +49,7 @@ do
 	done
 	if test $ok = no
 	then
-		echo "$i not in code."
+		echo "documented logging category '$i' not in code."
 		status=1
 	fi
 done

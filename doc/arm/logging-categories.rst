@@ -82,6 +82,9 @@
 ``resolver``
     DNS resolution, such as the recursive lookups performed on behalf of clients by a caching name server.
 
+``responses``
+    Specify where responses should be logged to.
+
 ``rpz``
     Information about errors in response policy zone files, rewritten responses, and, at the highest ``debug`` levels, mere rewriting attempts.
 

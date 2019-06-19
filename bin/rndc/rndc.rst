@@ -385,6 +385,9 @@ Currently supported commands are:
 ``reload`` *zone* [*class* [*view*]]
    This command reloads the given zone.
 
+``responselog`` [on | off]
+   Enable or disable response logging.
+
 ``retransfer`` *zone* [*class* [*view*]]
    This command retransfers the given secondary zone from the primary server.
 
