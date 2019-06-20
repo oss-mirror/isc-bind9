@@ -312,23 +312,14 @@ doc_matchname(cfg_printer_t *pctx, const cfg_type_t *type) {
 	cfg_print_cstr(pctx, " ]");
 }
 
-static const char *matchtype_enums[] = { "6to4-self",
-					 "external",
-					 "krb5-self",
-					 "krb5-selfsub",
-					 "krb5-subdomain",
-					 "ms-self",
-					 "ms-selfsub",
-					 "ms-subdomain",
-					 "name",
-					 "self",
-					 "selfsub",
-					 "selfwild",
-					 "subdomain",
-					 "tcp-self",
-					 "wildcard",
-					 "zonesub",
-					 NULL };
+static const char *matchtype_enums[] = {
+	"6to4-self", "add-new",	     "external",
+	"krb5-self", "krb5-selfsub", "krb5-subdomain",
+	"ms-self",   "ms-selfsub",   "ms-subdomain",
+	"name",	     "self",	     "selfsub",
+	"selfwild",  "subdomain",    "tcp-self",
+	"wildcard",  "zonesub",	     NULL
+};
 
 static cfg_type_t cfg_type_matchtype = { "matchtype",	    parse_matchtype,
 					 cfg_print_ustring, cfg_doc_enum,

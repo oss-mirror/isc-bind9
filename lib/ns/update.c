@@ -200,6 +200,9 @@
 			goto failure;                                        \
 	} while (0)
 
+#define IS_ADD_NEW(rule) \
+	(rule != NULL && dns_ssurule_matchtype(rule) == dns_ssumatchtype_addnew)
+
 /*
  * Return TRUE if NS_CLIENTATTR_TCP is set in the attributes other FALSE.
  */
@@ -927,6 +930,9 @@ ssu_checkrule(void *data, dns_rdataset_t *rrset) {
 					  ssuinfo->name, ssuinfo->addr,
 					  ssuinfo->tcp, ssuinfo->aclenv,
 					  rrset->type, ssuinfo->key, &rule);
+	if (IS_ADD_NEW(rule)) {
+		return (ISC_R_FAILURE);
+	}
 	return (rule_ok ? ISC_R_SUCCESS : ISC_R_FAILURE);
 }
 
@@ -2856,6 +2862,12 @@ update_action(isc_task_t *task, isc_event_t *event) {
 					FAILC(DNS_R_REFUSED, "rejected by "
 							     "secure update");
 				}
+				/* add-new is addition only */
+				if (update_class == dns_rdataclass_none &&
+				    IS_ADD_NEW(rules[rule])) {
+					FAILC(DNS_R_REFUSED,
+					      "rejected by secure update");
+				}
 			} else {
 				if (!ssu_checkall(db, ver, name, ssutable,
 						  client->signer, &netaddr, env,
@@ -2896,6 +2908,24 @@ update_action(isc_task_t *task, isc_event_t *event) {
 
 		if (update_class == zoneclass) {
 			unsigned int max = 0;
+
+			/*
+			 * There must be no records at the name except the
+			 * the record to be added.
+			 */
+			if (IS_ADD_NEW(rules[rule])) {
+				result = foreach_rr(db, ver, name, rdata.type,
+						    covers, rrset_exists_action,
+						    NULL);
+				if (result == ISC_R_EXISTS)
+					continue;
+				CHECK(result);
+				CHECK(name_exists(db, ver, name, &flag));
+				if (flag) {
+					FAILC(DNS_R_REFUSED,
+					      "rejected by secure update");
+				}
+			}
 
 			/*
 			 * RFC1123 doesn't allow MF and MD in master zones.
