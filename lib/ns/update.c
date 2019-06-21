@@ -2913,7 +2913,7 @@ update_action(isc_task_t *task, isc_event_t *event) {
 			 * There must be no records at the name except the
 			 * the record to be added.
 			 */
-			if (IS_ADD_NEW(rules[rule])) {
+			if (ssutable != NULL && IS_ADD_NEW(rules[rule])) {
 				result = foreach_rr(db, ver, name, rdata.type,
 						    covers, rrset_exists_action,
 						    NULL);
