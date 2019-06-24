@@ -47,6 +47,7 @@ rm -f ns3/many.test.bk
 rm -f ns3/nsec3param.test.db
 rm -f ns3/too-big.test.db
 rm -f ns5/local.db
+rm -f ns6/add-new.example.db
 rm -f ns6/in-addr.db
 rm -f ns7/_default.tsigkeys
 rm -f ns7/example.com.db

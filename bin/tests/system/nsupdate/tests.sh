@@ -1458,6 +1458,11 @@ EOF
   grep "status: NXDOMAIN" dig.out.ns10.test$n > /dev/null || ret=1
   [ $ret = 0 ] || { echo_i "failed"; status=1; }
 
+  n=`expr $n + 1`
+  ret=0
+  echo_i "check add-new ($n)"
+
+
 fi
 
 echo_i "exit status: $status"
