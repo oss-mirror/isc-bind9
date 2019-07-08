@@ -38,7 +38,8 @@
 		abort();                                                   \
 	}
 
-#define FROMTEXTARGS  "rdclass, type, lexer, origin, options, target, callbacks"
+#define FROMTEXTARGS \
+	"rdclass, type, lexer, origin, options, mctx, target, callbacks"
 #define FROMTEXTCLASS "rdclass"
 #define FROMTEXTTYPE  "type"
 #define FROMTEXTDEF   "result = DNS_R_UNKNOWN"

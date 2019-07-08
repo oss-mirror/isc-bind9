@@ -20,6 +20,7 @@ fromtext_openpgpkey(ARGS_FROMTEXT) {
 
 	UNUSED(type);
 	UNUSED(rdclass);
+	UNUSED(mctx);
 	UNUSED(callbacks);
 	UNUSED(options);
 	UNUSED(origin);

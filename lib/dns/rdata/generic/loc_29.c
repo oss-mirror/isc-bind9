@@ -397,6 +397,7 @@ fromtext_loc(ARGS_FROMTEXT) {
 	UNUSED(rdclass);
 	UNUSED(origin);
 	UNUSED(options);
+	UNUSED(mctx);
 	UNUSED(callbacks);
 
 	RETERR(loc_getlatitude(lexer, &latitude));
