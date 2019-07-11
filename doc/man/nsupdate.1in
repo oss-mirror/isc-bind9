@@ -271,15 +271,20 @@ existing in the zone at the given \fBtype\fP, \fBclass\fP, and
 \fBdomain\-name\fP\&. The \fBdata\fP are written in the standard text
 representation of the resource record\(aqs RDATA.
 .TP
+.B \fBupdate add domain\-name ttl class type data\fP
+This command adds a new resource record with the specified \fBttl\fP, \fBclass\fP, and
+\fBdata\fP\&.
+.TP
 .B \fBupdate delete domain\-name ttl class type data\fP
 This command deletes any resource records named \fBdomain\-name\fP\&. If \fBtype\fP and
 \fBdata\fP are provided, only matching resource records are removed.
 The Internet class is assumed if \fBclass\fP is not supplied. The
 \fBttl\fP is ignored, and is only allowed for compatibility.
 .TP
-.B \fBupdate add domain\-name ttl class type data\fP
-This command adds a new resource record with the specified \fBttl\fP, \fBclass\fP, and
-\fBdata\fP\&.
+.B \fBupdate timeout domain\-name lifetime class type data\fP
+Adds a Type 1 TIMEOUT record with the expiry Expiry Time set
+to \fBlifetime\fP from now for the record matching \fBdomain\-name\fP,
+\fBtype\fP, \fBclass\fP, and \fBdata\fP\&.
 .TP
 .B \fBshow\fP
 This command displays the current message, containing all of the prerequisites and
@@ -317,16 +322,19 @@ server for \fBexample.com\fP\&.
 .ft C
 # nsupdate
 > update delete oldhost.example.com A
-> update add newhost.example.com 86400 A 172.16.1.1
+> update add newhost.example.com 3600 A 172.16.1.1
+> update timeout newhost.example.com 86400 A 172.16.1.1
 > send
 .ft P
 .fi
 .UNINDENT
 .UNINDENT
 .sp
-Any A records for \fBoldhost.example.com\fP are deleted, and an A record
-for \fBnewhost.example.com\fP with IP address 172.16.1.1 is added. The
-newly added record has a TTL of 1 day (86400 seconds).
+Any A records for \fBoldhost.example.com\fP are deleted, and an A
+record for \fBnewhost.example.com\fP with IP address 172.16.1.1 is
+added. The newly added A record has a TTL of 1 hour (3600 seconds)
+and a TIMEOUT record requesting that it be deleted in 1 day (86400
+second) will also be added.
 .INDENT 0.0
 .INDENT 3.5
 .sp

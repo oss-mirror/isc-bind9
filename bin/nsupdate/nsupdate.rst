@@ -271,15 +271,20 @@ The command formats and their meanings are as follows:
    ``domain-name``. The ``data`` are written in the standard text
    representation of the resource record's RDATA.
 
+``update add domain-name ttl class type data``
+   This command adds a new resource record with the specified ``ttl``, ``class``, and
+   ``data``.
+
 ``update delete domain-name ttl class type data``
    This command deletes any resource records named ``domain-name``. If ``type`` and
    ``data`` are provided, only matching resource records are removed.
    The Internet class is assumed if ``class`` is not supplied. The
    ``ttl`` is ignored, and is only allowed for compatibility.
 
-``update add domain-name ttl class type data``
-   This command adds a new resource record with the specified ``ttl``, ``class``, and
-   ``data``.
+``update timeout domain-name lifetime class type data``
+      Adds a Type 1 TIMEOUT record with the expiry Expiry Time set
+      to ``lifetime`` from now for the record matching ``domain-name``,
+      ``type``, ``class``, and ``data``.
 
 ``show``
    This command displays the current message, containing all of the prerequisites and
@@ -316,12 +321,15 @@ server for ``example.com``.
 
    # nsupdate
    > update delete oldhost.example.com A
-   > update add newhost.example.com 86400 A 172.16.1.1
+   > update add newhost.example.com 3600 A 172.16.1.1
+   > update timeout newhost.example.com 86400 A 172.16.1.1
    > send
 
-Any A records for ``oldhost.example.com`` are deleted, and an A record
-for ``newhost.example.com`` with IP address 172.16.1.1 is added. The
-newly added record has a TTL of 1 day (86400 seconds).
+Any A records for ``oldhost.example.com`` are deleted, and an A
+record for ``newhost.example.com`` with IP address 172.16.1.1 is
+added. The newly added A record has a TTL of 1 hour (3600 seconds)
+and a TIMEOUT record requesting that it be deleted in 1 day (86400
+second) will also be added.
 
 ::
 
