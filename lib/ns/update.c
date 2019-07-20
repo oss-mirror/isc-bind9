@@ -890,16 +890,19 @@ name_exists(dns_db_t *db, dns_dbversion_t *ver, dns_name_t *name,
  */
 typedef struct {
 	/* The ownername of the record to be updated. */
-	dns_name_t *name;
+	const dns_name_t *name;
 
 	/* The signature's name if the request was signed. */
-	dns_name_t *signer;
+	const dns_name_t *signer;
+
+	/* The zone's name. */
+	const dns_name_t *origin;
 
 	/* The address of the client. */
-	isc_netaddr_t *addr;
+	const isc_netaddr_t *addr;
 
 	/* The ACL environment */
-	dns_aclenv_t *aclenv;
+	const dns_aclenv_t *aclenv;
 
 	/* Whether the request was sent via TCP. */
 	bool tcp;
@@ -908,7 +911,7 @@ typedef struct {
 	dns_ssutable_t *table;
 
 	/* the key used for TKEY requests */
-	dst_key_t *key;
+	const dst_key_t *key;
 } ssu_check_t;
 
 static isc_result_t
@@ -925,11 +928,10 @@ ssu_checkrule(void *data, dns_rdataset_t *rrset) {
 	    rrset->type == dns_rdatatype_nsec) {
 		return (ISC_R_SUCCESS);
 	}
-
-	rule_ok = dns_ssutable_checkrules(ssuinfo->table, ssuinfo->signer,
-					  ssuinfo->name, ssuinfo->addr,
-					  ssuinfo->tcp, ssuinfo->aclenv,
-					  rrset->type, ssuinfo->key, &rule);
+	rule_ok = dns_ssutable_checkrules(
+		ssuinfo->table, ssuinfo->signer, ssuinfo->name, ssuinfo->origin,
+		ssuinfo->addr, ssuinfo->tcp, ssuinfo->aclenv, rrset->type,
+		ssuinfo->key, &rule);
 	if (IS_ADD_NEW(rule)) {
 		return (ISC_R_FAILURE);
 	}
@@ -938,14 +940,16 @@ ssu_checkrule(void *data, dns_rdataset_t *rrset) {
 
 static bool
 ssu_checkall(dns_db_t *db, dns_dbversion_t *ver, dns_name_t *name,
-	     dns_ssutable_t *ssutable, dns_name_t *signer, isc_netaddr_t *addr,
-	     dns_aclenv_t *aclenv, bool tcp, dst_key_t *key) {
+	     dns_ssutable_t *ssutable, dns_name_t *signer, dns_name_t *origin,
+	     isc_netaddr_t *addr, dns_aclenv_t *aclenv, bool tcp,
+	     dst_key_t *key) {
 	isc_result_t result;
 	ssu_check_t ssuinfo;
 
 	ssuinfo.name = name;
 	ssuinfo.table = ssutable;
 	ssuinfo.signer = signer;
+	ssuinfo.origin = origin;
 	ssuinfo.addr = addr;
 	ssuinfo.aclenv = aclenv;
 	ssuinfo.tcp = tcp;
@@ -2856,8 +2860,9 @@ update_action(isc_task_t *task, isc_event_t *event) {
 			if (rdata.type != dns_rdatatype_any) {
 				if (!dns_ssutable_checkrules(
 					    ssutable, client->signer, name,
-					    &netaddr, TCPCLIENT(client), env,
-					    rdata.type, tsigkey, &rules[rule]))
+					    zonename, &netaddr,
+					    TCPCLIENT(client), env, rdata.type,
+					    tsigkey, &rules[rule]))
 				{
 					FAILC(DNS_R_REFUSED, "rejected by "
 							     "secure update");
@@ -2870,7 +2875,8 @@ update_action(isc_task_t *task, isc_event_t *event) {
 				}
 			} else {
 				if (!ssu_checkall(db, ver, name, ssutable,
-						  client->signer, &netaddr, env,
+						  client->signer, zonename,
+						  &netaddr, env,
 						  TCPCLIENT(client), tsigkey))
 				{
 					FAILC(DNS_R_REFUSED, "rejected by "
@@ -2917,8 +2923,9 @@ update_action(isc_task_t *task, isc_event_t *event) {
 				result = foreach_rr(db, ver, name, rdata.type,
 						    covers, rrset_exists_action,
 						    NULL);
-				if (result == ISC_R_EXISTS)
+				if (result == ISC_R_EXISTS) {
 					continue;
+				}
 				CHECK(result);
 				CHECK(name_exists(db, ver, name, &flag));
 				if (flag) {
