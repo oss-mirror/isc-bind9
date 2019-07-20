@@ -69,3 +69,9 @@ zone "multisigner.test" {
 	dnssec-policy "default";
 	file "multisigner.test.db";
 };
+
+zone "timeout-signed.test" {
+	type master;
+	allow-update { any; };
+	file "timeout-signed.test.db.signed";
+};

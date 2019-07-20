@@ -1319,6 +1319,7 @@ grep "NSEC3PARAM has excessive iterations (> 150)" nsupdate.out-$n >/dev/null ||
 
 n=`expr $n + 1`
 ret=0
+
 echo_i "check nsupdate retries with another server on REFUSED response ($n)"
 # resolv.conf uses 10.53.0.1 followed by 10.53.0.3; example is only
 # served by 10.53.0.3, so we should fail over to the second server;
@@ -1334,7 +1335,7 @@ grep '10.53.0.1.*REFUSED' nsupdate.out-$n > /dev/null || ret=1
 grep 'Reply from SOA query' nsupdate.out-$n > /dev/null || ret=1
 [ $ret = 0 ] || { echo_i "failed"; status=1; }
 
-echo_i "check that TIMEOUT type 0 is processed ($n)"
+echo_i "check that TIMEOUT type 0 is processed unsigned ($n)"
 when=$(env TZ=UTC $PERL -e '@l=localtime(time()+5); printf("%04u%02u%02u%02u%02u%02u\n",$l[5]+1900,$l[4]+1,$l[3],$l[2],$l[1],$l[0]);')
 $NSUPDATE -d <<END > nsupdate.out-$n 2>&1 || ret=1
 server 10.53.0.1 ${PORT}
@@ -1359,7 +1360,7 @@ grep "ANSWER: 0," dig.out.timeout-after.ns1.test$n > /dev/null 2>&1 || ret=1
 
 n=`expr $n + 1`
 ret=0
-echo_i "check that TIMEOUT type 1 is processed ($n)"
+echo_i "check that TIMEOUT type 1 is processed unsigned ($n)"
 $NSUPDATE -d <<END > nsupdate.out-$n 2>&1 || ret=1
 server 10.53.0.1 ${PORT}
 update add to-be-deleted-by-timeout.update.nil 0 IN TXT here.
@@ -1378,6 +1379,55 @@ sleep 6
 $DIG $DIGOPTS +tcp @10.53.0.1 to-be-deleted-by-timeout.update.nil TXT > dig.out.txt-after.ns1.test$n
 grep "ANSWER: 1," dig.out.txt-after.ns1.test$n > /dev/null 2>&1 || ret=1
 $DIG $DIGOPTS +tcp @10.53.0.1 to-be-deleted-by-timeout.update.nil TIMEOUT > dig.out.timeout-after.ns1.test$n
+grep "ANSWER: 0," dig.out.timeout-after.ns1.test$n > /dev/null 2>&1 || ret=1
+[ $ret = 0 ] || { echo_i "failed"; status=1; }
+
+n=`expr $n + 1`
+ret=0
+echo_i "check that TIMEOUT type 0 is processed signed ($n)"
+when=$(env TZ=UTC $PERL -e '@l=localtime(time()+5); printf("%04u%02u%02u%02u%02u%02u\n",$l[5]+1900,$l[4]+1,$l[3],$l[2],$l[1],$l[0]);')
+$NSUPDATE -d <<END > nsupdate.out-$n 2>&1 || ret=1
+server 10.53.0.3 ${PORT}
+update add to-be-deleted-by-timeout.timeout-signed.test 0 IN TXT here.
+update add to-be-deleted-by-timeout.timeout-signed.test 0 IN TXT there.
+update add to-be-deleted-by-timeout.timeout-signed.test 0 IN TIMEOUT TXT 0 0 $when
+show
+send
+END
+grep "UPDATE, status: NOERROR" nsupdate.out-$n > /dev/null 2>&1 || ret=1
+$DIG $DIGOPTS +dnssec +tcp @10.53.0.3 to-be-deleted-by-timeout.timeout-signed.test TXT > dig.out.txt-before.ns1.test$n
+grep "ANSWER: 3," dig.out.txt-before.ns1.test$n > /dev/null 2>&1 || ret=1
+$DIG $DIGOPTS +dnssec +tcp @10.53.0.3 to-be-deleted-by-timeout.timeout-signed.test TIMEOUT > dig.out.timeout-before.ns1.test$n
+grep "ANSWER: 2," dig.out.timeout-before.ns1.test$n > /dev/null 2>&1 || ret=1
+sleep 6
+# the TXT record and the TIMEOUT record should now have deleted themselves.
+$DIG $DIGOPTS +dnssec +tcp @10.53.0.3 to-be-deleted-by-timeout.timeout-signed.test TXT > dig.out.txt-after.ns1.test$n
+grep "ANSWER: 0," dig.out.txt-after.ns1.test$n > /dev/null 2>&1 || ret=1
+$DIG $DIGOPTS +dnssec +tcp @10.53.0.3 to-be-deleted-by-timeout.timeout-signed.test TIMEOUT > dig.out.timeout-after.ns1.test$n
+grep "ANSWER: 0," dig.out.timeout-after.ns1.test$n > /dev/null 2>&1 || ret=1
+[ $ret = 0 ] || { echo_i "failed"; status=1; }
+
+n=`expr $n + 1`
+ret=0
+echo_i "check that TIMEOUT type 1 is processed signed ($n)"
+$NSUPDATE -d <<END > nsupdate.out-$n 2>&1 || ret=1
+server 10.53.0.3 ${PORT}
+update add to-be-deleted-by-timeout.timeout-signed.test 0 IN TXT here.
+update add to-be-deleted-by-timeout.timeout-signed.test 0 IN TXT there.
+update timeout to-be-deleted-by-timeout.timeout-signed.test 5 IN TXT here.
+show
+send
+END
+grep "UPDATE, status: NOERROR" nsupdate.out-$n > /dev/null 2>&1 || ret=1
+$DIG $DIGOPTS +dnssec +tcp @10.53.0.3 to-be-deleted-by-timeout.timeout-signed.test TXT > dig.out.txt-before.ns1.test$n
+grep "ANSWER: 3," dig.out.txt-before.ns1.test$n > /dev/null 2>&1 || ret=1
+$DIG $DIGOPTS +dnssec +tcp @10.53.0.3 to-be-deleted-by-timeout.timeout-signed.test TIMEOUT > dig.out.timeout-before.ns1.test$n
+grep "ANSWER: 2," dig.out.timeout-before.ns1.test$n > /dev/null 2>&1 || ret=1
+sleep 6
+# the TXT record and the TIMEOUT record should now have deleted themselves.
+$DIG $DIGOPTS +dnssec +tcp @10.53.0.3 to-be-deleted-by-timeout.timeout-signed.test TXT > dig.out.txt-after.ns1.test$n
+grep "ANSWER: 2," dig.out.txt-after.ns1.test$n > /dev/null 2>&1 || ret=1
+$DIG $DIGOPTS +dnssec +tcp @10.53.0.3 to-be-deleted-by-timeout.timeout-signed.test TIMEOUT > dig.out.timeout-after.ns1.test$n
 grep "ANSWER: 0," dig.out.timeout-after.ns1.test$n > /dev/null 2>&1 || ret=1
 [ $ret = 0 ] || { echo_i "failed"; status=1; }
 
