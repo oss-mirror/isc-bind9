@@ -67,6 +67,7 @@
 #include <dns/rdatatype.h>
 #include <dns/request.h>
 #include <dns/result.h>
+#include <dns/time.h>
 #include <dns/tkey.h>
 #include <dns/tsig.h>
 
@@ -1289,8 +1290,8 @@ parse_name(char **cmdlinep, dns_message_t *msg, dns_name_t **namep) {
 
 static uint16_t
 parse_rdata(char **cmdlinep, dns_rdataclass_t rdataclass,
-	    dns_rdatatype_t rdatatype, bool istimeout, uint32_t ttl,
-	    dns_message_t *msg, dns_rdata_t *rdata) {
+	    dns_rdatatype_t rdatatype, bool istimeout, bool isdate,
+	    uint64_t ttl, dns_message_t *msg, dns_rdata_t *rdata) {
 	char *cmdline = *cmdlinep;
 	isc_buffer_t source, *buf = NULL, *newbuf = NULL;
 	isc_region_t r;
@@ -1323,7 +1324,12 @@ parse_rdata(char **cmdlinep, dns_rdataclass_t rdataclass,
 			isc_buffer_putuint16(buf, rdatatype);
 			isc_buffer_putuint8(buf, 1);
 			isc_buffer_putuint8(buf, 1);
-			isc_buffer_putuint64(buf, (uint64_t)(now + ttl));
+			if (isdate) {
+				isc_buffer_putuint64(buf, ttl);
+			} else {
+				isc_buffer_putuint64(buf,
+						     (uint64_t)(ttl + now));
+			}
 			isc_buffer_add(buf, 2);
 		}
 		result = dns_rdata_fromtext(NULL, rdataclass, rdatatype, lex,
@@ -1429,8 +1435,8 @@ make_prereq(char *cmdline, bool ispositive, bool isrrset) {
 	dns_rdata_init(rdata);
 
 	if (isrrset && ispositive) {
-		retval = parse_rdata(&cmdline, rdataclass, rdatatype, false, 0,
-				     updatemsg, rdata);
+		retval = parse_rdata(&cmdline, rdataclass, rdatatype, false,
+				     false, 0, updatemsg, rdata);
 		if (retval != STATUS_MORE) {
 			goto failure;
 		}
@@ -1806,6 +1812,7 @@ update_addordelete(char *cmdline, bool isdelete, bool istimeout) {
 	isc_result_t result;
 	dns_name_t *name = NULL;
 	uint32_t ttl;
+	int64_t when;
 	char *word;
 	dns_rdataclass_t rdataclass;
 	dns_rdatatype_t rdatatype;
@@ -1814,6 +1821,7 @@ update_addordelete(char *cmdline, bool isdelete, bool istimeout) {
 	dns_rdataset_t *rdataset = NULL;
 	isc_textregion_t region;
 	uint16_t retval;
+	bool isdate = false;
 
 	ddebug("update_addordelete()");
 
@@ -1848,6 +1856,12 @@ update_addordelete(char *cmdline, bool isdelete, bool istimeout) {
 		}
 	}
 	result = isc_parse_uint32(&ttl, word, 10);
+	if (result == ISC_R_RANGE && istimeout) {
+		result = dns_time64_fromtext(word, &when);
+		if (result == ISC_R_SUCCESS) {
+			isdate = true;
+		}
+	}
 	if (result != ISC_R_SUCCESS) {
 		if (isdelete) {
 			ttl = 0;
@@ -1864,7 +1878,7 @@ update_addordelete(char *cmdline, bool isdelete, bool istimeout) {
 
 	if (isdelete) {
 		ttl = 0;
-	} else if (ttl > TTL_MAX) {
+	} else if (!isdate && ttl > TTL_MAX) {
 		fprintf(stderr, "ttl '%s' is out of range (0 to %u)\n", word,
 			TTL_MAX);
 		goto failure;
@@ -1930,8 +1944,8 @@ parseclass:
 		}
 	}
 
-	retval = parse_rdata(&cmdline, rdataclass, rdatatype, istimeout, ttl,
-			     updatemsg, rdata);
+	retval = parse_rdata(&cmdline, rdataclass, rdatatype, istimeout, isdate,
+			     isdate ? when : ttl, updatemsg, rdata);
 	if (retval != STATUS_MORE) {
 		goto failure;
 	}
