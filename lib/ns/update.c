@@ -2757,9 +2757,6 @@ update_action(isc_task_t *task, isc_event_t *event) {
 	if (ssutable == NULL) {
 		CHECK(checkupdateacl(client, dns_zone_getupdateacl(zone),
 				     "update", zonename, false, false));
-	} else if (client->signer == NULL && !TCPCLIENT(client)) {
-		CHECK(checkupdateacl(client, NULL, "update", zonename, false,
-				     true));
 	}
 
 	if (dns_zone_getupdatedisabled(zone)) {
@@ -2873,6 +2870,25 @@ update_action(isc_task_t *task, isc_event_t *event) {
 					FAILC(DNS_R_REFUSED,
 					      "rejected by secure update");
 				}
+				/*
+				 * There must be no records at the name except
+				 * the the record to be added.
+				 */
+				if (IS_ADD_NEW(rules[rule])) {
+					bool flag;
+					result = rr_exists(db, ver, name,
+							   &rdata, &flag);
+					if (result == ISC_R_SUCCESS && flag) {
+						continue;
+					}
+					CHECK(name_exists(db, ver, name,
+							  &flag));
+					if (flag) {
+						FAILC(DNS_R_REFUSED,
+						      "rejected by secure "
+						      "update");
+					}
+				}
 			} else {
 				if (!ssu_checkall(db, ver, name, ssutable,
 						  client->signer, zonename,
@@ -2914,25 +2930,6 @@ update_action(isc_task_t *task, isc_event_t *event) {
 
 		if (update_class == zoneclass) {
 			unsigned int max = 0;
-
-			/*
-			 * There must be no records at the name except the
-			 * the record to be added.
-			 */
-			if (ssutable != NULL && IS_ADD_NEW(rules[rule])) {
-				result = foreach_rr(db, ver, name, rdata.type,
-						    covers, rrset_exists_action,
-						    NULL);
-				if (result == ISC_R_EXISTS) {
-					continue;
-				}
-				CHECK(result);
-				CHECK(name_exists(db, ver, name, &flag));
-				if (flag) {
-					FAILC(DNS_R_REFUSED,
-					      "rejected by secure update");
-				}
-			}
 
 			/*
 			 * RFC1123 doesn't allow MF and MD in master zones.
