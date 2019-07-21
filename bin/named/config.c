@@ -201,6 +201,7 @@ options {\n\
 	synth-from-dnssec no;\n\
 #	topology <none>\n\
 	transfer-format many-answers;\n\
+	use-dns64 false;\n\
 	v6-bias 50;\n\
 	zero-no-soa-ttl-cache no;\n\
 \n\
