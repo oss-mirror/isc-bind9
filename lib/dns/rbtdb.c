@@ -2069,7 +2069,6 @@ decrement_reference(dns_rbtdb_t *rbtdb, dns_rbtnode_t *node,
 	bool no_reference = true;
 	uint_fast32_t refs;
 
-	INSIST(tlock != isc_rwlocktype_none);
 	nodelock = &rbtdb->node_locks[bucket];
 
 #define KEEP_NODE(n, r, l)                                  \
@@ -5501,11 +5500,10 @@ detachnode(dns_db_t *db, dns_dbnode_t **targetp) {
 	node = (dns_rbtnode_t *)(*targetp);
 	nodelock = &rbtdb->node_locks[node->locknum];
 
-	RWLOCK(&rbtdb->tree_lock, isc_rwlocktype_read);
 	NODE_LOCK(&nodelock->lock, isc_rwlocktype_read);
 
 	if (decrement_reference(rbtdb, node, 0, isc_rwlocktype_read,
-				isc_rwlocktype_read, false))
+				isc_rwlocktype_none, false))
 	{
 		if (isc_refcount_current(&nodelock->references) == 0 &&
 		    nodelock->exiting) {
@@ -5514,7 +5512,6 @@ detachnode(dns_db_t *db, dns_dbnode_t **targetp) {
 	}
 
 	NODE_UNLOCK(&nodelock->lock, isc_rwlocktype_read);
-	RWUNLOCK(&rbtdb->tree_lock, isc_rwlocktype_read);
 
 	*targetp = NULL;
 
