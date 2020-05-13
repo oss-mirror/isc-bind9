@@ -309,7 +309,8 @@ isc_result_t
 isc_nm_listentcpdns(isc_nm_t *mgr, isc_nmiface_t *iface, isc_nm_recv_cb_t cb,
 		    void *cbarg, isc_nm_accept_cb_t accept_cb,
 		    void *accept_cbarg, size_t extrahandlesize, int backlog,
-		    isc_quota_t *quota, isc_nmsocket_t **sockp);
+		    isc_quota_t *quota, SSL_CTX *sslctx,
+		    isc_nmsocket_t **sockp);
 /*%<
  * Start listening for DNS messages over the TCP interface 'iface', using
  * net manager 'mgr'.

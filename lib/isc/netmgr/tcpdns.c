@@ -340,7 +340,8 @@ isc_result_t
 isc_nm_listentcpdns(isc_nm_t *mgr, isc_nmiface_t *iface, isc_nm_recv_cb_t cb,
 		    void *cbarg, isc_nm_accept_cb_t accept_cb,
 		    void *accept_cbarg, size_t extrahandlesize, int backlog,
-		    isc_quota_t *quota, isc_nmsocket_t **sockp) {
+		    isc_quota_t *quota, SSL_CTX *sslctx,
+		    isc_nmsocket_t **sockp) {
 	/* A 'wrapper' socket object with outer set to true TCP socket */
 	isc_nmsocket_t *dnslistensock = isc_mem_get(mgr->mctx,
 						    sizeof(*dnslistensock));
@@ -356,9 +357,16 @@ isc_nm_listentcpdns(isc_nm_t *mgr, isc_nmiface_t *iface, isc_nm_recv_cb_t cb,
 	dnslistensock->extrahandlesize = extrahandlesize;
 
 	/* We set dnslistensock->outer to a true listening socket */
-	result = isc_nm_listentcp(mgr, iface, dnslisten_acceptcb, dnslistensock,
-				  extrahandlesize, backlog, quota,
-				  &dnslistensock->outer);
+	if (sslctx != NULL) {
+		result = isc_nm_listentls(mgr, iface, dnslisten_acceptcb,
+					  dnslistensock, extrahandlesize,
+					  backlog, quota, sslctx,
+					  &dnslistensock->outer);
+	} else {
+		result = isc_nm_listentcp(
+			mgr, iface, dnslisten_acceptcb, dnslistensock,
+			extrahandlesize, backlog, quota, &dnslistensock->outer);
+	}
 	if (result == ISC_R_SUCCESS) {
 		atomic_store(&dnslistensock->listening, true);
 		*sockp = dnslistensock;

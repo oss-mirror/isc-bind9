@@ -468,7 +468,7 @@ ns_interface_listentcp(ns_interface_t *ifp) {
 	result = isc_nm_listentcpdns(
 		ifp->mgr->nm, (isc_nmiface_t *)&ifp->addr, ns__client_request,
 		ifp, ns__client_tcpconn, ifp, sizeof(ns_client_t),
-		ifp->mgr->backlog, &ifp->mgr->sctx->tcpquota,
+		ifp->mgr->backlog, &ifp->mgr->sctx->tcpquota, NULL,
 		&ifp->tcplistensocket);
 	if (result != ISC_R_SUCCESS) {
 		isc_log_write(IFMGR_COMMON_LOGARGS, ISC_LOG_ERROR,
