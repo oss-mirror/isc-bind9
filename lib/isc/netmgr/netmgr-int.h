@@ -14,6 +14,9 @@
 #include <unistd.h>
 #include <uv.h>
 
+#include <openssl/err.h>
+#include <openssl/ssl.h>
+
 #include <isc/astack.h>
 #include <isc/atomic.h>
 #include <isc/buffer.h>
@@ -135,6 +138,10 @@ typedef enum isc__netievent_type {
 	netievent_tcpdnsread,
 	netievent_tcpdnsclose,
 
+	netievent_tlsclose,
+	netievent_tlssend,
+	netievent_tlsstartread,
+
 	netievent_closecb,
 	netievent_shutdown,
 	netievent_stop,
@@ -205,6 +212,11 @@ typedef isc__netievent__socket_t isc__netievent_udpstop_t;
 typedef isc__netievent__socket_t isc__netievent_udpclose_t;
 typedef isc__netievent__socket_t isc__netievent_tcpstop_t;
 typedef isc__netievent__socket_t isc__netievent_tcpclose_t;
+<<<<<<< HEAD
+=======
+typedef isc__netievent__socket_t isc__netievent_tlsclose_t;
+typedef isc__netievent__socket_t isc__netievent_tcpdnsclose_t;
+>>>>>>> netmgr: server-side TLS support
 typedef isc__netievent__socket_t isc__netievent_startread_t;
 typedef isc__netievent__socket_t isc__netievent_pauseread_t;
 typedef isc__netievent__socket_t isc__netievent_closecb_t;
@@ -336,7 +348,9 @@ typedef enum isc_nmsocket_type {
 	isc_nm_tcpsocket,
 	isc_nm_tcplistener,
 	isc_nm_tcpdnslistener,
-	isc_nm_tcpdnssocket
+	isc_nm_tcpdnssocket,
+	isc_nm_tlslistener,
+	isc_nm_tlssocket
 } isc_nmsocket_type;
 
 /*%
@@ -373,6 +387,15 @@ struct isc_nmsocket {
 	isc_nmsocket_t *listener;
 	/*% Self, for self-contained unreferenced sockets (tcpdns) */
 	isc_nmsocket_t *self;
+
+	/*% TLS stuff */
+	struct tls {
+		BIO *app_bio;
+		SSL *ssl;
+		SSL_CTX *ctx;
+		BIO *ssl_bio;
+		enum { INIT, HANDSHAKE, IO, CLOSING } state;
+	} tls;
 
 	/*%
 	 * quota is the TCP client, attached when a TCP connection
@@ -783,6 +806,15 @@ isc__nm_async_tcpclose(isc__networker_t *worker, isc__netievent_t *ev0);
  * stoplisten, send, read, pause, close).
  */
 
+void
+isc__nm_async_tlsclose(isc__networker_t *worker, isc__netievent_t *ev0);
+
+void
+isc__nm_async_tlssend(isc__networker_t *worker, isc__netievent_t *ev0);
+/*%<
+ * Callback handlers for asynchronouse TLS events.
+ */
+
 isc_result_t
 isc__nm_tcpdns_send(isc_nmhandle_t *handle, isc_region_t *region,
 		    isc_nm_cb_t cb, void *cbarg);
@@ -816,6 +848,37 @@ isc__nm_tcpdns_cancelread(isc_nmhandle_t *handle);
 /*%<
  * Stop reading on a connected TCPDNS handle.
  */
+
+isc_result_t
+isc__nm_tls_send(isc_nmhandle_t *handle, isc_region_t *region, isc_nm_cb_t cb,
+		 void *cbarg);
+
+isc_result_t
+isc__nm_tls_read(isc_nmhandle_t *handle, isc_nm_recv_cb_t cb, void *cbarg);
+
+void
+isc__nm_tls_close(isc_nmsocket_t *sock);
+/*%<
+ * Close a TLS socket.
+ */
+isc_result_t
+isc__nm_tls_pauseread(isc_nmsocket_t *sock);
+/*%<
+ * Pause reading on this socket, while still remembering the callback.
+ */
+
+isc_result_t
+isc__nm_tls_resumeread(isc_nmsocket_t *sock);
+/*%<
+ * Resume reading from socket.
+ *
+ */
+
+void
+isc__nm_tls_stoplistening(isc_nmsocket_t *sock);
+
+void
+isc__nm_async_tls_startread(isc__networker_t *worker, isc__netievent_t *ev0);
 
 #define isc__nm_uverr2result(x) \
 	isc___nm_uverr2result(x, true, __FILE__, __LINE__)

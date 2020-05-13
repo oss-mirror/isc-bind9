@@ -592,7 +592,7 @@ CRYPTO=OpenSSL
 #
 # OpenSSL/LibreSSL is mandatory
 #
-PKG_CHECK_MODULES([OPENSSL], [libcrypto], [],
+PKG_CHECK_MODULES([OPENSSL], [libssl libcrypto], [],
 		  [AX_CHECK_OPENSSL([:],[AC_MSG_FAILURE([OpenSSL/LibreSSL not found])])])
 
 AX_SAVE_FLAGS([openssl])
