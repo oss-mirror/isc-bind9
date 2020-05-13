@@ -1,3 +1,7 @@
+5495.	[func]		Add a netmgr TLS layer, enabling server-side DoT
+			support (not yet available), and client-side DoT
+			support in dig with "dig +tls". [GL #1840]
+
 5494.	[bug]		Silence the EPROTO syslog message on older systems.
 			[GL #1928]
 
