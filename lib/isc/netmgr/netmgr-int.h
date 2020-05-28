@@ -1463,6 +1463,13 @@ isc__nm_socket_connectiontimeout(uv_os_sock_t fd, int timeout_ms);
  * the minimum value must be at least 1000 (1 second).
  */
 
+isc_result_t
+isc__nm_socket_recverr(uv_os_sock_t fd, sa_family_t sa_family);
+/*%<
+ * Set IP_RECVERR/IPV6_RECVERR on the socket to enable full ICMP error reporting
+ * on Linux, for faster failovers to working DNS servers.
+ */
+
 void
 isc__nm_tls_initialize(void);
 /*%<

@@ -336,7 +336,10 @@ isc_nm_tcpconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 	sock->fd = fd;
 	atomic_init(&sock->client, true);
 
-	result = isc__nm_socket_connectiontimeout(fd, timeout);
+	(void)isc__nm_socket_incoming_cpu(sock->fd);
+	(void)isc__nm_socket_recverr(sock->fd, sa_family);
+
+	result = isc__nm_socket_connectiontimeout(sock->fd, timeout);
 	RUNTIME_CHECK(result == ISC_R_SUCCESS);
 
 	req = isc__nm_uvreq_get(mgr, sock);
@@ -383,6 +386,7 @@ isc__nm_tcp_lb_socket(sa_family_t sa_family) {
 	RUNTIME_CHECK(result == ISC_R_SUCCESS);
 
 	(void)isc__nm_socket_incoming_cpu(sock);
+	(void)isc__nm_socket_recverr(sock, sa_family);
 
 	/* FIXME: set mss */
 

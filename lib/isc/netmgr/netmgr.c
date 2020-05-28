@@ -2313,6 +2313,35 @@ isc__nm_socket_connectiontimeout(uv_os_sock_t fd, int timeout_ms) {
 #endif
 }
 
+isc_result_t
+isc__nm_socket_recverr(uv_os_sock_t fd, sa_family_t sa_family) {
+	if (sa_family == AF_INET6) {
+#if defined(IPV6_RECVERR)
+		if (setsockopt_on(fd, IPPROTO_IPV6, IPV6_RECVERR) == -1) {
+			return (ISC_R_FAILURE);
+		}
+		return (ISC_R_SUCCESS);
+#else
+		UNUSED(fd);
+		UNUSED(sa_family);
+		return (ISC_R_NOTIMPLEMENTED);
+#endif
+	} else if (sa_family == AF_INET) {
+#if defined(IP_RECVERR)
+		if (setsockopt_on(fd, IPPROTO_IP, IP_RECVERR) == -1) {
+			return (ISC_R_FAILURE);
+		}
+		return (ISC_R_SUCCESS);
+#else
+		UNUSED(fd);
+		UNUSED(sa_family);
+		return (ISC_R_NOTIMPLEMENTED);
+#endif
+	}
+
+	return (ISC_R_FAMILYNOSUPPORT);
+}
+
 #ifdef NETMGR_TRACE
 /*
  * Dump all active sockets in netmgr. We output to stderr

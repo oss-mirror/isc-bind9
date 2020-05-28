@@ -87,6 +87,7 @@ isc__nm_udp_lb_socket(sa_family_t sa_family) {
 
 	(void)isc__nm_socket_incoming_cpu(sock);
 	(void)isc__nm_socket_dontfrag(sock, sa_family);
+	(void)isc__nm_socket_recverr(sock, sa_family);
 
 	result = isc__nm_socket_reuse(sock);
 	RUNTIME_CHECK(result == ISC_R_SUCCESS);
@@ -802,8 +803,8 @@ isc_nm_udpconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 		      result == ISC_R_NOTIMPLEMENTED);
 
 	(void)isc__nm_socket_incoming_cpu(sock->fd);
-
 	(void)isc__nm_socket_dontfrag(sock->fd, sa_family);
+	(void)isc__nm_socket_recverr(sock->fd, sa_family);
 
 	req = isc__nm_uvreq_get(mgr, sock);
 	req->cb.connect = cb;
