@@ -166,35 +166,7 @@ maybe_free_listener(controllistener_t *listener) {
 }
 
 static void
-free_connection(controlconnection_t *conn) {
-	controllistener_t *listener = conn->listener;
-
-	if (conn->buffer != NULL) {
-		isc_buffer_free(&conn->buffer);
-	}
-
-	if (conn->ccmsg_valid) {
-		isccc_ccmsg_cancelread(&conn->ccmsg);
-		return;
-	}
-
-	ISC_LIST_UNLINK(listener->connections, conn, link);
-#ifdef ENABLE_AFL
-	if (named_g_fuzz_type == isc_fuzz_rndc) {
-		named_fuzz_notify();
-	}
-#endif /* ifdef ENABLE_AFL */
-
-	isccc_ccmsg_invalidate(&conn->ccmsg);
-
-	isc_mem_put(listener->mctx, conn, sizeof(*conn));
-}
-
-static void
 shutdown_listener(controllistener_t *listener) {
-	controlconnection_t *conn = NULL;
-	controlconnection_t *next = NULL;
-
 	if (!listener->exiting) {
 		char socktext[ISC_SOCKADDR_FORMATSIZE];
 
@@ -213,12 +185,6 @@ shutdown_listener(controllistener_t *listener) {
 #endif
 		listener->exiting = true;
 		listener->listening = false;
-	}
-
-	for (conn = ISC_LIST_HEAD(listener->connections); conn != NULL;
-	     conn = next) {
-		next = ISC_LIST_NEXT(conn, link);
-		free_connection(conn);
 	}
 
 	isc_nm_stoplistening(listener->sock);
@@ -273,7 +239,6 @@ control_senddone(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 	result = isccc_ccmsg_readmessage(&conn->ccmsg, control_recvmessage,
 					 conn);
 	if (result != ISC_R_SUCCESS) {
-		free_connection(conn);
 		maybe_free_listener(listener);
 	}
 
@@ -557,12 +522,62 @@ cleanup:
 	}
 }
 
+static void
+conn_reset(void *arg) {
+	controlconnection_t *conn = (controlconnection_t *)arg;
+	controllistener_t *listener = conn->listener;
+
+	if (conn->buffer != NULL) {
+		isc_buffer_free(&conn->buffer);
+	}
+
+	if (conn->ccmsg_valid) {
+		isccc_ccmsg_cancelread(&conn->ccmsg);
+		return;
+	}
+
+	ISC_LIST_UNLINK(listener->connections, conn, link);
+#ifdef ENABLE_AFL
+	if (named_g_fuzz_type == isc_fuzz_rndc) {
+		named_fuzz_notify();
+	}
+#endif /* ifdef ENABLE_AFL */
+
+	isccc_ccmsg_invalidate(&conn->ccmsg);
+}
+
+static void
+conn_put(void *arg) {
+	controlconnection_t *conn = (controlconnection_t *)arg;
+	controllistener_t *listener = conn->listener;
+
+	isc_log_write(named_g_lctx, NAMED_LOGCATEGORY_GENERAL,
+		      NAMED_LOGMODULE_CONTROL, ISC_LOG_DEBUG(3),
+		      "freeing control connection");
+
+	maybe_free_listener(listener);
+}
+
 static isc_result_t
 newconnection(controllistener_t *listener, isc_nmhandle_t *handle) {
 	controlconnection_t *conn = NULL;
 	isc_result_t result;
 
-	conn = isc_mem_get(listener->mctx, sizeof(*conn));
+	conn = isc_nmhandle_getdata(handle);
+	if (conn == NULL) {
+		conn = isc_nmhandle_getextra(handle);
+		isc_log_write(named_g_lctx, NAMED_LOGCATEGORY_GENERAL,
+			      NAMED_LOGMODULE_CONTROL, ISC_LOG_DEBUG(3),
+			      "allocate new control connection");
+		*conn = (controlconnection_t){};
+	}
+
+	if (conn->handle == NULL) {
+		isc_nmhandle_setdata(handle, conn, conn_reset, conn_put);
+	} else {
+		INSIST(conn->handle == handle);
+	}
+
 	*conn = (controlconnection_t){ .handle = handle,
 				       .listener = listener,
 				       .ccmsg_valid = true,
@@ -1144,7 +1159,8 @@ add_listener(named_controls_t *cp, controllistener_t **listenerp,
 #endif
 
 	CHECK(isc_nm_listentcp(named_g_nm, (isc_nmiface_t *)&listener->address,
-			       control_newconn, listener, 0, 5, NULL,
+			       control_newconn, listener,
+			       sizeof(controlconnection_t), 5, NULL,
 			       &listener->sock));
 	listener->listening = true;
 #if 0
