@@ -208,10 +208,7 @@ void
 isccc_ccmsg_cancelread(isccc_ccmsg_t *ccmsg) {
 	REQUIRE(VALID_CCMSG(ccmsg));
 
-#if 0
-	/* XXX: not sure if this is needed with the netmgr */
-	isc_socket_cancel(ccmsg->sock, NULL, ISC_SOCKCANCEL_RECV);
-#endif
+	isc_nm_cancelread(ccmsg->handle);
 }
 
 void

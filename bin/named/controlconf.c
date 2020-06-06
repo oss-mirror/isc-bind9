@@ -408,9 +408,10 @@ control_recvmessage(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 	isccc_time_t exp;
 	uint32_t nonce;
 
+	conn->ccmsg_valid = false;
+
 	/* Is the server shutting down? */
 	if (listener->controls->shuttingdown) {
-		conn->ccmsg_valid = false;
 		return;
 	}
 
@@ -419,7 +420,6 @@ control_recvmessage(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 			log_invalid(&conn->ccmsg, result);
 		}
 
-		conn->ccmsg_valid = false;
 		return;
 	}
 
@@ -445,7 +445,6 @@ control_recvmessage(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 			    REGION_SIZE(conn->secret));
 		if (result != ISCCC_R_BADAUTH) {
 			log_invalid(&conn->ccmsg, result);
-			conn->ccmsg_valid = false;
 			return;
 		}
 	}
@@ -517,6 +516,8 @@ control_recvmessage(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 	}
 
 	isc_buffer_allocate(listener->mctx, &conn->text, 2 * 2048);
+
+	conn->ccmsg_valid = true;
 
 	if (conn->nonce == 0) {
 		/*
