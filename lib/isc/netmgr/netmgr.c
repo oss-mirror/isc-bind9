@@ -129,6 +129,27 @@ async_cb(uv_async_t *handle);
 static void
 process_queue(isc__networker_t *worker, isc_queue_t *queue);
 
+const char *
+isc__nm_socket_type(isc_nmsocket_type type) {
+	switch(type) {
+	case isc_nm_udpsocket:
+		return("udpsocket");
+	case isc_nm_udplistener:
+		return("udplistener");
+	case isc_nm_tcpsocket:
+		return("tcpsocket");
+	case isc_nm_tcplistener:
+		return("tcplistener");
+	case isc_nm_tcpdnssocket:
+		return("tcpdnssocket");
+	case isc_nm_tcpdnslistener:
+		return("tcpdnslistener");
+	default:
+		INSIST(0);
+		ISC_UNREACHABLE();
+	}
+}
+
 int
 isc_nm_tid(void) {
 	return (isc__nm_tid_v);
@@ -692,8 +713,10 @@ isc__nmsocket_attach(isc_nmsocket_t *sock, isc_nmsocket_t **target) {
 
 	if (sock->parent != NULL) {
 		INSIST(sock->parent->parent == NULL); /* sanity check */
+fprintf(stderr, "attach sock %p (%s) (%p) to %lu\n", sock, isc__nm_socket_type(sock->type), sock->parent, sock->parent->references+1);
 		isc_refcount_increment0(&sock->parent->references);
 	} else {
+fprintf(stderr, "attach sock %p (%s) to %lu\n", sock, isc__nm_socket_type(sock->type), sock->references+1);
 		isc_refcount_increment0(&sock->references);
 	}
 
@@ -740,6 +763,7 @@ nmsocket_cleanup(isc_nmsocket_t *sock, bool dofree) {
 
 	if (sock->outerhandle != NULL) {
 		isc_nmhandle_unref(sock->outerhandle);
+fprintf(stderr, "sock %p outerhandle %p, clearing?\n", sock, sock->outerhandle);
 		sock->outerhandle = NULL;
 	}
 
@@ -897,8 +921,10 @@ isc__nmsocket_detach(isc_nmsocket_t **sockp) {
 	 */
 	if (sock->parent != NULL) {
 		rsock = sock->parent;
+fprintf(stderr, "detach sock %p (%s) (%p) to %lu\n", sock, isc__nm_socket_type(sock->type), rsock, rsock->references-1);
 		INSIST(rsock->parent == NULL); /* Sanity check */
 	} else {
+fprintf(stderr, "detach sock %p (%s) to %lu\n", sock, isc__nm_socket_type(sock->type), sock->references-1);
 		rsock = sock;
 	}
 
@@ -928,6 +954,7 @@ isc__nmsocket_init(isc_nmsocket_t *sock, isc_nm_t *mgr, isc_nmsocket_type type,
 	REQUIRE(iface != NULL);
 
 	family = iface->addr.type.sa.sa_family;
+fprintf(stderr, "init sock %p (%s)\n", sock, isc__nm_socket_type(type));
 
 	*sock = (isc_nmsocket_t){ .type = type,
 				  .iface = iface,
@@ -1112,6 +1139,7 @@ void
 isc_nmhandle_ref(isc_nmhandle_t *handle) {
 	REQUIRE(VALID_NMHANDLE(handle));
 
+fprintf(stderr, "ref %p (%p %s) to %lu\n", handle, handle->sock, isc__nm_socket_type(handle->sock->type), handle->references+1);
 	isc_refcount_increment(&handle->references);
 }
 
@@ -1171,22 +1199,24 @@ isc_nmhandle_unref(isc_nmhandle_t *handle) {
 
 	REQUIRE(VALID_NMHANDLE(handle));
 
+fprintf(stderr, "unref %p (%p %s) to %lu\n", handle, handle->sock, isc__nm_socket_type(handle->sock->type), handle->references-1);
 	if (isc_refcount_decrement(&handle->references) > 1) {
 		return;
 	}
 
+	/*
+	 * XXX: Do we need to reference the socket to ensure that it
+	 * can't be deleted by another thread while we're deactivating
+	 * the handle?
+	 */
 	sock = handle->sock;
 	handle->sock = NULL;
+fprintf(stderr, "handle %p sock %p set to NULL\n", handle, sock);
 
 	if (handle->doreset != NULL) {
 		handle->doreset(handle->opaque);
 	}
 
-	/*
-	 * Temporarily reference the socket to ensure that it can't
-	 * be deleted by another thread while we're deactivating the
-	 * handle.
-	 */
 	nmhandle_deactivate(sock, handle);
 
 	/*

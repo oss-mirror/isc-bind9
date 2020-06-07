@@ -756,7 +756,7 @@ accept_connection(isc_nmsocket_t *ssock, isc_quota_t *quota) {
 		 * We need to attach to ssock, because it might be queued
 		 * waiting for a TCP quota slot.  If so, then we'll detach it
 		 * later when the connection is accepted. (XXX: This may be
-		 * suboptimal, it might be better to attach unless
+		 * suboptimal, it might be better not to attach unless
 		 * we need to.)
 		 */
 		isc_nmsocket_t *tsock = NULL;
