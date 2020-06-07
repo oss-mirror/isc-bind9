@@ -180,8 +180,8 @@ isc_nm_listentcp(isc_nm_t *mgr, isc_nmiface_t *iface, isc_nm_cb_t cb,
 
 	nsock = isc_mem_get(mgr->mctx, sizeof(*nsock));
 	isc__nmsocket_init(nsock, mgr, isc_nm_tcplistener, iface);
-	nsock->rcb.accept = cb;
-	nsock->rcbarg = cbarg;
+	nsock->accept_cb.accept = cb;
+	nsock->accept_cbarg = cbarg;
 	nsock->extrahandlesize = extrahandlesize;
 	nsock->backlog = backlog;
 	nsock->result = ISC_R_SUCCESS;
@@ -392,9 +392,9 @@ isc__nm_async_tcpchildaccept(isc__networker_t *worker, isc__netievent_t *ev0) {
 
 	handle = isc__nmhandle_get(csock, NULL, &local);
 
-	INSIST(ssock->rcb.accept != NULL);
+	INSIST(ssock->accept_cb.accept != NULL);
 	csock->read_timeout = ssock->mgr->init;
-	ssock->rcb.accept(handle, ISC_R_SUCCESS, ssock->rcbarg);
+	ssock->accept_cb.accept(handle, ISC_R_SUCCESS, ssock->accept_cbarg);
 
 	/*
 	 * csock is now attached to the handle.
