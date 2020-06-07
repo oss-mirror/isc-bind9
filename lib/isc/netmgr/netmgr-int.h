@@ -804,3 +804,9 @@ isc__nm_decstats(isc_nm_t *mgr, isc_statscounter_t counterid);
 /*%<
  * Decrement socket-related statistics counters.
  */
+
+const char *
+isc__nm_socket_type(isc_nmsocket_type type);
+/*%<
+ * Returns socket type as a string for logging purposes.
+ */
