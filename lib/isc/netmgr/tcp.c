@@ -925,6 +925,7 @@ tcp_close_cb(uv_handle_t *uvhandle) {
 
 	REQUIRE(VALID_NMSOCK(sock));
 
+fprintf(stderr, "close tcp socket %p\n", sock);
 	isc__nm_incstats(sock->mgr, sock->statsindex[STATID_CLOSE]);
 	atomic_store(&sock->closed, true);
 	isc__nmsocket_prep_destroy(sock);
@@ -999,5 +1000,8 @@ isc__nm_tcp_shutdown(isc_nmsocket_t *sock) {
 	    sock->rcb.recv != NULL)
 	{
 		sock->rcb.recv(sock->tcphandle, NULL, sock->rcbarg);
+		if (atomic_load(&sock->tcphandle->connected)) {
+			isc__nmhandle_disconnect(sock->tcphandle);
+		}
 	}
 }

@@ -96,21 +96,23 @@ struct isc_nmhandle {
 	 * the socket.
 	 */
 	isc_nmsocket_t *sock;
-	size_t ah_pos; /* Position in the socket's
-			* 'active handles' array */
+
+	/* Position in the socket's 'active handles' array */
+	size_t ah_pos;
 
 	/*
-	 * The handle is 'inflight' if netmgr is not currently processing
-	 * it in any way - it might mean that e.g. a recursive resolution
-	 * is happening. For an inflight handle we must wait for the
-	 * calling code to finish before we can free it.
+	 * When a handle is 'connected' then it holds an additional reference
+	 * to its associated socket, and an additional reference to itself;
+	 * it cannot be deleted until it is disconnected.
 	 */
-	atomic_bool inflight;
+	atomic_bool connected;
 
 	isc_sockaddr_t peer;
 	isc_sockaddr_t local;
 	isc_nm_opaquecb_t doreset; /* reset extra callback, external */
 	isc_nm_opaquecb_t dofree;  /* free extra callback, external */
+	isc_nm_opaquecb_t dcb;     /* disconnect callback */
+	isc_nm_opaquecb_t dcbarg;  /* disconnect callback argument */
 	void *opaque;
 	char extra[];
 };
@@ -810,3 +812,9 @@ isc__nm_socket_type(isc_nmsocket_type type);
 /*%<
  * Returns socket type as a string for logging purposes.
  */
+
+void
+isc__nmhandle_connected(isc_nmhandle_t *handle,
+			isc_nm_opaquecb_t disconnect_cb, void *dcbarg);
+void
+isc__nmhandle_disconnect(isc_nmhandle_t *handle);

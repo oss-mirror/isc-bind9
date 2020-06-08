@@ -95,13 +95,19 @@ dnstcp_readtimeout(uv_timer_t *timer) {
 	tcpdns_close_direct(sock);
 }
 
+static void
+disconnect_cb(void *arg) {
+	isc_nmsocket_t *sock = (isc_nmsocket_t *)arg;
+	isc__nmsocket_detach(&sock);
+}
+
 /*
  * Accept callback for TCP-DNS connection.
  */
 static void
 dnslisten_acceptcb(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 	isc_nmsocket_t *dnslistensock = (isc_nmsocket_t *)cbarg;
-	isc_nmsocket_t *dnssock = NULL;
+	isc_nmsocket_t *dnssock = NULL, *tsock = NULL;
 
 fprintf(stderr, "dnslisten_acceptcb %p %s\n", handle, isc_result_totext(result));
 	REQUIRE(VALID_NMSOCK(dnslistensock));
@@ -127,6 +133,9 @@ fprintf(stderr, "dnslisten_acceptcb %p %s\n", handle, isc_result_totext(result))
 
 	dnssock->outerhandle = handle;
 	isc_nmhandle_ref(dnssock->outerhandle);
+
+	isc__nmsocket_attach(dnssock, &tsock);
+	isc__nmhandle_connected(dnssock->outerhandle, disconnect_cb, dnssock);
 
 	dnssock->peer = handle->sock->peer;
 	dnssock->read_timeout = handle->sock->mgr->init;
@@ -395,6 +404,7 @@ static void
 resume_processing(void *arg) {
 	isc_nmsocket_t *sock = (isc_nmsocket_t *)arg;
 	isc_result_t result;
+	bool resumed = false;
 
 	REQUIRE(VALID_NMSOCK(sock));
 	REQUIRE(sock->tid == isc_nm_tid());
@@ -430,6 +440,7 @@ fprintf(stderr, "processed sequential sock %p with handle %p, result %s\n", sock
 			isc_nmhandle_unref(handle);
 		} else if (sock->outerhandle != NULL) {
 			isc_nm_resumeread(sock->outerhandle->sock);
+			resumed = true;
 		}
 
 		return;
@@ -450,6 +461,7 @@ fprintf(stderr, "processed nonsequentially sock %p with handle %p, result %s\n",
 			 */
 			if (sock->outerhandle != NULL) {
 				isc_nm_resumeread(sock->outerhandle->sock);
+				resumed = true;
 			}
 
 			break;
@@ -461,6 +473,10 @@ fprintf(stderr, "processed nonsequentially sock %p with handle %p, result %s\n",
 		atomic_store(&sock->outerhandle->sock->processing, true);
 		isc_nmhandle_unref(dnshandle);
 	} while (atomic_load(&sock->ah) < TCPDNS_CLIENTS_PER_CONN);
+
+	if (!resumed && sock->outerhandle != NULL) {
+		isc__nmhandle_disconnect(sock->outerhandle);
+	}
 
 
 }
@@ -542,12 +558,6 @@ fprintf(stderr, "...done\n");
 		 * At this point we're certain that there are no external
 		 * references, we can close everything.
 		 */
-		if (sock->outerhandle != NULL) {
-fprintf(stderr, "clearing outerhandle\n");
-			sock->outerhandle->sock->rcb.recv = NULL;
-			isc_nmhandle_unref(sock->outerhandle);
-			sock->outerhandle = NULL;
-		}
 		if (sock->listener != NULL) {
 fprintf(stderr, "clearing listener\n");
 			isc__nmsocket_detach(&sock->listener);

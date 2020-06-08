@@ -1243,6 +1243,33 @@ fprintf(stderr, "handle %p sock %p set to NULL\n", handle, sock);
 	isc__nmsocket_detach(&sock);
 }
 
+void
+isc__nmhandle_connected(isc_nmhandle_t *handle,
+			isc_nm_opaquecb_t disconnect_cb, void *dcbarg) {
+	isc_nmsocket_t *tsock = NULL;
+fprintf(stderr, "connect handle %p (%p %s)\n", handle, handle->sock, isc__nm_socket_type(handle->sock->type));
+	isc_nmhandle_ref(handle);
+	isc__nmsocket_attach(handle->sock, &tsock);
+	atomic_store(&handle->connected, true);
+	handle->dcb = disconnect_cb;
+	handle->dcbarg = dcbarg;
+}
+
+void
+isc__nmhandle_disconnect(isc_nmhandle_t *handle) {
+	isc_nmsocket_t *tsock = handle->sock;
+fprintf(stderr, "disconnect handle %p (%p %s)\n", handle, handle->sock, isc__nm_socket_type(handle->sock->type));
+	isc__nmsocket_detach(&tsock);
+	atomic_store(&handle->connected, false);
+
+	if (handle->dcb != NULL) {
+		handle->dcb(handle->dcbarg);
+		handle->dcb = NULL;
+		handle->dcbarg = NULL;
+	}
+	isc_nmhandle_unref(handle);
+}
+
 void *
 isc_nmhandle_getdata(isc_nmhandle_t *handle) {
 	REQUIRE(VALID_NMHANDLE(handle));
