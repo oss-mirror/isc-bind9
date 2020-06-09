@@ -32,6 +32,10 @@
 
 #include "netmgr-int.h"
 #include "uv-compat.h"
+#include <execinfo.h>
+
+#define BACKTRACE() do { void *arr[4]; backtrace_symbols_fd(arr, backtrace(arr, 4), 2); fprintf(stderr, "\n"); } while(0)
+
 
 /*%
  * How many isc_nmhandles and isc_nm_uvreqs will we be
@@ -719,6 +723,7 @@ fprintf(stderr, "attach sock %p (%s) (%p) to %lu\n", sock, isc__nm_socket_type(s
 fprintf(stderr, "attach sock %p (%s) to %lu\n", sock, isc__nm_socket_type(sock->type), sock->references+1);
 		isc_refcount_increment0(&sock->references);
 	}
+	BACKTRACE();
 
 	*target = sock;
 }
@@ -764,6 +769,7 @@ nmsocket_cleanup(isc_nmsocket_t *sock, bool dofree) {
 	if (sock->outerhandle != NULL) {
 		isc_nmhandle_unref(sock->outerhandle);
 fprintf(stderr, "sock %p outerhandle %p, clearing?\n", sock, sock->outerhandle);
+	BACKTRACE();
 		sock->outerhandle = NULL;
 	}
 
@@ -927,6 +933,7 @@ fprintf(stderr, "detach sock %p (%s) (%p) to %lu\n", sock, isc__nm_socket_type(s
 fprintf(stderr, "detach sock %p (%s) to %lu\n", sock, isc__nm_socket_type(sock->type), sock->references-1);
 		rsock = sock;
 	}
+	BACKTRACE();
 
 	if (isc_refcount_decrement(&rsock->references) == 1) {
 		isc__nmsocket_prep_destroy(rsock);
@@ -955,6 +962,7 @@ isc__nmsocket_init(isc_nmsocket_t *sock, isc_nm_t *mgr, isc_nmsocket_type type,
 
 	family = iface->addr.type.sa.sa_family;
 fprintf(stderr, "init sock %p (%s)\n", sock, isc__nm_socket_type(type));
+	BACKTRACE();
 
 	*sock = (isc_nmsocket_t){ .type = type,
 				  .iface = iface,
@@ -1140,6 +1148,7 @@ isc_nmhandle_ref(isc_nmhandle_t *handle) {
 	REQUIRE(VALID_NMHANDLE(handle));
 
 fprintf(stderr, "ref %p (%p %s) to %lu\n", handle, handle->sock, isc__nm_socket_type(handle->sock->type), handle->references+1);
+	BACKTRACE();
 	isc_refcount_increment(&handle->references);
 }
 
@@ -1200,6 +1209,7 @@ isc_nmhandle_unref(isc_nmhandle_t *handle) {
 	REQUIRE(VALID_NMHANDLE(handle));
 
 fprintf(stderr, "unref %p (%p %s) to %lu\n", handle, handle->sock, isc__nm_socket_type(handle->sock->type), handle->references-1);
+	BACKTRACE();
 	if (isc_refcount_decrement(&handle->references) > 1) {
 		return;
 	}
@@ -1214,6 +1224,7 @@ fprintf(stderr, "unref %p (%p %s) to %lu\n", handle, handle->sock, isc__nm_socke
 	sock = handle->sock;
 	handle->sock = NULL;
 fprintf(stderr, "handle %p sock %p set to NULL\n", handle, sock);
+	BACKTRACE();
 
 	if (handle->doreset != NULL) {
 		handle->doreset(handle->opaque);
