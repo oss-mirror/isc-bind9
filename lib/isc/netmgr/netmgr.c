@@ -1205,13 +1205,16 @@ fprintf(stderr, "unref %p (%p %s) to %lu\n", handle, handle->sock, isc__nm_socke
 	}
 
 	/*
-	 * XXX: Do we need to reference the socket to ensure that it
-	 * can't be deleted by another thread while we're deactivating
-	 * the handle?
+	 * If connected, we should still have at least one reference.
 	 */
-	sock = handle->sock;
+	INSIST(!atomic_load(&handle->connected));
+
+	/*
+	 * Reference the socket to ensure that it can't be deleted by
+	 * another thread while we're deactivating the handle.
+	 */
+	isc__nmsocket_attach(handle->sock, &sock);
 	handle->sock = NULL;
-fprintf(stderr, "handle %p sock %p set to NULL\n", handle, sock);
 
 	if (handle->doreset != NULL) {
 		handle->doreset(handle->opaque);
@@ -1231,15 +1234,14 @@ fprintf(stderr, "handle %p sock %p set to NULL\n", handle, sock);
 			isc__netievent_closecb_t *event = isc__nm_get_ievent(
 				sock->mgr, netievent_closecb);
 			/*
-			 * The socket will be finally detached by the closecb
-			 * event handler.
+			 * The socket will be detached by both the closecb
+			 * event handler and the closehandle callback.
 			 */
 			isc__nmsocket_attach(sock, &event->sock);
 			isc__nm_enqueue_ievent(&sock->mgr->workers[sock->tid],
 					       (isc__netievent_t *)event);
 		}
 	}
-
 	isc__nmsocket_detach(&sock);
 }
 

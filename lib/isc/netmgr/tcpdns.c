@@ -206,7 +206,7 @@ processbuffer(isc_nmsocket_t *dnssock, isc_nmhandle_t **handlep) {
 		}
 
 		/*
-		 * dnssock is now attached to dnshandle
+		 * dnssock is now attached to dnshandle.
 		 */
 		isc__nmsocket_detach(&dnssock);
 
@@ -408,10 +408,8 @@ resume_processing(void *arg) {
 
 	REQUIRE(VALID_NMSOCK(sock));
 	REQUIRE(sock->tid == isc_nm_tid());
-
-	if (sock->type != isc_nm_tcpdnssocket || sock->outerhandle == NULL) {
-		return;
-	}
+	REQUIRE(sock->type == isc_nm_tcpdnssocket);
+	REQUIRE(sock->outerhandle != NULL);
 
 	if (atomic_load(&sock->ah) == 0) {
 		/* Nothing is active; sockets can timeout now */
@@ -438,12 +436,15 @@ fprintf(stderr, "processed sequential sock %p with handle %p, result %s\n", sock
 				uv_timer_stop(&sock->timer);
 			}
 			isc_nmhandle_unref(handle);
-		} else if (sock->outerhandle != NULL) {
+		} else {
+			/*
+			 * Nothing in the buffer; resume reading.
+			 */
 			isc_nm_resumeread(sock->outerhandle->sock);
 			resumed = true;
 		}
 
-		return;
+		goto done;
 	}
 
 	/*
@@ -455,7 +456,13 @@ fprintf(stderr, "processed sequential sock %p with handle %p, result %s\n", sock
 
 		result = processbuffer(sock, &dnshandle);
 fprintf(stderr, "processed nonsequentially sock %p with handle %p, result %s\n", sock, dnshandle, isc_result_totext(result));
-		if (result != ISC_R_SUCCESS) {
+		if (result == ISC_R_SUCCESS) {
+			if (sock->timer_initialized) {
+				uv_timer_stop(&sock->timer);
+			}
+			atomic_store(&sock->outerhandle->sock->processing, true);
+			isc_nmhandle_unref(dnshandle);
+		} else {
 			/*
 			 * Nothing in the buffer; resume reading.
 			 */
@@ -466,19 +473,14 @@ fprintf(stderr, "processed nonsequentially sock %p with handle %p, result %s\n",
 
 			break;
 		}
-
-		if (sock->timer_initialized) {
-			uv_timer_stop(&sock->timer);
-		}
-		atomic_store(&sock->outerhandle->sock->processing, true);
-		isc_nmhandle_unref(dnshandle);
 	} while (atomic_load(&sock->ah) < TCPDNS_CLIENTS_PER_CONN);
 
+done:
 	if (!resumed && sock->outerhandle != NULL) {
 		isc__nmhandle_disconnect(sock->outerhandle);
 	}
 
-
+	isc__nmsocket_detach(&sock);
 }
 
 static void
