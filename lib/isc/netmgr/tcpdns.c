@@ -94,9 +94,9 @@ dnstcp_readtimeout(uv_timer_t *timer) {
 
 	REQUIRE(VALID_NMSOCK(sock));
 	REQUIRE(sock->tid == isc_nm_tid());
-	if (sock->self != NULL) {
-		isc__nmsocket_detach(&sock->self);
-	};
+	/* Close the TCP connection, it's closing should fire 'our' closing */
+	isc_nmhandle_unref(sock->outerhandle);
+	sock->outerhandle = NULL;
 }
 
 /*
