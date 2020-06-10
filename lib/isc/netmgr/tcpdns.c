@@ -182,8 +182,13 @@ processbuffer(isc_nmsocket_t *dnssock, isc_nmhandle_t **handlep) {
 	 */
 	len = dnslen(dnssock->buf);
 	if (len <= dnssock->buf_len - 2) {
-		isc_nmhandle_t *dnshandle = isc__nmhandle_get(dnssock, NULL,
-							      NULL);
+		isc_nmhandle_t *dnshandle;
+		if (dnssock->statichandle != NULL) {
+			dnshandle = dnssock->statichandle;
+			isc_nmhandle_ref(dnshandle);
+		} else {
+			dnshandle = isc__nmhandle_get(dnssock, NULL, NULL);
+		}
 		isc_nmsocket_t *listener = dnssock->listener;
 
 		if (listener != NULL && listener->rcb.recv != NULL) {
@@ -578,4 +583,72 @@ isc__nm_async_tcpdnsclose(isc__networker_t *worker, isc__netievent_t *ev0) {
 	REQUIRE(worker->id == ievent->sock->tid);
 
 	tcpdns_close_direct(ievent->sock);
+}
+
+typedef struct tcpconnect {
+	isc_mem_t *mctx;
+	isc_nm_cb_t cb;
+	void *cbarg;
+	size_t extrahandlesize;
+} tcpconnect_t;
+
+static void
+tcpdnsconnect_cb(isc_nmhandle_t *handle, isc_result_t result, void *ncbarg_) {
+	tcpconnect_t *ncbarg = (tcpconnect_t *)ncbarg_;
+	isc_nm_cb_t cb = ncbarg->cb;
+	void *cbarg = ncbarg->cbarg;
+	size_t extrahandlesize = ncbarg->extrahandlesize;
+	isc_mem_putanddetach(&ncbarg->mctx, ncbarg, sizeof(*ncbarg));
+
+	if (result != ISC_R_SUCCESS) {
+		cb(NULL, result, cbarg);
+		return;
+	}
+	INSIST(VALID_NMHANDLE(handle));
+
+	isc_nmsocket_t *dnssock = isc_mem_get(handle->sock->mgr->mctx,
+					      sizeof(*dnssock));
+	isc__nmsocket_init(dnssock, handle->sock->mgr, isc_nm_tcpdnssocket,
+			   handle->sock->iface);
+
+	dnssock->extrahandlesize = extrahandlesize;
+	dnssock->outerhandle = handle;
+	isc_nmhandle_ref(dnssock->outerhandle);
+
+	dnssock->peer = handle->sock->peer;
+	dnssock->read_timeout = handle->sock->mgr->init;
+	dnssock->tid = isc_nm_tid();
+
+	/* Outgoing sockets are always sequential */
+	dnssock->sequential = true;
+
+	uv_timer_init(&dnssock->mgr->workers[isc_nm_tid()].loop,
+		      &dnssock->timer);
+	dnssock->timer.data = dnssock;
+	dnssock->timer_initialized = true;
+	uv_timer_start(&dnssock->timer, dnstcp_readtimeout,
+		       dnssock->read_timeout, 0);
+	/*
+	 * We start reading not asked to - we'll read and buffer
+	 * at most one packet.
+	 */
+	result = isc_nm_read(handle, dnslisten_readcb, dnssock);
+	if (result != ISC_R_SUCCESS) {
+		isc_nmhandle_unref(handle);
+	}
+
+	isc_nmhandle_t *dnshandle = isc__nmhandle_get(dnssock, NULL, NULL);
+	cb(dnshandle, ISC_R_SUCCESS, cbarg);
+}
+
+isc_result_t
+isc_nm_tcpdnsconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
+		     isc_nm_cb_t cb, void *cbarg, size_t extrahandlesize) {
+	tcpconnect_t *ncbarg = isc_mem_get(mgr->mctx, sizeof(tcpconnect_t));
+	*ncbarg = (tcpconnect_t){ .cb = cb,
+				  .cbarg = cbarg,
+				  .extrahandlesize = extrahandlesize };
+	isc_mem_attach(mgr->mctx, &ncbarg->mctx);
+	return (isc_nm_tcpconnect(mgr, local, peer, tcpdnsconnect_cb, ncbarg,
+				  0));
 }

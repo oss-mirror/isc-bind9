@@ -1340,6 +1340,8 @@ isc_nm_read(isc_nmhandle_t *handle, isc_nm_recv_cb_t cb, void *cbarg) {
 	switch (handle->sock->type) {
 	case isc_nm_tcpsocket:
 		return (isc__nm_tcp_read(handle, cb, cbarg));
+	case isc_nm_tcpdnssocket:
+		return (isc__nm_tcpdns_read(handle, cb, cbarg));
 	default:
 		INSIST(0);
 		ISC_UNREACHABLE();
