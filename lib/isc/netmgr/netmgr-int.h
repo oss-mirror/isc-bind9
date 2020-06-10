@@ -130,8 +130,9 @@ typedef enum isc__netievent_type {
 	netievent_tcpstop,
 	netievent_tcpclose,
 
-	netievent_tcpdnsclose,
 	netievent_tcpdnssend,
+	netievent_tcpdnsread,
+	netievent_tcpdnsclose,
 
 	netievent_closecb,
 	netievent_shutdown,
@@ -209,10 +210,11 @@ typedef isc__netievent__socket_t isc__netievent_udplisten_t;
 typedef isc__netievent__socket_t isc__netievent_udpstop_t;
 typedef isc__netievent__socket_t isc__netievent_tcpstop_t;
 typedef isc__netievent__socket_t isc__netievent_tcpclose_t;
-typedef isc__netievent__socket_t isc__netievent_tcpdnsclose_t;
 typedef isc__netievent__socket_t isc__netievent_startread_t;
 typedef isc__netievent__socket_t isc__netievent_pauseread_t;
 typedef isc__netievent__socket_t isc__netievent_closecb_t;
+typedef isc__netievent__socket_t isc__netievent_tcpdnsclose_t;
+typedef isc__netievent__socket_t isc__netievent_tcpdnsread_t;
 
 typedef struct isc__netievent__socket_req {
 	isc__netievent_type type;
@@ -445,7 +447,12 @@ struct isc_nmsocket {
 	isc_refcount_t references;
 
 	/*%
-	 * TCPDNS socket has been set not to pipeliine.
+	 * Established an outgoing connection, as client not server.
+	 */
+	atomic_bool client;
+
+	/*%
+	 * TCPDNS socket has been set not to pipeline.
 	 */
 	atomic_bool sequential;
 
@@ -713,9 +720,9 @@ isc__nm_tcp_shutdown(isc_nmsocket_t *sock);
  */
 
 void
-isc__nm_tcp_cancelread(isc_nmsocket_t *sock);
+isc__nm_tcp_cancelread(isc_nmhandle_t *handle);
 /*%<
- * Stop reading on a connected socket.
+ * Stop reading on a connected TCP handle.
  */
 
 void
@@ -769,6 +776,18 @@ isc__nm_async_tcpdnsclose(isc__networker_t *worker, isc__netievent_t *ev0);
 
 void
 isc__nm_async_tcpdnssend(isc__networker_t *worker, isc__netievent_t *ev0);
+
+void
+isc__nm_async_tcpdnsread(isc__networker_t *worker, isc__netievent_t *ev0);
+
+isc_result_t
+isc__nm_tcpdns_read(isc_nmhandle_t *handle, isc_nm_recv_cb_t cb, void *cbarg);
+
+void
+isc__nm_tcpdns_cancelread(isc_nmhandle_t *handle);
+/*%<
+ * Stop reading on a connected TCPDNS handle.
+ */
 
 #define isc__nm_uverr2result(x) \
 	isc___nm_uverr2result(x, true, __FILE__, __LINE__)

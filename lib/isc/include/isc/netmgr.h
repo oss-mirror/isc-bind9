@@ -385,3 +385,7 @@ isc_nm_setstats(isc_nm_t *mgr, isc_stats_t *stats);
  *\li	stats is a valid set of statistics counters supporting the
  *	full range of socket-related stats counter numbers.
  */
+
+isc_result_t
+isc_nm_tcpdnsconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
+		     isc_nm_cb_t cb, void *cbarg, size_t extrahandlesize);
