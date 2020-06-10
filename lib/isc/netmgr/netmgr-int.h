@@ -403,7 +403,7 @@ struct isc_nmsocket {
 	isc_nmsocket_t *children;
 	int nchildren;
 	isc_nmiface_t *iface;
-	isc_nmhandle_t *tcphandle;
+	isc_nmhandle_t *statichandle;
 	isc_nmhandle_t *outerhandle;
 
 	/*% Extra data allocated at the end of each isc_nmhandle_t */
