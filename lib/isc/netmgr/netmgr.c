@@ -739,7 +739,7 @@ nmsocket_cleanup(isc_nmsocket_t *sock, bool dofree) {
 		isc__nm_decstats(sock->mgr, sock->statsindex[STATID_ACTIVE]);
 	}
 
-	sock->tcphandle = NULL;
+	sock->statichandle = NULL;
 
 	if (sock->outerhandle != NULL) {
 		isc_nmhandle_unref(sock->outerhandle);
@@ -833,7 +833,7 @@ nmsocket_maybe_destroy(isc_nmsocket_t *sock) {
 		}
 	}
 
-	if (active_handles == 0 || sock->tcphandle != NULL) {
+	if (active_handles == 0 || sock->statichandle != NULL) {
 		destroy = true;
 	}
 
@@ -1100,8 +1100,8 @@ isc__nmhandle_get(isc_nmsocket_t *sock, isc_sockaddr_t *peer,
 	UNLOCK(&sock->lock);
 
 	if (sock->type == isc_nm_tcpsocket) {
-		INSIST(sock->tcphandle == NULL);
-		sock->tcphandle = handle;
+		INSIST(sock->statichandle == NULL);
+		sock->statichandle = handle;
 	}
 
 	return (handle);
