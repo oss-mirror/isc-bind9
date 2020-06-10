@@ -76,6 +76,15 @@ New Features
    at the zone apex via UPDATE will be logged but otherwise ignored.
    DS records belong in the parent zone, not at the zone apex. [GL #1798]
 
+- ``rndc`` has been updated to use the new BIND network manager API.
+  This change had the side effect of altering the TCP timeout for RNDC
+  connections from 60 seconds to the ``tcp-idle-timeout`` value, which
+  defaults to 30 seconds. Also, because the network manager currently
+  has no support for UNIX-domain sockets, those cannot now be used
+  with ``rndc``. This will be addressed in a future release, either by
+  restoring UNIX-domain socket support or by formally declaring them
+  to be obsolete in the control channel. [GL #1759]
+
 Feature Changes
 ~~~~~~~~~~~~~~~
 
