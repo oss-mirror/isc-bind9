@@ -569,7 +569,7 @@ newconnection(controllistener_t *listener, isc_nmhandle_t *handle) {
 		isc_log_write(named_g_lctx, NAMED_LOGCATEGORY_GENERAL,
 			      NAMED_LOGMODULE_CONTROL, ISC_LOG_DEBUG(3),
 			      "allocate new control connection");
-		*conn = (controlconnection_t){};
+		*conn = (controlconnection_t){ .handle = NULL };
 	}
 
 	if (conn->handle == NULL) {
