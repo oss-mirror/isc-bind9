@@ -175,6 +175,11 @@ processbuffer(isc_nmsocket_t *dnssock, isc_nmhandle_t **handlep) {
 	if (dnssock->buf_len < 2) {
 		return (ISC_R_NOMORE);
 	}
+	
+	if (dnssock->listener == NULL && dnssock->rcb.recv == NULL) {
+		/* Nobody waits for us, pause. */
+		return (ISC_R_DISABLED);
+	}
 
 	/*
 	 * Process the first packet from the buffer, leaving
@@ -189,6 +194,7 @@ processbuffer(isc_nmsocket_t *dnssock, isc_nmhandle_t **handlep) {
 		} else {
 			dnshandle = isc__nmhandle_get(dnssock, NULL, NULL);
 		}
+		
 		isc_nmsocket_t *listener = dnssock->listener;
 
 		if (listener != NULL && listener->rcb.recv != NULL) {
@@ -197,6 +203,19 @@ processbuffer(isc_nmsocket_t *dnssock, isc_nmhandle_t **handlep) {
 				&(isc_region_t){ .base = dnssock->buf + 2,
 						 .length = len },
 				listener->rcbarg);
+		} else if (dnssock->rcb.recv != NULL) {
+			/*
+			 * We need to clear the callback before issuing it -
+			 * as the callback itself might replace it.
+			 */
+			isc_nm_recv_cb_t cb = dnssock->rcb.recv;
+			void* cbarg = dnssock->rcbarg;
+			dnssock->rcb.recv = NULL;
+			dnssock->rcbarg = NULL;
+			cb(dnshandle, ISC_R_SUCCESS,
+			   &(isc_region_t){ .base = dnssock->buf + 2,
+					    .length = len },
+			   cbarg);
 		}
 
 		len += 2;
@@ -257,12 +276,19 @@ dnslisten_readcb(isc_nmhandle_t *handle, isc_result_t eresult,
 		isc_nmhandle_t *dnshandle = NULL;
 
 		result = processbuffer(dnssock, &dnshandle);
-		if (result != ISC_R_SUCCESS) {
+		if (result == ISC_R_DISABLED) {
 			/*
-			 * There wasn't anything in the buffer to process.
+			 * Nobody is waiting on the callback, pause reading.
+			 */
+			isc_nm_pauseread(dnssock->outerhandle->sock);
+			return;
+		} else if (result == ISC_R_NOMORE) {
+			/*
+			 * There wasn't anything in the buffer to process
 			 */
 			return;
 		}
+		INSIST(result == ISC_R_SUCCESS);
 
 		/*
 		 * We have a packet: stop timeout timers
@@ -277,6 +303,12 @@ dnslisten_readcb(isc_nmhandle_t *handle, isc_result_t eresult,
 			 * We're in sequential mode and we processed
 			 * one packet, so we're done until the next read
 			 * completes.
+			 * If we're a client - clear the callback.
+			 */
+		} else if (dnssock->client && dnssock->rcb.recv == NULL) {
+			/*
+			 * We're in client mode and we don't have a callback -
+			 * pause the read.
 			 */
 			isc_nm_pauseread(dnssock->outerhandle->sock);
 			done = true;
@@ -619,9 +651,9 @@ tcpdnsconnect_cb(isc_nmhandle_t *handle, isc_result_t result, void *ncbarg_) {
 	dnssock->read_timeout = handle->sock->mgr->init;
 	dnssock->tid = isc_nm_tid();
 
-	/* Outgoing sockets are always sequential */
-	dnssock->sequential = true;
-
+	dnssock->client = true;
+	dnssock->statichandle = isc__nmhandle_get(dnssock, NULL, NULL);
+	
 	uv_timer_init(&dnssock->mgr->workers[isc_nm_tid()].loop,
 		      &dnssock->timer);
 	dnssock->timer.data = dnssock;
@@ -637,8 +669,9 @@ tcpdnsconnect_cb(isc_nmhandle_t *handle, isc_result_t result, void *ncbarg_) {
 		isc_nmhandle_unref(handle);
 	}
 
-	isc_nmhandle_t *dnshandle = isc__nmhandle_get(dnssock, NULL, NULL);
-	cb(dnshandle, ISC_R_SUCCESS, cbarg);
+	cb(dnssock->statichandle, ISC_R_SUCCESS, cbarg);
+	isc_nmhandle_unref(dnssock->statichandle);
+	isc__nmsocket_detach(&dnssock);
 }
 
 isc_result_t
@@ -651,4 +684,69 @@ isc_nm_tcpdnsconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 	isc_mem_attach(mgr->mctx, &ncbarg->mctx);
 	return (isc_nm_tcpconnect(mgr, local, peer, tcpdnsconnect_cb, ncbarg,
 				  0));
+}
+
+isc_result_t
+isc__nm_tcpdns_read(isc_nmhandle_t *handle, isc_nm_recv_cb_t cb, void *cbarg) {
+	/*
+	 * This HAS to be done asynchronously - read is often called from the
+	 * read callback, we'd clash in processbuffer() AND grow the stack
+	 * indefinitely.
+	 */
+	isc_nmsocket_t *sock = handle->sock;
+	INSIST(handle == sock->statichandle);
+	INSIST(sock->rcb.recv == NULL);
+	isc__netievent_tcpdnsread_t *ievent =
+		isc__nm_get_ievent(sock->mgr, netievent_tcpdnsread);
+	ievent->sock = sock;
+	sock->rcb.recv = cb;
+	sock->rcbarg = cbarg;
+	isc__nm_enqueue_ievent(&sock->mgr->workers[sock->tid],
+			       (isc__netievent_t *)ievent);
+	return (ISC_R_SUCCESS);
+}
+
+void
+isc__nm_async_tcpdnsread(isc__networker_t *worker, isc__netievent_t *ev0) {
+	isc__netievent_tcpdnsread_t *ievent =
+		(isc__netievent_tcpdnsclose_t *)ev0;
+	isc_nmsocket_t *sock = ievent->sock;
+
+	REQUIRE(VALID_NMSOCK(sock));
+	REQUIRE(worker->id == sock->tid);
+	isc_nmhandle_t *handle = sock->statichandle;
+
+	isc_result_t result;
+
+	if (sock->type != isc_nm_tcpdnssocket || sock->outerhandle == NULL) {
+		sock->rcb.recv(handle, ISC_R_NOTCONNECTED, NULL, sock->rcbarg);
+		return;
+	}
+
+	/* Maybe we have a packet already? */
+	isc_nmhandle_t *newhandle = NULL;
+	result = processbuffer(sock, &newhandle);
+	if (result == ISC_R_SUCCESS) {
+		atomic_store(&sock->outerhandle->sock->processing,
+			     true);
+		if (sock->timer_initialized) {
+			uv_timer_stop(&sock->timer);
+		}
+		isc_nmhandle_unref(handle);
+	} else if (sock->outerhandle != NULL) {
+		/* Restart reading, wait for the callback */
+		atomic_store(&sock->outerhandle->sock->processing,
+			     false);
+		if (sock->timer_initialized) {
+			uv_timer_start(&sock->timer, dnstcp_readtimeout,
+				       sock->read_timeout, 0);
+		}
+		isc_nm_resumeread(sock->outerhandle->sock);
+	} else {
+		isc_nm_recv_cb_t cb = sock->rcb.recv;
+		void *cbarg = sock->rcbarg;
+		sock->rcb.recv = NULL;
+		sock->rcbarg = NULL;
+		cb(handle, ISC_R_NOTCONNECTED, NULL, cbarg);
+	}
 }

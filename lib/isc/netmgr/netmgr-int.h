@@ -135,7 +135,9 @@ typedef enum isc__netievent_type {
 	netievent_tcpaccept,
 	netievent_tcpstop,
 	netievent_tcpclose,
+
 	netievent_tcpdnsclose,
+	netievent_tcpdnsread,
 
 	netievent_closecb,
 	netievent_shutdown,
@@ -213,10 +215,11 @@ typedef isc__netievent__socket_t isc__netievent_udplisten_t;
 typedef isc__netievent__socket_t isc__netievent_udpstop_t;
 typedef isc__netievent__socket_t isc__netievent_tcpstop_t;
 typedef isc__netievent__socket_t isc__netievent_tcpclose_t;
-typedef isc__netievent__socket_t isc__netievent_tcpdnsclose_t;
 typedef isc__netievent__socket_t isc__netievent_startread_t;
 typedef isc__netievent__socket_t isc__netievent_pauseread_t;
 typedef isc__netievent__socket_t isc__netievent_closecb_t;
+typedef isc__netievent__socket_t isc__netievent_tcpdnsclose_t;
+typedef isc__netievent__socket_t isc__netievent_tcpdnsread_t;
 
 typedef struct isc__netievent__socket_req {
 	isc__netievent_type type;
@@ -446,6 +449,12 @@ struct isc_nmsocket {
 	atomic_bool connected;
 	atomic_bool connect_error;
 	isc_refcount_t references;
+
+
+	/*%
+	 * Socket was connected, not connected to.
+	 */
+	atomic_bool client;
 
 	/*%
 	 * TCPDNS socket has been set not to pipeliine.
@@ -773,6 +782,13 @@ isc__nm_tcpdns_stoplistening(isc_nmsocket_t *sock);
 
 void
 isc__nm_async_tcpdnsclose(isc__networker_t *worker, isc__netievent_t *ev0);
+
+void
+isc__nm_async_tcpdnsread(isc__networker_t *worker, isc__netievent_t *ev0);
+
+isc_result_t
+isc__nm_tcpdns_read(isc_nmhandle_t *handle, isc_nm_recv_cb_t cb, void *cbarg);
+
 
 #define isc__nm_uverr2result(x) \
 	isc___nm_uverr2result(x, true, __FILE__, __LINE__)

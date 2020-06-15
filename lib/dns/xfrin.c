@@ -735,6 +735,8 @@ xfrin_cancelio(dns_xfrin_ctx_t *xfr) {
 	   ISC_SOCKCANCEL_SEND);
 		}
 	*/
+	isc_nmhandle_unref(xfr->nmhandle);
+	xfr->nmhandle = NULL;
 }
 
 static void
@@ -919,9 +921,8 @@ failure:
 static isc_result_t
 xfrin_start(dns_xfrin_ctx_t *xfr) {
 	isc_result_t result;
-	CHECK(isc_nm_tcpconnect(xfr->netmgr, (isc_nmiface_t *)&xfr->sourceaddr,
-				(isc_nmiface_t *)&xfr->masteraddr,
-				xfrin_connect_done, xfr, 0));
+	CHECK(isc_nm_tcpdnsconnect(xfr->netmgr, (isc_nmiface_t *)&xfr->sourceaddr,
+				(isc_nmiface_t *) &xfr->masteraddr, xfrin_connect_done, xfr, 0));
 	/* TODO	isc_socket_dscp(xfr->socket, xfr->dscp); */
 	xfr->connects++;
 	return (ISC_R_SUCCESS);
@@ -990,7 +991,9 @@ xfrin_connect_done(isc_nmhandle_t *nmhandle, isc_result_t result, void *cbarg) {
 
 	sockaddr = isc_nmhandle_peeraddr(nmhandle);
 	isc_sockaddr_format(&sockaddr, sourcetext, sizeof(sourcetext));
-
+	isc_nmhandle_ref(nmhandle);
+	xfr->nmhandle = nmhandle;
+	
 	if (xfr->tsigkey != NULL && xfr->tsigkey->key != NULL) {
 		dns_name_format(dst_key_name(xfr->tsigkey->key), signerbuf,
 				sizeof(signerbuf));
@@ -1219,6 +1222,7 @@ xfrin_recv_done(isc_nmhandle_t *handle, isc_result_t result,
 	}
 	isc_buffer_t buffer;
 	isc_buffer_init(&buffer, region->base, region->length);
+	isc_buffer_add(&buffer, region->length);
 
 	result = dns_message_parse(msg, &buffer,
 				   DNS_MESSAGEPARSE_PRESERVEORDER);
