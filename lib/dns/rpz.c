@@ -1486,7 +1486,7 @@ dns_rpz_new_zones(dns_rpz_zones_t **rpzsp, char *rps_cstr, size_t rps_cstr_size,
 		goto cleanup_rbt;
 	}
 
-	result = isc_task_create(taskmgr, 0, &zones->updater);
+	result = isc_task_create(taskmgr, 5, &zones->updater);
 	if (result != ISC_R_SUCCESS) {
 		goto cleanup_task;
 	}
