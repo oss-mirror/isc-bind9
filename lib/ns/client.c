@@ -1358,7 +1358,7 @@ process_ecs(ns_client_t *client, isc_buffer_t *buf, size_t optlen) {
 	}
 
 	paddr = (uint8_t *)&caddr.type;
-	if (addrbytes != 0U) {
+	if (addrbytes > 0U) {
 		memmove(paddr, isc_buffer_current(buf), addrbytes);
 		isc_buffer_forward(buf, addrbytes);
 		optlen -= addrbytes;
