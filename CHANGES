@@ -1,3 +1,7 @@
+5447.	[bug]		The introduction of KASP support broke whether the
+			second field of sig-validity-interval was treated as
+			days or hours. [GL !3735]
+
 5446.	[bug]		The validator could fail to accept a properly signed
 			RRset if an unsupported algorithm appeared earlier in
 			the DNSKEY RRset than a supported algorithm.  It could
