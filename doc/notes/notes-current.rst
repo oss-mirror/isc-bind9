@@ -53,3 +53,6 @@ Bug Fixes
   unsupported algorithm appeared earlier in the DNSKEY RRset than a
   supported algorithm.  It could also stop if it detected a malformed
   public key. [GL #1689]
+
+- The introduction of KASP support broke whether the second field
+  of sig-validity-interval was treated as days or hours. [GL !3735]
