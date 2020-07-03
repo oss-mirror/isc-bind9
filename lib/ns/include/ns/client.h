@@ -325,14 +325,6 @@ ns_client_shuttingdown(ns_client_t *client);
  * Return true iff the client is currently shutting down.
  */
 
-isc_result_t
-ns_client_replace(ns_client_t *client);
-/*%<
- * Try to replace the current client with a new one, so that the
- * current one can go off and do some lengthy work without
- * leaving the dispatch/socket without service.
- */
-
 void
 ns_client_settimeout(ns_client_t *client, unsigned int seconds);
 /*%<

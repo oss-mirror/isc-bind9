@@ -1734,10 +1734,6 @@ query_fetch_additional(ns_client_t *client, const dns_name_t *name,
 	if (client->recursionquota == NULL) {
 		result = isc_quota_attach(&client->sctx->recursionquota,
 					  &client->recursionquota);
-		if (result == ISC_R_SUCCESS && !client->mortal && !TCP(client))
-		{
-			result = ns_client_replace(client);
-		}
 		if (result == ISC_R_SUCCESS) {
 			ns_stats_increment(client->sctx->nsstats,
 					   ns_statscounter_recursclients);
