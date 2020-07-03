@@ -29,6 +29,7 @@ options {
 	minimal-responses no;
 	dnssec-validation yes;
 	qname-minimization disabled;
+	prefetch-additional no;
 };
 
 server 10.53.0.1 { tcp-only yes; };

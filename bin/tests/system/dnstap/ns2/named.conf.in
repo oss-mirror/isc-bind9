@@ -28,6 +28,7 @@ options {
 	require-server-cookie no;
 	dnssec-validation yes;
 	qname-minimization disabled;
+	prefetch-additional no;
 };
 
 key rndc_key {
