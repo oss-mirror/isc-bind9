@@ -141,7 +141,9 @@
 /*% Does the rdataset 'r' contain a stale answer? */
 #define STALE(r) (((r)->attributes & DNS_RDATASETATTR_STALE) != 0)
 
+#ifndef ARRAYSIZE
 #define ARRAYSIZE(x) (sizeof(x) / sizeof((x)[0]))
+#endif
 
 #ifdef WANT_QUERYTRACE
 static inline void
