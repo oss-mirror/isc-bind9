@@ -386,7 +386,8 @@ ret=0
 $DIG $DIGOPTS -t SRV @10.53.0.3 _http._tcp.cname.srv.example > dig.out.$n || ret=1
 grep '^cname\.example\.tld\..*target\.example\.tld\.$' dig.out.$n > /dev/null || ret=1
 grep '^target\.example\.tld\..*1\.2\.3\.4$' dig.out.$n > /dev/null || ret=1
-grep '^target\.example\.tld\..*::1\.2\.3\.5$' dig.out.$n > /dev/null || ret=1
+grep '^target\.example\.tld\..*::1\.2\.3\.5$' dig.out.$n > /dev/null || \
+grep '^target\.example\.tld\..*::102:305$' dig.out.$n > /dev/null || ret=1
 if [ $ret -eq 1 ] ; then
     echo_i " failed"; status=1
 fi
