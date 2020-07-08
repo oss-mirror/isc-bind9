@@ -246,11 +246,13 @@ static char *
 isc___mem_strdup(isc_mem_t *mctx, const char *s FLARG);
 static void
 isc___mem_free(isc_mem_t *ctx, void *ptr FLARG);
+static void *
+isc___mem_calloc(isc_mem_t *ctx, size_t count, size_t size FLARG);
 
 static isc_memmethods_t memmethods = {
 	isc___mem_get,	    isc___mem_put,	  isc___mem_putanddetach,
 	isc___mem_allocate, isc___mem_reallocate, isc___mem_strdup,
-	isc___mem_free,
+	isc___mem_free, isc___mem_calloc
 };
 
 #if ISC_MEM_TRACKLINES
@@ -1360,6 +1362,16 @@ isc___mem_reallocate(isc_mem_t *ctx0, void *ptr, size_t size FLARG) {
 	return (new_ptr);
 }
 
+void *
+isc___mem_calloc(isc_mem_t *ctx0, size_t count, size_t size FLARG) {
+	REQUIRE(ISC_MUL_OVERFLOW(count, size));
+
+	size_t csize = count * size;
+	void *ptr = isc__mem_allocate(ctx0, csize FLARG_PASS);
+
+	return (memset(ptr, 0, csize));
+}
+
 void
 isc___mem_free(isc_mem_t *ctx0, void *ptr FLARG) {
 	REQUIRE(VALID_CONTEXT(ctx0));
@@ -2458,6 +2470,13 @@ isc__mem_reallocate(isc_mem_t *mctx, void *ptr, size_t size FLARG) {
 	REQUIRE(ISCAPI_MCTX_VALID(mctx));
 
 	return (mctx->methods->memreallocate(mctx, ptr, size FLARG_PASS));
+}
+
+void *
+isc__mem_calloc(isc_mem_t *mctx, size_t count, size_t size FLARG) {
+	REQUIRE(ISCAPI_MCTX_VALID(mctx));
+
+	return (mctx->methods->calloc(mctx, count, size FLARG_PASS));
 }
 
 char *

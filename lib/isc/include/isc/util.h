@@ -341,6 +341,15 @@ mock_assert(const int result, const char *const expression,
 #endif /* ifdef __GNUC__ */
 
 /*%
+ * Integer Overflow Builtins
+ */
+#if (__GNUC__ > 7) || ((__GNUC__ == 7) && (__GNUC_MINOR__ > 3))
+#define ISC_MUL_OVERFLOW(a, b) __builtin_mul_overflow_p(a, b, (__typeof__ ((a) * (b))) 0)
+#else
+#define ISC_MUL_OVERLOW(a, b) 1
+#endif
+
+/*%
  * Misc
  */
 #include <isc/deprecated.h>

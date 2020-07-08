@@ -173,6 +173,7 @@ typedef struct isc_memmethods {
 			       size_t size _ISC_MEM_FLARG);
 	char *(*memstrdup)(isc_mem_t *mctx, const char *s _ISC_MEM_FLARG);
 	void (*memfree)(isc_mem_t *mctx, void *ptr _ISC_MEM_FLARG);
+	void *(*calloc)(isc_mem_t *, size_t, size_t _ISC_MEM_FLARG);
 } isc_memmethods_t;
 
 /*%
@@ -225,6 +226,7 @@ struct isc_mempool {
 #define isc_mem_allocate(c, s) ISCMEMFUNC(allocate)((c), (s)_ISC_MEM_FILELINE)
 #define isc_mem_reallocate(c, p, s) \
 	ISCMEMFUNC(reallocate)((c), (p), (s)_ISC_MEM_FILELINE)
+#define isc_mem_calloc(c, n, s) ISCMEMFUNC(calloc)((c), (n), (s)_ISC_MEM_FILELINE)
 #define isc_mem_strdup(c, p) ISCMEMFUNC(strdup)((c), (p)_ISC_MEM_FILELINE)
 #define isc_mempool_get(c)   ISCMEMPOOLFUNC(get)((c)_ISC_MEM_FILELINE)
 
@@ -596,6 +598,7 @@ void *ISCMEMFUNC(allocate)(isc_mem_t *, size_t _ISC_MEM_FLARG);
 void *ISCMEMFUNC(reallocate)(isc_mem_t *, void *, size_t _ISC_MEM_FLARG);
 void  ISCMEMFUNC(free)(isc_mem_t *, void *_ISC_MEM_FLARG);
 char *ISCMEMFUNC(strdup)(isc_mem_t *, const char *_ISC_MEM_FLARG);
+void *ISCMEMFUNC(calloc)(isc_mem_t *, size_t, size_t _ISC_MEM_FLARG);
 void *ISCMEMPOOLFUNC(get)(isc_mempool_t *_ISC_MEM_FLARG);
 void  ISCMEMPOOLFUNC(put)(isc_mempool_t *, void *_ISC_MEM_FLARG);
 

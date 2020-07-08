@@ -19,6 +19,7 @@
 #include <isc/magic.h>
 #include <isc/mem.h>
 #include <isc/netmgr.h>
+#include <isc/once.h>
 #include <isc/print.h>
 #include <isc/quota.h>
 #include <isc/random.h>
@@ -134,15 +135,41 @@ isc_nm_tid(void) {
 	return (isc__nm_tid_v);
 }
 
+static atomic_uintptr_t isc__nm_mctx = ATOMIC_VAR_INIT(0);
+
 bool
 isc__nm_in_netthread(void) {
 	return (isc__nm_tid_v >= 0);
+}
+
+static void *
+isc__nm_malloc(size_t size) {
+	return (isc_mem_allocate((isc_mem_t *)isc__nm_mctx, size));
+}
+
+static void *
+isc__nm_realloc(void *ptr, size_t size) {
+	return (isc_mem_reallocate((isc_mem_t *)isc__nm_mctx, ptr, size));
+}
+
+static void *
+isc__nm_calloc(size_t count, size_t size) {
+	return (isc_mem_calloc((isc_mem_t *)isc__nm_mctx, count, size));
+}
+
+static void
+isc__nm_free(void *ptr) {
+	isc_mem_free((isc_mem_t *)isc__nm_mctx, ptr);
 }
 
 isc_nm_t *
 isc_nm_start(isc_mem_t *mctx, uint32_t workers) {
 	isc_nm_t *mgr = NULL;
 	char name[32];
+
+	REQUIRE(atomic_compare_exchange_strong(&isc__nm_mctx, &(uintptr_t){ 0 }, (uintptr_t)mctx));
+
+	uv_replace_allocator(isc__nm_malloc, isc__nm_realloc, isc__nm_calloc, isc__nm_free);
 
 	mgr = isc_mem_get(mctx, sizeof(*mgr));
 	*mgr = (isc_nm_t){ .nworkers = workers };
