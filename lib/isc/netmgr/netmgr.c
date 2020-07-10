@@ -167,9 +167,18 @@ isc_nm_start(isc_mem_t *mctx, uint32_t workers) {
 	isc_nm_t *mgr = NULL;
 	char name[32];
 
-	REQUIRE(atomic_compare_exchange_strong(&isc__nm_mctx, &(uintptr_t){ 0 }, (uintptr_t)mctx));
+	REQUIRE(atomic_compare_exchange_strong(&isc__nm_mctx, &(uintptr_t){ 0 },
+					       (uintptr_t)mctx));
 
-	uv_replace_allocator(isc__nm_malloc, isc__nm_realloc, isc__nm_calloc, isc__nm_free);
+	/*
+	 * If we are using libisc allocator we need to shutdown libuv before
+	 * shutting down the memory context and the uv_library_shutdown()
+	 * function became only available since libuv 1.38.0
+	 */
+#if UV_VERSION_MAJOR > 1 || (UV_VERSION_MAJOR == 1 && UV_VERSION_MINOR >= 38)
+	uv_replace_allocator(isc__nm_malloc, isc__nm_realloc, isc__nm_calloc,
+			     isc__nm_free);
+#endif
 
 	mgr = isc_mem_get(mctx, sizeof(*mgr));
 	*mgr = (isc_nm_t){ .nworkers = workers };
@@ -323,6 +332,10 @@ nm_destroy(isc_nm_t **mgr0) {
 
 	isc_mempool_destroy(&mgr->reqpool);
 	isc_mutex_destroy(&mgr->reqlock);
+
+#if UV_VERSION_MAJOR > 1 || (UV_VERSION_MAJOR == 1 && UV_VERSION_MINOR >= 38)
+	uv_library_shutdown();
+#endif
 
 	isc_mem_put(mgr->mctx, mgr->workers,
 		    mgr->nworkers * sizeof(isc__networker_t));
