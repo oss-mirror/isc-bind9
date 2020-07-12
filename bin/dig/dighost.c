@@ -90,14 +90,6 @@
 #include <pk11/result.h>
 #endif /* if USE_PKCS11 */
 
-#if !defined(NS_INADDRSZ)
-#define NS_INADDRSZ 4
-#endif /* if !defined(NS_INADDRSZ) */
-
-#if !defined(NS_IN6ADDRSZ)
-#define NS_IN6ADDRSZ 16
-#endif /* if !defined(NS_IN6ADDRSZ) */
-
 dig_lookuplist_t lookup_list;
 dig_serverlist_t server_list;
 dig_searchlistlist_t search_list;
@@ -114,9 +106,8 @@ isc_log_t *lctx = NULL;
 isc_taskmgr_t *taskmgr = NULL;
 isc_task_t *global_task = NULL;
 isc_timermgr_t *timermgr = NULL;
-isc_socketmgr_t *socketmgr = NULL;
-isc_sockaddr_t bind_address;
-isc_sockaddr_t bind_any;
+isc_nm_t *netmgr = NULL;
+isc_sockaddr_t localaddr;
 int sendcount = 0;
 int recvcount = 0;
 int sockcount = 0;
@@ -135,7 +126,7 @@ static isc_result_t
 idn_output_filter(isc_buffer_t *buffer, unsigned int used_org);
 #endif /* HAVE_LIBIDN2 */
 
-isc_socket_t *keep = NULL;
+isc_nmhandle_t *keep = NULL;
 isc_sockaddr_t keepaddr;
 
 /*%
@@ -238,7 +229,8 @@ static void
 cancel_lookup(dig_lookup_t *lookup);
 
 static void
-recv_done(isc_task_t *task, isc_event_t *event);
+recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
+	  void *arg);
 
 static void
 send_udp(dig_query_t *query);
@@ -247,7 +239,7 @@ static void
 connect_timeout(isc_task_t *task, isc_event_t *event);
 
 static void
-launch_next_query(dig_query_t *query, bool include_question);
+launch_next_query(dig_query_t *query);
 
 static void
 check_next_lookup(dig_lookup_t *lookup);
@@ -1408,7 +1400,9 @@ setup_libs(void) {
 
 	isc_log_setdebuglevel(lctx, 0);
 
-	result = isc_taskmgr_create(mctx, 1, 0, NULL, &taskmgr);
+	netmgr = isc_nm_start(mctx, 1);
+
+	result = isc_taskmgr_create(mctx, 1, 0, netmgr, &taskmgr);
 	check_result(result, "isc_taskmgr_create");
 
 	result = isc_task_create(taskmgr, 0, &global_task);
@@ -1417,9 +1411,6 @@ setup_libs(void) {
 
 	result = isc_timermgr_create(mctx, &timermgr);
 	check_result(result, "isc_timermgr_create");
-
-	result = isc_socketmgr_create(mctx, &socketmgr);
-	check_result(result, "isc_socketmgr_create");
 
 	result = dst_lib_init(mctx, NULL);
 	check_result(result, "dst_lib_init");
@@ -1606,15 +1597,17 @@ clear_query(dig_query_t *query) {
 	}
 	INSIST(query->recvspace != NULL);
 
-	if (query->sock != NULL) {
-		isc_socket_detach(&query->sock);
+	if (query->handle != NULL) {
+		isc_nmhandle_unref(query->handle);
+		query->handle = NULL;
 		sockcount--;
 		debug("sockcount=%d", sockcount);
+		INSIST(sockcount >= 0);
 	}
+
 	isc_mempool_put(commctx, query->recvspace);
 	isc_mempool_put(commctx, query->tmpsendspace);
 	isc_buffer_invalidate(&query->recvbuf);
-	isc_buffer_invalidate(&query->lengthbuf);
 
 	if (query->waiting_senddone) {
 		query->pending_free = true;
@@ -2587,7 +2580,7 @@ setup_lookup(dig_lookup_t *lookup) {
 		query->msg_count = 0;
 		query->byte_count = 0;
 		query->ixfr_axfr = false;
-		query->sock = NULL;
+		query->handle = NULL;
 		query->recvspace = isc_mempool_get(commctx);
 		query->tmpsendspace = isc_mempool_get(commctx);
 		if (query->recvspace == NULL) {
@@ -2595,9 +2588,6 @@ setup_lookup(dig_lookup_t *lookup) {
 		}
 
 		isc_buffer_init(&query->recvbuf, query->recvspace, COMMSIZE);
-		isc_buffer_init(&query->lengthbuf, query->lengthspace, 2);
-		isc_buffer_init(&query->tmpsendbuf, query->tmpsendspace,
-				COMMSIZE);
 		query->sendbuf = lookup->renderbuf;
 
 		isc_time_settoepoch(&query->time_sent);
@@ -2619,23 +2609,32 @@ setup_lookup(dig_lookup_t *lookup) {
  * the query if the send was canceled.
  */
 static void
-send_done(isc_task_t *_task, isc_event_t *event) {
-	dig_query_t *query, *next;
-	dig_lookup_t *l;
+send_done(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
+	dig_query_t *query = (dig_query_t *)arg;
+	dig_query_t *next = NULL;
+	dig_lookup_t *l = NULL;
 
-	REQUIRE(event->ev_type == ISC_SOCKEVENT_SENDDONE);
-
-	UNUSED(_task);
-
-	LOCK_LOOKUP;
+	REQUIRE(DIG_VALID_QUERY(query));
+	REQUIRE(handle == query->handle);
+	INSIST(!free_now);
 
 	debug("send_done()");
 	sendcount--;
 	debug("sendcount=%d", sendcount);
 	INSIST(sendcount >= 0);
 
-	query = event->ev_arg;
-	REQUIRE(DIG_VALID_QUERY(query));
+	if (eresult == ISC_R_CANCELED) {
+		return;
+	} else if (eresult != ISC_R_SUCCESS) {
+		if (eresult != ISC_R_CANCELED) {
+			debug("send failed: %s", isc_result_totext(eresult));
+		}
+		isc_nmhandle_unref(handle);
+		return;
+	}
+
+	LOCK_LOOKUP;
+
 	query->waiting_senddone = false;
 	l = query->lookup;
 
@@ -2648,8 +2647,6 @@ send_done(isc_task_t *_task, isc_event_t *event) {
 		}
 	}
 
-	isc_event_free(&event);
-
 	if (query->pending_free) {
 		query->magic = 0;
 		isc_mem_free(mctx, query);
@@ -2660,9 +2657,7 @@ send_done(isc_task_t *_task, isc_event_t *event) {
 }
 
 /*%
- * Cancel a lookup, sending isc_socket_cancel() requests to all outstanding
- * IO sockets.  The cancel handlers should take care of cleaning up the
- * query and lookup structures
+ * Cancel a lookup, sending canceling reads on all existing sockets.
  */
 static void
 cancel_lookup(dig_lookup_t *lookup) {
@@ -2673,9 +2668,8 @@ cancel_lookup(dig_lookup_t *lookup) {
 	while (query != NULL) {
 		REQUIRE(DIG_VALID_QUERY(query));
 		next = ISC_LIST_NEXT(query, link);
-		if (query->sock != NULL) {
-			isc_socket_cancel(query->sock, global_task,
-					  ISC_SOCKCANCEL_ALL);
+		if (query->handle != NULL) {
+			isc_nm_cancelread(query->handle);
 			check_if_done();
 		} else {
 			clear_query(query);
@@ -2742,7 +2736,7 @@ force_timeout(dig_query_t *query) {
 }
 
 static void
-connect_done(isc_task_t *task, isc_event_t *event);
+connect_done(isc_nmhandle_t *handle, isc_result_t eresult, void *arg);
 
 /*%
  * Unlike send_udp, this can't be called multiple times with the same
@@ -2799,43 +2793,39 @@ send_tcp_connect(dig_query_t *query) {
 		return;
 	}
 
-	INSIST(query->sock == NULL);
+	INSIST(query->handle == NULL);
 
 	if (keep != NULL && isc_sockaddr_equal(&keepaddr, &query->sockaddr)) {
 		sockcount++;
-		isc_socket_attach(keep, &query->sock);
+		isc_nmhandle_ref(keep);
+		query->handle = keep;
 		query->waiting_connect = false;
-		launch_next_query(query, true);
-		goto search;
+		launch_next_query(query);
+	} else {
+		if (keep != NULL) {
+			isc_nmhandle_unref(keep);
+			keep = NULL;
+		}
+
+		if (!specified_source) {
+			if ((isc_sockaddr_pf(&query->sockaddr) == AF_INET) &&
+			    have_ipv4) {
+				isc_sockaddr_any(&localaddr);
+			} else {
+				isc_sockaddr_any6(&localaddr);
+			}
+		}
+
+		result = isc_nm_tcpdnsconnect(netmgr,
+					      (isc_nmiface_t *)&localaddr,
+					      (isc_nmiface_t *)&query->sockaddr,
+					      connect_done, query, 0);
+		check_result(result, "isc_nm_tcpdnsconnect");
+		/* XXX: set DSCP */
+		/* XXX: set IPV6ONLY */
+		bringup_timer(query, TCP_TIMEOUT);
 	}
 
-	result = isc_socket_create(socketmgr, isc_sockaddr_pf(&query->sockaddr),
-				   isc_sockettype_tcp, &query->sock);
-	check_result(result, "isc_socket_create");
-	sockcount++;
-	debug("sockcount=%d", sockcount);
-	if (query->lookup->dscp != -1) {
-		isc_socket_dscp(query->sock, query->lookup->dscp);
-	}
-	isc_socket_ipv6only(query->sock, !query->lookup->mapped);
-	if (specified_source) {
-		result = isc_socket_bind(query->sock, &bind_address,
-					 ISC_SOCKET_REUSEADDRESS);
-	} else {
-		if ((isc_sockaddr_pf(&query->sockaddr) == AF_INET) && have_ipv4)
-		{
-			isc_sockaddr_any(&bind_any);
-		} else {
-			isc_sockaddr_any6(&bind_any);
-		}
-		result = isc_socket_bind(query->sock, &bind_any, 0);
-	}
-	check_result(result, "isc_socket_bind");
-	bringup_timer(query, TCP_TIMEOUT);
-	result = isc_socket_connect(query->sock, &query->sockaddr, global_task,
-				    connect_done, query);
-	check_result(result, "isc_socket_connect");
-search:
 	/*
 	 * If we're at the endgame of a nameserver search, we need to
 	 * immediately bring up all the queries.  Do it here.
@@ -2874,10 +2864,12 @@ send_udp(dig_query_t *query) {
 	isc_result_t result;
 	dig_query_t *next;
 	isc_region_t r;
-	isc_socketevent_t *sevent;
+
 	REQUIRE(DIG_VALID_QUERY(query));
 
 	debug("send_udp(%p)", query);
+
+	INSIST(query->handle != NULL);
 
 	l = query->lookup;
 	bringup_timer(query, UDP_TIMEOUT);
@@ -2915,47 +2907,51 @@ send_udp(dig_query_t *query) {
 			return;
 		}
 
+		if (!specified_source) {
+			if ((isc_sockaddr_pf(&query->sockaddr) == AF_INET) &&
+			    have_ipv4) {
+				isc_sockaddr_any(&localaddr);
+			} else {
+				isc_sockaddr_any6(&localaddr);
+			}
+		}
+
+		/* XXX: udpconnect */
+#if 0
 		result = isc_socket_create(socketmgr,
 					   isc_sockaddr_pf(&query->sockaddr),
 					   isc_sockettype_udp, &query->sock);
 		check_result(result, "isc_socket_create");
+#endif
 		sockcount++;
 		debug("sockcount=%d", sockcount);
-		if (query->lookup->dscp != -1) {
-			isc_socket_dscp(query->sock, query->lookup->dscp);
-		}
-		isc_socket_ipv6only(query->sock, !query->lookup->mapped);
-		if (specified_source) {
-			result = isc_socket_bind(query->sock, &bind_address,
-						 ISC_SOCKET_REUSEADDRESS);
-		} else {
-			isc_sockaddr_anyofpf(&bind_any,
-					     isc_sockaddr_pf(&query->sockaddr));
-			result = isc_socket_bind(query->sock, &bind_any, 0);
-		}
-		check_result(result, "isc_socket_bind");
+		/* XXX: set up DSCP */
+		/* XXX: set IPV6ONLY */
 
 		query->recv_made = true;
 		isc_buffer_availableregion(&query->recvbuf, &r);
-		debug("recving with lookup=%p, query=%p, sock=%p",
-		      query->lookup, query, query->sock);
-		result = isc_socket_recv(query->sock, &r, 1, global_task,
-					 recv_done, query);
-		check_result(result, "isc_socket_recv");
+		debug("recving with lookup=%p, query=%p, handle=%p",
+		      query->lookup, query, query->handle);
+		isc_nmhandle_ref(query->handle);
+		isc_nm_read(query->handle, recv_done, query);
+		check_result(result, "isc_nm_read");
 		recvcount++;
 		debug("recvcount=%d", recvcount);
 	}
+
 	isc_buffer_usedregion(&query->sendbuf, &r);
 	debug("sending a request");
 	TIME_NOW(&query->time_sent);
-	INSIST(query->sock != NULL);
 	query->waiting_senddone = true;
-	sevent = isc_socket_socketevent(
-		mctx, query->sock, ISC_SOCKEVENT_SENDDONE, send_done, query);
-	result = isc_socket_sendto2(query->sock, &r, global_task,
-				    &query->sockaddr, NULL, sevent,
-				    ISC_SOCKFLAG_NORETRY);
-	check_result(result, "isc_socket_sendto2");
+
+	isc_nmhandle_ref(query->handle);
+	result = isc_nm_send(query->handle, &r, send_done, query);
+	if (result != ISC_R_SUCCESS) {
+		isc_nmhandle_unref(query->handle);
+		return;
+	}
+
+	check_result(result, "isc_nm_send");
 	sendcount++;
 
 	/* XXX qrflag, print_query, etc... */
@@ -3030,9 +3026,8 @@ connect_timeout(isc_task_t *task, isc_event_t *event) {
 
 	if (try_next_server(l)) {
 		if (l->tcp_mode) {
-			if (query->sock != NULL) {
-				isc_socket_cancel(query->sock, NULL,
-						  ISC_SOCKCANCEL_ALL);
+			if (query->handle != NULL) {
+				isc_nm_cancelread(query->handle);
 			} else {
 				clear_query(query);
 			}
@@ -3041,9 +3036,9 @@ connect_timeout(isc_task_t *task, isc_event_t *event) {
 		return;
 	}
 
-	if (l->tcp_mode && query->sock != NULL) {
+	if (l->tcp_mode && query->handle != NULL) {
 		query->timedout = true;
-		isc_socket_cancel(query->sock, NULL, ISC_SOCKCANCEL_ALL);
+		isc_nm_cancelread(query->handle);
 	}
 
 	if (l->retries > 1) {
@@ -3104,115 +3099,22 @@ requeue_or_update_exitcode(dig_lookup_t *lookup) {
 }
 
 /*%
- * Event handler for the TCP recv which gets the length header of TCP
- * packets.  Start the next recv of length bytes.
- */
-static void
-tcp_length_done(isc_task_t *task, isc_event_t *event) {
-	isc_socketevent_t *sevent;
-	isc_buffer_t b;
-	isc_region_t r;
-	isc_result_t result;
-	dig_query_t *query = NULL;
-	dig_lookup_t *l;
-	uint16_t length;
-
-	REQUIRE(event->ev_type == ISC_SOCKEVENT_RECVDONE);
-	INSIST(!free_now);
-
-	UNUSED(task);
-
-	debug("tcp_length_done()");
-
-	LOCK_LOOKUP;
-	sevent = (isc_socketevent_t *)event;
-	query = event->ev_arg;
-	REQUIRE(DIG_VALID_QUERY(query));
-
-	recvcount--;
-	INSIST(recvcount >= 0);
-
-	if (sevent->result == ISC_R_CANCELED) {
-		isc_event_free(&event);
-		l = query->lookup;
-		clear_query(query);
-		check_next_lookup(l);
-		UNLOCK_LOOKUP;
-		return;
-	}
-	if (sevent->result != ISC_R_SUCCESS) {
-		char sockstr[ISC_SOCKADDR_FORMATSIZE];
-		isc_sockaddr_format(&query->sockaddr, sockstr, sizeof(sockstr));
-		dighost_error("communications error to %s: %s\n", sockstr,
-			      isc_result_totext(sevent->result));
-		if (keep != NULL) {
-			isc_socket_detach(&keep);
-		}
-		l = query->lookup;
-		isc_socket_detach(&query->sock);
-		sockcount--;
-		debug("sockcount=%d", sockcount);
-		INSIST(sockcount >= 0);
-		if (sevent->result == ISC_R_EOF) {
-			requeue_or_update_exitcode(l);
-		}
-		isc_event_free(&event);
-		clear_query(query);
-		cancel_lookup(l);
-		check_next_lookup(l);
-		UNLOCK_LOOKUP;
-		return;
-	}
-	isc_buffer_init(&b, sevent->region.base, sevent->n);
-	isc_buffer_add(&b, sevent->n);
-	length = isc_buffer_getuint16(&b);
-
-	if (length == 0) {
-		isc_event_free(&event);
-		launch_next_query(query, false);
-		UNLOCK_LOOKUP;
-		return;
-	}
-
-	/*
-	 * Even though the buffer was already init'ed, we need
-	 * to redo it now, to force the length we want.
-	 */
-	isc_buffer_invalidate(&query->recvbuf);
-	isc_buffer_init(&query->recvbuf, query->recvspace, length);
-	isc_buffer_availableregion(&query->recvbuf, &r);
-	debug("recving with lookup=%p, query=%p", query->lookup, query);
-	result = isc_socket_recv(query->sock, &r, length, task, recv_done,
-				 query);
-	check_result(result, "isc_socket_recv");
-	recvcount++;
-	debug("resubmitted recv request with length %d, recvcount=%d", length,
-	      recvcount);
-	isc_event_free(&event);
-	UNLOCK_LOOKUP;
-}
-
-/*%
  * For transfers that involve multiple recvs (XFR's in particular),
  * launch the next recv.
  */
 static void
-launch_next_query(dig_query_t *query, bool include_question) {
+launch_next_query(dig_query_t *query) {
 	isc_result_t result;
 	dig_lookup_t *l;
 	isc_region_t r;
-	REQUIRE(DIG_VALID_QUERY(query));
 
+	REQUIRE(DIG_VALID_QUERY(query));
 	INSIST(!free_now);
 
 	debug("launch_next_query()");
 
 	if (!query->lookup->pending) {
 		debug("ignoring launch_next_query because !pending");
-		isc_socket_detach(&query->sock);
-		sockcount--;
-		debug("sockcount=%d", sockcount);
-		INSIST(sockcount >= 0);
 		query->waiting_connect = false;
 		l = query->lookup;
 		clear_query(query);
@@ -3220,28 +3122,24 @@ launch_next_query(dig_query_t *query, bool include_question) {
 		return;
 	}
 
-	isc_buffer_clear(&query->lengthbuf);
-	isc_buffer_availableregion(&query->lengthbuf, &r);
-	result = isc_socket_recv(query->sock, &r, 0, global_task,
-				 tcp_length_done, query);
-	check_result(result, "isc_socket_recv");
+	isc_nmhandle_ref(query->handle);
+	result = isc_nm_read(query->handle, recv_done, query);
+	check_result(result, "isc_nm_read");
 	recvcount++;
 	debug("recvcount=%d", recvcount);
+
 	if (!query->first_soa_rcvd) {
 		debug("sending a request in launch_next_query");
 		TIME_NOW(&query->time_sent);
 		query->waiting_senddone = true;
-		isc_buffer_clear(&query->tmpsendbuf);
-		isc_buffer_putuint16(&query->tmpsendbuf,
-				     isc_buffer_usedlength(&query->sendbuf));
-		if (include_question) {
-			isc_buffer_usedregion(&query->sendbuf, &r);
-			isc_buffer_copyregion(&query->tmpsendbuf, &r);
+		isc_buffer_usedregion(&query->sendbuf, &r);
+		if (keep != NULL) {
+			isc_nmhandle_unref(query->handle);
+			query->handle = keep;
 		}
-		isc_buffer_usedregion(&query->tmpsendbuf, &r);
-		result = isc_socket_send(query->sock, &r, global_task,
-					 send_done, query);
-		check_result(result, "isc_socket_send");
+		isc_nmhandle_ref(query->handle);
+		isc_nm_send(query->handle, &r, send_done, query);
+		check_result(result, "isc_nm_send");
 		sendcount++;
 		debug("sendcount=%d", sendcount);
 
@@ -3269,29 +3167,26 @@ launch_next_query(dig_query_t *query, bool include_question) {
  * question.
  */
 static void
-connect_done(isc_task_t *task, isc_event_t *event) {
+connect_done(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
+	dig_query_t *query = (dig_query_t *)arg;
+	dig_query_t *next = NULL;
 	char sockstr[ISC_SOCKADDR_FORMATSIZE];
-	isc_socketevent_t *sevent = NULL;
-	dig_query_t *query = NULL, *next;
 	dig_lookup_t *l;
 
-	UNUSED(task);
-
-	REQUIRE(event->ev_type == ISC_SOCKEVENT_CONNECT);
+	REQUIRE(DIG_VALID_QUERY(query));
+	REQUIRE(query->handle == NULL);
 	INSIST(!free_now);
 
 	debug("connect_done()");
 
 	LOCK_LOOKUP;
-	sevent = (isc_socketevent_t *)event;
-	query = sevent->ev_arg;
-	REQUIRE(DIG_VALID_QUERY(query));
 
 	INSIST(query->waiting_connect);
 
 	query->waiting_connect = false;
+	sockcount++;
 
-	if (sevent->result == ISC_R_CANCELED) {
+	if (eresult == ISC_R_CANCELED) {
 		debug("in cancel handler");
 		isc_sockaddr_format(&query->sockaddr, sockstr, sizeof(sockstr));
 		if (query->timedout) {
@@ -3301,39 +3196,29 @@ connect_done(isc_task_t *task, isc_event_t *event) {
 					query->lookup->textname,
 					isc_result_totext(ISC_R_TIMEDOUT));
 		}
-		isc_socket_detach(&query->sock);
-		INSIST(sockcount > 0);
-		sockcount--;
-		debug("sockcount=%d", sockcount);
-		query->waiting_connect = false;
-		isc_event_free(&event);
+		isc_nmhandle_unref(handle);
 		l = query->lookup;
 		clear_query(query);
 		check_next_lookup(l);
 		UNLOCK_LOOKUP;
 		return;
-	}
-	if (sevent->result != ISC_R_SUCCESS) {
+	} else if (eresult != ISC_R_SUCCESS) {
 		debug("unsuccessful connection: %s",
-		      isc_result_totext(sevent->result));
+		      isc_result_totext(eresult));
 		isc_sockaddr_format(&query->sockaddr, sockstr, sizeof(sockstr));
-		if (sevent->result != ISC_R_CANCELED) {
+		if (eresult != ISC_R_CANCELED) {
 			dighost_warning("Connection to %s(%s) for %s failed: "
 					"%s.",
 					sockstr, query->servname,
 					query->lookup->textname,
-					isc_result_totext(sevent->result));
+					isc_result_totext(eresult));
 		}
-		isc_socket_detach(&query->sock);
-		INSIST(sockcount > 0);
-		sockcount--;
+
 		/* XXX Clean up exitcodes */
 		if (exitcode < 9) {
 			exitcode = 9;
 		}
-		debug("sockcount=%d", sockcount);
-		query->waiting_connect = false;
-		isc_event_free(&event);
+		isc_nmhandle_unref(handle);
 		l = query->lookup;
 		if ((l->current_query != NULL) &&
 		    (ISC_LINK_LINKED(l->current_query, link))) {
@@ -3351,16 +3236,24 @@ connect_done(isc_task_t *task, isc_event_t *event) {
 		UNLOCK_LOOKUP;
 		return;
 	}
+
 	exitcode = 0;
+
+	query->handle = handle;
+	isc_nmhandle_ref(query->handle);
+
 	if (keep_open) {
 		if (keep != NULL) {
-			isc_socket_detach(&keep);
+			isc_nmhandle_unref(keep);
+			keep = NULL;
 		}
-		isc_socket_attach(query->sock, &keep);
+		keep = query->handle;
+		isc_nmhandle_ref(keep);
 		keepaddr = query->sockaddr;
 	}
-	launch_next_query(query, true);
-	isc_event_free(&event);
+
+	launch_next_query(query);
+	isc_nmhandle_unref(handle);
 	UNLOCK_LOOKUP;
 }
 
@@ -3372,7 +3265,7 @@ connect_done(isc_task_t *task, isc_event_t *event) {
  */
 static bool
 check_for_more_data(dig_query_t *query, dns_message_t *msg,
-		    isc_socketevent_t *sevent) {
+		    isc_sockaddr_t *peer, int len) {
 	dns_rdataset_t *rdataset = NULL;
 	dns_rdata_t rdata = DNS_RDATA_INIT;
 	dns_rdata_soa_t soa;
@@ -3397,7 +3290,7 @@ check_for_more_data(dig_query_t *query, dns_message_t *msg,
 	 */
 
 	query->msg_count++;
-	query->byte_count += sevent->n;
+	query->byte_count += len;
 	result = dns_message_firstname(msg, DNS_SECTION_ANSWER);
 	if (result != ISC_R_SUCCESS) {
 		puts("; Transfer failed.");
@@ -3502,10 +3395,10 @@ check_for_more_data(dig_query_t *query, dns_message_t *msg,
 		}
 		result = dns_message_nextname(msg, DNS_SECTION_ANSWER);
 	} while (result == ISC_R_SUCCESS);
-	launch_next_query(query, false);
+	launch_next_query(query);
 	return (false);
 doexit:
-	dighost_received(sevent->n, &sevent->address, query);
+	dighost_received(len, peer, query);
 	return (true);
 }
 
@@ -3608,10 +3501,10 @@ ednsvers(dns_rdataset_t *opt) {
  * based on the specifics of the user's request.
  */
 static void
-recv_done(isc_task_t *task, isc_event_t *event) {
-	isc_socketevent_t *sevent = NULL;
+recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
+	  void *arg) {
+	dig_query_t *query = (dig_query_t *) arg;
 	isc_region_t r;
-	dig_query_t *query = NULL;
 	isc_buffer_t b;
 	dns_message_t *msg = NULL;
 	isc_result_t result;
@@ -3623,8 +3516,10 @@ recv_done(isc_task_t *task, isc_event_t *event) {
 	dns_messageid_t id;
 	unsigned int msgflags;
 	int newedns;
+	isc_sockaddr_t peer;
 
-	UNUSED(task);
+	REQUIRE(DIG_VALID_QUERY(query));
+	REQUIRE(handle == query->handle);
 	INSIST(!free_now);
 
 	debug("recv_done()");
@@ -3634,51 +3529,53 @@ recv_done(isc_task_t *task, isc_event_t *event) {
 	debug("recvcount=%d", recvcount);
 	INSIST(recvcount >= 0);
 
-	query = event->ev_arg;
 	TIME_NOW(&query->time_recv);
 
 	l = query->lookup;
 
-	REQUIRE(event->ev_type == ISC_SOCKEVENT_RECVDONE);
-	sevent = (isc_socketevent_t *)event;
-
-	isc_buffer_init(&b, sevent->region.base, sevent->n);
-	isc_buffer_add(&b, sevent->n);
+	isc_buffer_init(&b, region->base, region->length);
+	isc_buffer_add(&b, region->length);
 
 	if ((l->tcp_mode) && (query->timer != NULL)) {
 		isc_timer_touch(query->timer);
 	}
 	if ((!l->pending && !l->ns_search_only) || cancel_now) {
 		debug("no longer pending.  Got %s",
-		      isc_result_totext(sevent->result));
+		      isc_result_totext(eresult));
 		query->waiting_connect = false;
 
-		isc_event_free(&event);
+		isc_nmhandle_unref(handle);
 		clear_query(query);
 		check_next_lookup(l);
 		UNLOCK_LOOKUP;
 		return;
 	}
 
-	if (sevent->result != ISC_R_SUCCESS) {
-		if (sevent->result == ISC_R_CANCELED) {
-			debug("in recv cancel handler");
-			query->waiting_connect = false;
+	if (eresult != ISC_R_SUCCESS) {
+		if (eresult == ISC_R_CANCELED) {
+			debug("recv_done: cancel");
+			isc_nmhandle_unref(handle);
+			l = query->lookup;
+			clear_query(query);
+			check_next_lookup(l);
+			UNLOCK_LOOKUP;
+			return;
 		} else {
-			dighost_error("communications error: %s\n",
-				      isc_result_totext(sevent->result));
+			char sockstr[ISC_SOCKADDR_FORMATSIZE];
+			isc_sockaddr_format(&query->sockaddr, sockstr,
+					    sizeof(sockstr));
+			dighost_error("communications error to %s: %s\n",
+				      sockstr, isc_result_totext(eresult));
 			if (keep != NULL) {
-				isc_socket_detach(&keep);
+				isc_nmhandle_unref(keep);
+				keep = NULL;
 			}
-			isc_socket_detach(&query->sock);
-			sockcount--;
-			debug("sockcount=%d", sockcount);
-			INSIST(sockcount >= 0);
 		}
-		if (sevent->result == ISC_R_EOF) {
+		if (eresult == ISC_R_EOF) {
 			requeue_or_update_exitcode(l);
 		}
-		isc_event_free(&event);
+
+		isc_nmhandle_unref(handle);
 		clear_query(query);
 		cancel_lookup(l);
 		check_next_lookup(l);
@@ -3686,8 +3583,9 @@ recv_done(isc_task_t *task, isc_event_t *event) {
 		return;
 	}
 
+	peer = isc_nmhandle_peeraddr(handle);
 	if (!l->tcp_mode &&
-	    !isc_sockaddr_compare(&sevent->address, &query->sockaddr,
+	    !isc_sockaddr_compare(&peer, &query->sockaddr,
 				  ISC_SOCKADDR_CMPADDR | ISC_SOCKADDR_CMPPORT |
 					  ISC_SOCKADDR_CMPSCOPE |
 					  ISC_SOCKADDR_CMPSCOPEZERO))
@@ -3710,10 +3608,9 @@ recv_done(isc_task_t *task, isc_event_t *event) {
 		if ((!isc_sockaddr_eqaddr(&query->sockaddr, &any) &&
 		     !isc_sockaddr_ismulticast(&query->sockaddr)) ||
 		    isc_sockaddr_getport(&query->sockaddr) !=
-			    isc_sockaddr_getport(&sevent->address))
+			    isc_sockaddr_getport(&peer))
 		{
-			isc_sockaddr_format(&sevent->address, buf1,
-					    sizeof(buf1));
+			isc_sockaddr_format(&peer, buf1, sizeof(buf1));
 			isc_sockaddr_format(&query->sockaddr, buf2,
 					    sizeof(buf2));
 			dighost_warning("reply from unexpected source: %s,"
@@ -3750,7 +3647,7 @@ recv_done(isc_task_t *task, isc_event_t *event) {
 						"message");
 			}
 			if (fail) {
-				isc_event_free(&event);
+				isc_nmhandle_unref(handle);
 				clear_query(query);
 				cancel_lookup(l);
 				check_next_lookup(l);
@@ -3818,7 +3715,7 @@ recv_done(isc_task_t *task, isc_event_t *event) {
 		}
 		query->waiting_connect = false;
 		dns_message_destroy(&msg);
-		isc_event_free(&event);
+		isc_nmhandle_unref(handle);
 		clear_query(query);
 		cancel_lookup(l);
 		check_next_lookup(l);
@@ -3841,7 +3738,7 @@ recv_done(isc_task_t *task, isc_event_t *event) {
 
 		dns_message_destroy(&msg);
 		if (l->tcp_mode) {
-			isc_event_free(&event);
+			isc_nmhandle_unref(handle);
 			clear_query(query);
 			cancel_lookup(l);
 			check_next_lookup(l);
@@ -3893,7 +3790,7 @@ recv_done(isc_task_t *task, isc_event_t *event) {
 		if (!match) {
 			dns_message_destroy(&msg);
 			if (l->tcp_mode) {
-				isc_event_free(&event);
+				isc_nmhandle_unref(handle);
 				clear_query(query);
 				cancel_lookup(l);
 				check_next_lookup(l);
@@ -3918,7 +3815,7 @@ recv_done(isc_task_t *task, isc_event_t *event) {
 			n->rdtype = l->qrdtype;
 		}
 		dns_message_destroy(&msg);
-		isc_event_free(&event);
+		isc_nmhandle_unref(handle);
 		clear_query(query);
 		cancel_lookup(l);
 		check_next_lookup(l);
@@ -3937,7 +3834,7 @@ recv_done(isc_task_t *task, isc_event_t *event) {
 			n->rdtype = l->qrdtype;
 		}
 		dns_message_destroy(&msg);
-		isc_event_free(&event);
+		isc_nmhandle_unref(handle);
 		clear_query(query);
 		cancel_lookup(l);
 		check_next_lookup(l);
@@ -3961,7 +3858,7 @@ recv_done(isc_task_t *task, isc_event_t *event) {
 				n->rdtype = l->qrdtype;
 			}
 			dns_message_destroy(&msg);
-			isc_event_free(&event);
+			isc_nmhandle_unref(handle);
 			clear_query(query);
 			cancel_lookup(l);
 			check_next_lookup(l);
@@ -4002,7 +3899,7 @@ recv_done(isc_task_t *task, isc_event_t *event) {
 			clear_query(query);
 			check_next_lookup(l);
 			dns_message_destroy(&msg);
-			isc_event_free(&event);
+			isc_nmhandle_unref(handle);
 			UNLOCK_LOOKUP;
 			return;
 		}
@@ -4078,7 +3975,7 @@ recv_done(isc_task_t *task, isc_event_t *event) {
 			if (!next_origin(query->lookup) || showsearch) {
 				dighost_printmessage(query, &b, msg, true);
 				dighost_received(isc_buffer_usedlength(&b),
-						 &sevent->address, query);
+						 &peer, query);
 			}
 		} else if (!l->trace && !l->ns_search_only) {
 			dighost_printmessage(query, &b, msg, true);
@@ -4135,13 +4032,14 @@ recv_done(isc_task_t *task, isc_event_t *event) {
 	if (l->doing_xfr) {
 		if (query != l->xfr_q) {
 			dns_message_destroy(&msg);
-			isc_event_free(&event);
+			isc_nmhandle_unref(handle);
 			query->waiting_connect = false;
 			UNLOCK_LOOKUP;
 			return;
 		}
 		if (!docancel) {
-			docancel = check_for_more_data(query, msg, sevent);
+			docancel = check_for_more_data(query, msg, &peer,
+						       region->length);
 		}
 		if (docancel) {
 			dns_message_destroy(&msg);
@@ -4152,7 +4050,7 @@ recv_done(isc_task_t *task, isc_event_t *event) {
 	} else {
 		if (msg->rcode == dns_rcode_noerror || l->origin == NULL) {
 			dighost_received(isc_buffer_usedlength(&b),
-					 &sevent->address, query);
+					 &peer, query);
 		}
 
 		if (!query->lookup->ns_search_only) {
@@ -4169,7 +4067,8 @@ recv_done(isc_task_t *task, isc_event_t *event) {
 	if (msg != NULL) {
 		dns_message_destroy(&msg);
 	}
-	isc_event_free(&event);
+
+	isc_nmhandle_unref(handle);
 	UNLOCK_LOOKUP;
 	return;
 
@@ -4177,11 +4076,7 @@ udp_mismatch:
 	isc_buffer_invalidate(&query->recvbuf);
 	isc_buffer_init(&query->recvbuf, query->recvspace, COMMSIZE);
 	isc_buffer_availableregion(&query->recvbuf, &r);
-	result = isc_socket_recv(query->sock, &r, 1, global_task, recv_done,
-				 query);
-	check_result(result, "isc_socket_recv");
 	recvcount++;
-	isc_event_free(&event);
 	UNLOCK_LOOKUP;
 	return;
 }
@@ -4303,9 +4198,8 @@ cancel_all(void) {
 			nq = ISC_LIST_NEXT(q, link);
 			debug("canceling pending query %p, belonging to %p", q,
 			      current_lookup);
-			if (q->sock != NULL) {
-				isc_socket_cancel(q->sock, NULL,
-						  ISC_SOCKCANCEL_ALL);
+			if (q->handle != NULL) {
+				isc_nm_cancelread(q->handle);
 			} else {
 				clear_query(q);
 			}
@@ -4315,9 +4209,8 @@ cancel_all(void) {
 			nq = ISC_LIST_NEXT(q, clink);
 			debug("canceling connecting query %p, belonging to %p",
 			      q, current_lookup);
-			if (q->sock != NULL) {
-				isc_socket_cancel(q->sock, NULL,
-						  ISC_SOCKCANCEL_ALL);
+			if (q->handle != NULL) {
+				isc_nm_cancelread(q->handle);
 			} else {
 				clear_query(q);
 			}
@@ -4344,7 +4237,8 @@ destroy_libs(void) {
 #endif /* HAVE_LIBIDN2 */
 
 	if (keep != NULL) {
-		isc_socket_detach(&keep);
+		isc_nmhandle_unref(keep);
+		keep = NULL;
 	}
 	debug("destroy_libs()");
 	if (global_task != NULL) {
@@ -4352,13 +4246,16 @@ destroy_libs(void) {
 		isc_task_detach(&global_task);
 	}
 	/*
-	 * The taskmgr_destroy() call blocks until all events are cleared
-	 * from the task.
+	 * The taskmgr_destroy() and isc_nm_destroy() calls block until
+	 * all events are cleared.
 	 */
 	if (taskmgr != NULL) {
 		debug("freeing taskmgr");
 		isc_taskmgr_destroy(&taskmgr);
 	}
+
+	isc_nm_destroy(&netmgr);
+
 	LOCK_LOOKUP;
 	REQUIRE(sockcount == 0);
 	REQUIRE(recvcount == 0);
@@ -4382,10 +4279,6 @@ destroy_libs(void) {
 	if (commctx != NULL) {
 		debug("freeing commctx");
 		isc_mempool_destroy(&commctx);
-	}
-	if (socketmgr != NULL) {
-		debug("freeing socketmgr");
-		isc_socketmgr_destroy(&socketmgr);
 	}
 	if (timermgr != NULL) {
 		debug("freeing timermgr");
