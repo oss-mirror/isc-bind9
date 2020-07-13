@@ -55,4 +55,5 @@ Bug Fixes
   public key. [GL #1689]
 
 - The introduction of KASP support broke whether the second field
-  of sig-validity-interval was treated as days or hours. [GL !3735]
+  of sig-validity-interval was treated as days or hours. (Thanks to
+  Tony Finch.) [GL !3735]
