@@ -2521,3 +2521,47 @@ isc__nm_dump_active(isc_nm_t *nm) {
 	UNLOCK(&nm->lock);
 }
 #endif
+
+void
+isc__nm_initialize(void);
+void
+isc__nm_shutdown(void);
+
+#if UV_VERSION_MAJOR > 1 || (UV_VERSION_MAJOR == 1 && UV_VERSION_MINOR >= 38)
+static void *
+isc__nm_malloc(size_t size) {
+	return (isc_malloc(size));
+}
+
+static void *
+isc__nm_calloc(size_t num, size_t size) {
+	return (isc_calloc(num, size));
+}
+
+static void *
+isc__nm_realloc(void *ptr, size_t size) {
+	return (isc_realloc(ptr, size));
+}
+
+static void
+isc__nm_free(void *ptr) {
+	return (isc_free(ptr));
+}
+#endif
+
+ISC_CONSTRUCTOR(200)
+void
+isc__nm_initialize(void) {
+#if UV_VERSION_MAJOR > 1 || (UV_VERSION_MAJOR == 1 && UV_VERSION_MINOR >= 38)
+	uv_replace_allocator(isc__nm_malloc, isc__nm_realloc, isc__nm_calloc,
+			     isc__nm_free);
+#endif
+}
+
+ISC_DESTRUCTOR(200)
+void
+isc__nm_shutdown(void) {
+#if UV_VERSION_MAJOR > 1 || (UV_VERSION_MAJOR == 1 && UV_VERSION_MINOR >= 38)
+	uv_library_shutdown();
+#endif
+}

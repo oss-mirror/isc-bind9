@@ -16,6 +16,10 @@ void
 isc__mem_initialize(void);
 void
 isc__mem_shutdown(void);
+void
+isc__nm_initialize(void);
+void
+isc__nm_shutdown(void);
 
 /*
  * Called when we enter the DLL
@@ -33,6 +37,7 @@ __declspec(dllexport) BOOL WINAPI
 		 */
 		DisableThreadLibraryCalls(hinstDLL);
 		isc__mem_initialize(); /* priority=101 */
+		isc__nm_initialized(); /* priority=200 */
 		break;
 
 	/*
@@ -40,6 +45,7 @@ __declspec(dllexport) BOOL WINAPI
 	 * termination or a call to FreeLibrary.
 	 */
 	case DLL_PROCESS_DETACH:
+		isc__nm_shutdown();  /* priority=200 */
 		isc__mem_shutdown(); /* priority=101 */
 		break;
 
