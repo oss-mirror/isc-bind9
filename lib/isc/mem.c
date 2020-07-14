@@ -1299,6 +1299,26 @@ isc__mem_allocate(isc_mem_t *ctx0, size_t size FLARG) {
 }
 
 void *
+isc__mem_callocate(isc_mem_t *ctx0, size_t num, size_t size FLARG) {
+	size_t numsize;
+
+	ISC_MUL_OVERFLOW(num, size, &numsize);
+	void *ptr = isc__mem_allocate(ctx0, numsize FLARG_PASS);
+	memset(ptr, 0, numsize);
+	return (ptr);
+}
+
+void *
+isc__mem_cget(isc_mem_t *ctx0, size_t num, size_t size FLARG) {
+	size_t numsize;
+
+	ISC_MUL_OVERFLOW(num, size, &numsize);
+	void *ptr = isc__mem_get(ctx0, numsize FLARG_PASS);
+	memset(ptr, 0, numsize);
+	return (ptr);
+}
+
+void *
 isc__mem_reallocate(isc_mem_t *ctx0, void *ptr, size_t size FLARG) {
 	REQUIRE(VALID_CONTEXT(ctx0));
 
@@ -2534,12 +2554,7 @@ isc__malloc(size_t size FLARG) {
 
 void *
 isc__calloc(size_t num, size_t size FLARG) {
-	size_t numsize;
-
-	ISC_MUL_OVERFLOW(num, size, &numsize);
-	void *ptr = isc__mem_allocate(isc__mem_mctx, numsize FLARG_PASS);
-	memset(ptr, 0, numsize);
-	return (ptr);
+	return (isc__mem_callocate(isc__mem_mctx, num, size FLARG_PASS));
 }
 
 void *

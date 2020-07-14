@@ -207,8 +207,11 @@ struct isc_mempool {
 #define ISCMEMFUNC(sfx)	    isc__mem_##sfx
 #define ISCMEMPOOLFUNC(sfx) isc__mempool_##sfx
 
-#define isc_mem_get(c, s)      ISCMEMFUNC(get)((c), (s)_ISC_MEM_FILELINE)
+#define isc_mem_get(c, s) ISCMEMFUNC(get)((c), (s)_ISC_MEM_FILELINE)
+#define isc_mem_cget(c, n, s)  ISCMEMFUNC(cget((c), (n), (s)_ISC_MEM_FILELINE)
 #define isc_mem_allocate(c, s) ISCMEMFUNC(allocate)((c), (s)_ISC_MEM_FILELINE)
+#define isc_mem_callocate(c, n, s) \
+	ISCMEMFUNC(callocate)((c), (n), (s)_ISC_MEM_FILELINE)
 #define isc_mem_reallocate(c, p, s) \
 	ISCMEMFUNC(reallocate)((c), (p), (s)_ISC_MEM_FILELINE)
 #define isc_mem_strdup(c, p) ISCMEMFUNC(strdup)((c), (p)_ISC_MEM_FILELINE)
@@ -578,9 +581,11 @@ isc_mempool_setfillcount(isc_mempool_t *mpctx, unsigned int limit);
  * Pseudo-private functions for use via macros.  Do not call directly.
  */
 void *ISCMEMFUNC(get)(isc_mem_t *, size_t _ISC_MEM_FLARG);
+void *ISCMEMFUNC(cget)(isc_mem_t *, size_t, size_t _ISC_MEM_FLARG);
 void  ISCMEMFUNC(putanddetach)(isc_mem_t **, void *, size_t _ISC_MEM_FLARG);
 void  ISCMEMFUNC(put)(isc_mem_t *, void *, size_t _ISC_MEM_FLARG);
 void *ISCMEMFUNC(allocate)(isc_mem_t *, size_t _ISC_MEM_FLARG);
+void *ISCMEMFUNC(callocate)(isc_mem_t *, size_t, size_t _ISC_MEM_FLARG);
 void *ISCMEMFUNC(reallocate)(isc_mem_t *, void *, size_t _ISC_MEM_FLARG);
 void  ISCMEMFUNC(free)(isc_mem_t *, void *_ISC_MEM_FLARG);
 char *ISCMEMFUNC(strdup)(isc_mem_t *, const char *_ISC_MEM_FLARG);
