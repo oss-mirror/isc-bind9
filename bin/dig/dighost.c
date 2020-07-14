@@ -233,7 +233,7 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	  void *arg);
 
 static void
-send_udp(dig_query_t *query);
+start_udp(dig_query_t *query);
 
 static void
 connect_timeout(isc_task_t *task, isc_event_t *event);
@@ -1607,7 +1607,6 @@ clear_query(dig_query_t *query) {
 
 	isc_mempool_put(commctx, query->recvspace);
 	isc_mempool_put(commctx, query->tmpsendspace);
-	isc_buffer_invalidate(&query->recvbuf);
 
 	if (query->waiting_senddone) {
 		query->pending_free = true;
@@ -2420,8 +2419,8 @@ setup_lookup(dig_lookup_t *lookup) {
 			 *
 			 * (For future work: preserve the offset into
 			 * the buffer where the family field is;
-			 * that way we can update it in send_udp()
-			 * or send_tcp_connect() once we know
+			 * that way we can update it in start_udp()
+			 * or start_tcp() once we know
 			 * what it outght to be.)
 			 */
 			switch (sa->sa_family) {
@@ -2565,7 +2564,6 @@ setup_lookup(dig_lookup_t *lookup) {
 		query->waiting_connect = false;
 		query->waiting_senddone = false;
 		query->pending_free = false;
-		query->recv_made = false;
 		query->first_pass = true;
 		query->first_soa_rcvd = false;
 		query->second_rr_rcvd = false;
@@ -2587,7 +2585,6 @@ setup_lookup(dig_lookup_t *lookup) {
 			fatal("memory allocation failure");
 		}
 
-		isc_buffer_init(&query->recvbuf, query->recvspace, COMMSIZE);
 		query->sendbuf = lookup->renderbuf;
 
 		isc_time_settoepoch(&query->time_sent);
@@ -2643,7 +2640,7 @@ send_done(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 		debug("sending next, since searching");
 		next = ISC_LIST_NEXT(query, link);
 		if (next != NULL) {
-			send_udp(next);
+			start_udp(next);
 		}
 	}
 
@@ -2669,7 +2666,9 @@ cancel_lookup(dig_lookup_t *lookup) {
 		REQUIRE(DIG_VALID_QUERY(query));
 		next = ISC_LIST_NEXT(query, link);
 		if (query->handle != NULL) {
-			isc_nm_cancelread(query->handle);
+			if (query->lookup->tcp_mode) {
+				isc_nm_cancelread(query->handle);
+			}
 			check_if_done();
 		} else {
 			clear_query(query);
@@ -2736,21 +2735,21 @@ force_timeout(dig_query_t *query) {
 }
 
 static void
-connect_done(isc_nmhandle_t *handle, isc_result_t eresult, void *arg);
+tcp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg);
 
 /*%
- * Unlike send_udp, this can't be called multiple times with the same
+ * Unlike start_udp, this can't be called multiple times with the same
  * query.  When we retry TCP, we requeue the whole lookup, which should
  * start anew.
  */
 static void
-send_tcp_connect(dig_query_t *query) {
+start_tcp(dig_query_t *query) {
 	isc_result_t result;
 	dig_query_t *next;
 	dig_lookup_t *l;
 	REQUIRE(DIG_VALID_QUERY(query));
 
-	debug("send_tcp_connect(%p)", query);
+	debug("start_tcp(%p)", query);
 
 	l = query->lookup;
 	query->waiting_connect = true;
@@ -2789,7 +2788,7 @@ send_tcp_connect(dig_query_t *query) {
 			check_next_lookup(l);
 			return;
 		}
-		send_tcp_connect(next);
+		start_tcp(next);
 		return;
 	}
 
@@ -2819,10 +2818,9 @@ send_tcp_connect(dig_query_t *query) {
 		result = isc_nm_tcpdnsconnect(netmgr,
 					      (isc_nmiface_t *)&localaddr,
 					      (isc_nmiface_t *)&query->sockaddr,
-					      connect_done, query, 0);
+					      tcp_connected, query, 0);
 		check_result(result, "isc_nm_tcpdnsconnect");
 		/* XXX: set DSCP */
-		/* XXX: set IPV6ONLY */
 		bringup_timer(query, TCP_TIMEOUT);
 	}
 
@@ -2840,7 +2838,7 @@ send_tcp_connect(dig_query_t *query) {
 		}
 		ISC_LIST_ENQUEUE(l->connecting, query, clink);
 		if (next != NULL) {
-			send_tcp_connect(next);
+			start_tcp(next);
 		}
 	}
 }
@@ -2853,91 +2851,10 @@ print_query_size(dig_query_t *query) {
 	}
 }
 
-/*%
- * Send a UDP packet to the remote nameserver, possible starting the
- * recv action as well.  Also make sure that the timer is running and
- * is properly reset.
- */
 static void
 send_udp(dig_query_t *query) {
-	dig_lookup_t *l = NULL;
 	isc_result_t result;
-	dig_query_t *next;
 	isc_region_t r;
-
-	REQUIRE(DIG_VALID_QUERY(query));
-
-	debug("send_udp(%p)", query);
-
-	INSIST(query->handle != NULL);
-
-	l = query->lookup;
-	bringup_timer(query, UDP_TIMEOUT);
-	l->current_query = query;
-	debug("working on lookup %p, query %p", query->lookup, query);
-	if (!query->recv_made) {
-		/* XXX Check the sense of this, need assertion? */
-		query->waiting_connect = false;
-		result = get_address(query->servname, port, &query->sockaddr);
-		if (result != ISC_R_SUCCESS) {
-			/* This servname doesn't have an address. */
-			force_timeout(query);
-			return;
-		}
-
-		if (!l->mapped &&
-		    isc_sockaddr_pf(&query->sockaddr) == AF_INET6 &&
-		    IN6_IS_ADDR_V4MAPPED(&query->sockaddr.type.sin6.sin6_addr))
-		{
-			isc_netaddr_t netaddr;
-			char buf[ISC_NETADDR_FORMATSIZE];
-
-			isc_netaddr_fromsockaddr(&netaddr, &query->sockaddr);
-			isc_netaddr_format(&netaddr, buf, sizeof(buf));
-			dighost_warning("Skipping mapped address '%s'", buf);
-			next = ISC_LIST_NEXT(query, link);
-			l = query->lookup;
-			clear_query(query);
-			if (next == NULL) {
-				dighost_warning("No acceptable nameservers");
-				check_next_lookup(l);
-			} else {
-				send_udp(next);
-			}
-			return;
-		}
-
-		if (!specified_source) {
-			if ((isc_sockaddr_pf(&query->sockaddr) == AF_INET) &&
-			    have_ipv4) {
-				isc_sockaddr_any(&localaddr);
-			} else {
-				isc_sockaddr_any6(&localaddr);
-			}
-		}
-
-		/* XXX: udpconnect */
-#if 0
-		result = isc_socket_create(socketmgr,
-					   isc_sockaddr_pf(&query->sockaddr),
-					   isc_sockettype_udp, &query->sock);
-		check_result(result, "isc_socket_create");
-#endif
-		sockcount++;
-		debug("sockcount=%d", sockcount);
-		/* XXX: set up DSCP */
-		/* XXX: set IPV6ONLY */
-
-		query->recv_made = true;
-		isc_buffer_availableregion(&query->recvbuf, &r);
-		debug("recving with lookup=%p, query=%p, handle=%p",
-		      query->lookup, query, query->handle);
-		isc_nmhandle_ref(query->handle);
-		isc_nm_read(query->handle, recv_done, query);
-		check_result(result, "isc_nm_read");
-		recvcount++;
-		debug("recvcount=%d", recvcount);
-	}
 
 	isc_buffer_usedregion(&query->sendbuf, &r);
 	debug("sending a request");
@@ -2966,6 +2883,98 @@ send_udp(dig_query_t *query) {
 	}
 }
 
+static void
+udp_ready(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
+	dig_query_t *query = (dig_query_t *)arg;
+	isc_result_t result;
+
+	UNUSED(eresult);
+
+	query->handle = handle;
+
+	debug("recving with lookup=%p, query=%p, handle=%p",
+	      query->lookup, query, query->handle);
+	isc_nmhandle_ref(query->handle);
+	result = isc_nm_read(query->handle, recv_done, query);
+	check_result(result, "isc_nm_read");
+	recvcount++;
+	debug("recvcount=%d", recvcount);
+
+	send_udp(query);
+}
+
+/*%
+ * Send a UDP packet to the remote nameserver, possible starting the
+ * recv action as well.  Also make sure that the timer is running and
+ * is properly reset.
+ */
+static void
+start_udp(dig_query_t *query) {
+	dig_lookup_t *l = NULL;
+	isc_result_t result;
+	dig_query_t *next;
+
+	REQUIRE(DIG_VALID_QUERY(query));
+
+	debug("start_udp(%p)", query);
+
+	l = query->lookup;
+	bringup_timer(query, UDP_TIMEOUT);
+	l->current_query = query;
+	debug("working on lookup %p, query %p", query->lookup, query);
+	if (query->handle != NULL) {
+		send_udp(query);
+		return;
+	}
+
+	query->waiting_connect = false;
+	result = get_address(query->servname, port, &query->sockaddr);
+	if (result != ISC_R_SUCCESS) {
+		/* This servname doesn't have an address. */
+		force_timeout(query);
+		return;
+	}
+
+	if (!l->mapped &&
+	    isc_sockaddr_pf(&query->sockaddr) == AF_INET6 &&
+	    IN6_IS_ADDR_V4MAPPED(&query->sockaddr.type.sin6.sin6_addr))
+	{
+		isc_netaddr_t netaddr;
+		char buf[ISC_NETADDR_FORMATSIZE];
+
+		isc_netaddr_fromsockaddr(&netaddr, &query->sockaddr);
+		isc_netaddr_format(&netaddr, buf, sizeof(buf));
+		dighost_warning("Skipping mapped address '%s'", buf);
+		next = ISC_LIST_NEXT(query, link);
+		l = query->lookup;
+		clear_query(query);
+		if (next == NULL) {
+			dighost_warning("No acceptable nameservers");
+			check_next_lookup(l);
+		} else {
+			start_udp(next);
+		}
+		return;
+	}
+
+	if (!specified_source) {
+		if ((isc_sockaddr_pf(&query->sockaddr) == AF_INET) &&
+		    have_ipv4) {
+			isc_sockaddr_any(&localaddr);
+		} else {
+			isc_sockaddr_any6(&localaddr);
+		}
+	}
+
+	result = isc_nm_udpconnect(netmgr,
+				   (isc_nmiface_t *)&localaddr,
+				   (isc_nmiface_t *)&query->sockaddr,
+				   udp_ready, query, 0);
+	check_result(result, "isc_nm_udpconnect");
+	sockcount++;
+	debug("sockcount=%d", sockcount);
+}
+
 /*%
  * If there are more servers available for querying within 'lookup', initiate a
  * TCP or UDP query to the next available server and return true; otherwise,
@@ -2988,9 +2997,9 @@ try_next_server(dig_lookup_t *lookup) {
 	debug("trying next server...");
 
 	if (lookup->tcp_mode) {
-		send_tcp_connect(next_query);
+		start_tcp(next_query);
 	} else {
-		send_udp(next_query);
+		start_udp(next_query);
 	}
 
 	return (true);
@@ -3045,7 +3054,7 @@ connect_timeout(isc_task_t *task, isc_event_t *event) {
 		if (!l->tcp_mode) {
 			l->retries--;
 			debug("resending UDP request to first server");
-			send_udp(ISC_LIST_HEAD(l->q));
+			start_udp(ISC_LIST_HEAD(l->q));
 		} else {
 			debug("making new TCP request, %d tries left",
 			      l->retries);
@@ -3155,9 +3164,6 @@ launch_next_query(dig_query_t *query) {
 		}
 	}
 	query->waiting_connect = false;
-#if 0
-	check_next_lookup(query->lookup);
-#endif /* if 0 */
 	return;
 }
 
@@ -3167,7 +3173,7 @@ launch_next_query(dig_query_t *query) {
  * question.
  */
 static void
-connect_done(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
+tcp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	dig_query_t *query = (dig_query_t *)arg;
 	dig_query_t *next = NULL;
 	char sockstr[ISC_SOCKADDR_FORMATSIZE];
@@ -3177,7 +3183,7 @@ connect_done(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	REQUIRE(query->handle == NULL);
 	INSIST(!free_now);
 
-	debug("connect_done()");
+	debug("tcp_connected()");
 
 	LOCK_LOOKUP;
 
@@ -3229,7 +3235,7 @@ connect_done(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 		clear_query(query);
 		if (next != NULL) {
 			bringup_timer(next, TCP_TIMEOUT);
-			send_tcp_connect(next);
+			start_tcp(next);
 		} else {
 			check_next_lookup(l);
 		}
@@ -3504,7 +3510,6 @@ static void
 recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	  void *arg) {
 	dig_query_t *query = (dig_query_t *) arg;
-	isc_region_t r;
 	isc_buffer_t b;
 	dns_message_t *msg = NULL;
 	isc_result_t result;
@@ -3877,9 +3882,9 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 		if (next != NULL) {
 			debug("sending query %p\n", next);
 			if (l->tcp_mode) {
-				send_tcp_connect(next);
+				start_tcp(next);
 			} else {
-				send_udp(next);
+				start_udp(next);
 			}
 		}
 		/*
@@ -4073,9 +4078,6 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	return;
 
 udp_mismatch:
-	isc_buffer_invalidate(&query->recvbuf);
-	isc_buffer_init(&query->recvbuf, query->recvspace, COMMSIZE);
-	isc_buffer_availableregion(&query->recvbuf, &r);
 	recvcount++;
 	UNLOCK_LOOKUP;
 	return;
@@ -4156,9 +4158,9 @@ do_lookup(dig_lookup_t *lookup) {
 	if (query != NULL) {
 		REQUIRE(DIG_VALID_QUERY(query));
 		if (lookup->tcp_mode) {
-			send_tcp_connect(query);
+			start_tcp(query);
 		} else {
-			send_udp(query);
+			start_udp(query);
 		}
 	}
 }
@@ -4199,7 +4201,11 @@ cancel_all(void) {
 			debug("canceling pending query %p, belonging to %p", q,
 			      current_lookup);
 			if (q->handle != NULL) {
-				isc_nm_cancelread(q->handle);
+				if (q->lookup->tcp_mode) {
+					isc_nm_cancelread(q->handle);
+				}
+				isc_nmhandle_unref(q->handle);
+				q->handle = NULL;
 			} else {
 				clear_query(q);
 			}
@@ -4210,7 +4216,11 @@ cancel_all(void) {
 			debug("canceling connecting query %p, belonging to %p",
 			      q, current_lookup);
 			if (q->handle != NULL) {
-				isc_nm_cancelread(q->handle);
+				if (q->lookup->tcp_mode) {
+					isc_nm_cancelread(q->handle);
+				}
+				isc_nmhandle_unref(q->handle);
+				q->handle = NULL;
 			} else {
 				clear_query(q);
 			}

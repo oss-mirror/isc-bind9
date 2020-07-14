@@ -921,7 +921,6 @@ flush_lookup_list(void) {
 				isc_nmhandle_unref(q->handle);
 				q->handle = NULL;
 			}
-			isc_buffer_invalidate(&q->recvbuf);
 			qp = q;
 			q = ISC_LIST_NEXT(q, link);
 			ISC_LIST_DEQUEUE(l->q, qp, link);

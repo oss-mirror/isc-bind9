@@ -168,7 +168,7 @@ struct dig_query {
 	unsigned int magic;
 	dig_lookup_t *lookup;
 	bool waiting_connect, pending_free, waiting_senddone, first_pass,
-		first_soa_rcvd, second_rr_rcvd, first_repeat_rcvd, recv_made,
+		first_soa_rcvd, second_rr_rcvd, first_repeat_rcvd,
 		warn_id, timedout;
 	uint32_t first_rr_serial;
 	uint32_t second_rr_serial;
@@ -177,7 +177,7 @@ struct dig_query {
 	bool ixfr_axfr;
 	char *servname;
 	char *userarg;
-	isc_buffer_t recvbuf, sendbuf;
+	isc_buffer_t sendbuf;
 	char *recvspace, *tmpsendspace, lengthspace[4];
 	isc_nmhandle_t *handle;
 	ISC_LINK(dig_query_t) link;
