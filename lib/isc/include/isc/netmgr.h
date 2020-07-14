@@ -181,11 +181,12 @@ isc_nm_listenudp(isc_nm_t *mgr, isc_nmiface_t *iface, isc_nm_recv_cb_t cb,
  */
 
 isc_result_t
-isc_nm_udpconnect(isc_nm_t *mgr, isc_nmiface_t *iface, isc_nmiface_t *peer,
+isc_nm_udpconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 		  isc_nm_cb_t cb, void *cbarg, size_t extrahandlesize);
 /*%<
- * Open a UDP socket, connect to 'peer', and immediately call 'cb' with
- * a handle so that the caller can begin sending packets over UDP.
+ * Open a UDP socket, bind to 'local' and connect to 'peer', and
+ * immediately call 'cb' with a handle so that the caller can begin
+ * sending packets over UDP.
  *
  * When handles are allocated for the socket, 'extrasize' additional bytes
  * can be allocated along with the handle for an associated object, which

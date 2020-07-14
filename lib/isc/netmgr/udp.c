@@ -593,7 +593,7 @@ isc__nm_async_udpconnect(isc__networker_t *worker, isc__netievent_t *ev0) {
 		(isc__netievent_udpconnect_t *)ev0;
 	isc_nmsocket_t *sock = ievent->sock;
 	isc_nmhandle_t *handle = NULL;
-	int uv_bind_flags = 0;
+	int uv_bind_flags = UV_UDP_REUSEADDR;
 	int r;
 
 	REQUIRE(sock->type == isc_nm_udpsocket);
@@ -616,6 +616,19 @@ isc__nm_async_udpconnect(isc__networker_t *worker, isc__netievent_t *ev0) {
 	}
 	isc__nm_incstats(sock->mgr, sock->statsindex[STATID_OPEN]);
 
+	if (sock->iface->addr.type.sa.sa_family == AF_INET6) {
+		uv_bind_flags |= UV_UDP_IPV6ONLY;
+	}
+
+	r = uv_udp_bind(&sock->uv_handle.udp,
+			&sock->iface->addr.type.sa, uv_bind_flags);
+	if (r != 0) {
+		isc__nm_incstats(sock->mgr, sock->statsindex[STATID_BINDFAIL]);
+		atomic_store(&sock->connect_error, true);
+		sock->result = isc__nm_uverr2result(r);
+		goto done;
+	}
+
 	r = uv_udp_connect(&sock->uv_handle.udp, &ievent->peer.type.sa);
 	if (r != 0) {
 		isc__nm_incstats(sock->mgr,
@@ -625,16 +638,6 @@ isc__nm_async_udpconnect(isc__networker_t *worker, isc__netievent_t *ev0) {
 		goto done;
 	}
 	isc__nm_incstats(sock->mgr, sock->statsindex[STATID_CONNECT]);
-
-	if (sock->iface->addr.type.sa.sa_family == AF_INET6) {
-		uv_bind_flags |= UV_UDP_IPV6ONLY;
-	}
-
-	r = uv_udp_bind(&sock->uv_handle.udp,
-			&sock->iface->addr.type.sa, 0);
-	if (r < 0) {
-		isc__nm_incstats(sock->mgr, sock->statsindex[STATID_BINDFAIL]);
-	}
 
 #ifdef ISC_RECV_BUFFER_SIZE
 	uv_recv_buffer_size(&sock->uv_handle.handle,
@@ -659,7 +662,7 @@ done:
 }
 
 isc_result_t
-isc_nm_udpconnect(isc_nm_t *mgr, isc_nmiface_t *iface, isc_nmiface_t *peer,
+isc_nm_udpconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 		  isc_nm_cb_t cb, void *cbarg, size_t extrahandlesize) {
 	isc_result_t result = ISC_R_SUCCESS;
 	isc_nmsocket_t *sock = NULL, *tmp = NULL;
@@ -667,11 +670,11 @@ isc_nm_udpconnect(isc_nm_t *mgr, isc_nmiface_t *iface, isc_nmiface_t *peer,
 	int r = 0;
 
 	REQUIRE(VALID_NM(mgr));
-	REQUIRE(iface != NULL);
+	REQUIRE(local != NULL);
 	REQUIRE(peer != NULL);
 
 	sock = isc_mem_get(mgr->mctx, sizeof(isc_nmsocket_t));
-	isc__nmsocket_init(sock, mgr, isc_nm_udpsocket, iface);
+	isc__nmsocket_init(sock, mgr, isc_nm_udpsocket, local);
 
 	INSIST(sock->rcb.recv == NULL && sock->rcbarg == NULL);
 	sock->rcb.connect = cb;
@@ -680,7 +683,7 @@ isc_nm_udpconnect(isc_nm_t *mgr, isc_nmiface_t *iface, isc_nmiface_t *peer,
 	sock->peer = peer->addr;
 	sock->client = true;
 
-	sock->fd = socket(iface->addr.type.sa.sa_family, SOCK_DGRAM, 0);
+	sock->fd = socket(peer->addr.type.sa.sa_family, SOCK_DGRAM, 0);
 	RUNTIME_CHECK(sock->fd >= 0);
 
 	/*

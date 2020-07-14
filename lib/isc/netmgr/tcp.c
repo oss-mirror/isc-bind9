@@ -198,6 +198,8 @@ isc_nm_tcpconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 	isc_result_t result = ISC_R_SUCCESS;
 
 	REQUIRE(VALID_NM(mgr));
+	REQUIRE(local != NULL);
+	REQUIRE(peer != NULL);
 
 	nsock = isc_mem_get(mgr->mctx, sizeof(*nsock));
 	isc__nmsocket_init(nsock, mgr, isc_nm_tcpsocket, local);
@@ -208,6 +210,7 @@ isc_nm_tcpconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 	req->cb.connect = cb;
 	req->cbarg = cbarg;
 	req->peer = peer->addr;
+	req->local = local->addr;
 
 	ievent = isc__nm_get_ievent(mgr, netievent_tcpconnect);
 	ievent->sock = nsock;
