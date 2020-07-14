@@ -145,7 +145,6 @@ struct isc__mem {
 	struct stats *stats;
 	isc_refcount_t references;
 	char name[16];
-	void *tag;
 	size_t total;
 	size_t inuse;
 	size_t maxinuse;
@@ -747,7 +746,6 @@ mem_create(isc_mem_t **ctxp, unsigned int flags) {
 	ctx->flags = flags;
 	isc_refcount_init(&ctx->references, 1);
 	memset(ctx->name, 0, sizeof(ctx->name));
-	ctx->tag = NULL;
 	ctx->total = 0;
 	ctx->inuse = 0;
 	ctx->maxinuse = 0;
@@ -1575,14 +1573,13 @@ isc_mem_isovermem(isc_mem_t *ctx0) {
 }
 
 void
-isc_mem_setname(isc_mem_t *ctx0, const char *name, void *tag) {
+isc_mem_setname(isc_mem_t *ctx0, const char *name) {
 	REQUIRE(VALID_CONTEXT(ctx0));
 
 	isc__mem_t *ctx = (isc__mem_t *)ctx0;
 
 	LOCK(&ctx->lock);
 	strlcpy(ctx->name, name, sizeof(ctx->name));
-	ctx->tag = tag;
 	UNLOCK(&ctx->lock);
 }
 
@@ -1597,15 +1594,6 @@ isc_mem_getname(isc_mem_t *ctx0) {
 	}
 
 	return (ctx->name);
-}
-
-void *
-isc_mem_gettag(isc_mem_t *ctx0) {
-	REQUIRE(VALID_CONTEXT(ctx0));
-
-	isc__mem_t *ctx = (isc__mem_t *)ctx0;
-
-	return (ctx->tag);
 }
 
 /*
@@ -2536,7 +2524,7 @@ void
 isc__mem_initialize(void) {
 	REQUIRE(isc__mem_mctx == NULL);
 	isc_mem_create(&isc__mem_mctx);
-	isc_mem_setname(isc__mem_mctx, "default", NULL);
+	isc_mem_setname(isc__mem_mctx, "default");
 }
 
 ISC_DESTRUCTOR(101)
