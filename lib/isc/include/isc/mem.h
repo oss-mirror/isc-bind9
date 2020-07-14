@@ -162,21 +162,6 @@ LIBISC_EXTERNAL_DATA extern unsigned int isc_mem_defaultflags;
  * \endcode
  */
 
-/*% memory and memory pool methods */
-typedef struct isc_memmethods {
-	void *(*memget)(isc_mem_t *mctx, size_t size _ISC_MEM_FLARG);
-	void (*memput)(isc_mem_t *mctx, void *ptr, size_t size _ISC_MEM_FLARG);
-	void (*memputanddetach)(isc_mem_t **mctxp, void *ptr,
-				size_t size _ISC_MEM_FLARG);
-	void *(*memallocate)(isc_mem_t *mctx, size_t size _ISC_MEM_FLARG);
-	void *(*memreallocate)(isc_mem_t *mctx, void *ptr,
-			       size_t size _ISC_MEM_FLARG);
-	char *(*memstrdup)(isc_mem_t *mctx, const char *s _ISC_MEM_FLARG);
-	char *(*memstrndup)(isc_mem_t *mctx, const char *s,
-			    size_t size _ISC_MEM_FLARG);
-	void (*memfree)(isc_mem_t *mctx, void *ptr _ISC_MEM_FLARG);
-} isc_memmethods_t;
-
 /*%
  * This structure is actually just the common prefix of a memory context
  * implementation's version of an isc_mem_t.
@@ -187,9 +172,8 @@ typedef struct isc_memmethods {
  * invariants.
  */
 struct isc_mem {
-	unsigned int	  impmagic;
-	unsigned int	  magic;
-	isc_memmethods_t *methods;
+	unsigned int impmagic;
+	unsigned int magic;
 };
 
 #define ISCAPI_MCTX_MAGIC    ISC_MAGIC('A', 'm', 'c', 'x')
@@ -613,6 +597,7 @@ void  ISCMEMPOOLFUNC(put)(isc_mempool_t *, void *_ISC_MEM_FLARG);
 #define isc_realloc(ptr, size) isc__realloc((ptr), (size)_ISC_MEM_FILELINE)
 #define isc_free(ptr)	       isc__free((ptr)_ISC_MEM_FILELINE)
 #define isc_strdup(str)	       isc__strdup((str)_ISC_MEM_FILELINE)
+#define isc_strndup(str)       isc__strndup((str)_ISC_MEM_FILELINE)
 
 void *
 isc__malloc(size_t size _ISC_MEM_FLARG);
@@ -624,6 +609,8 @@ void
 isc__free(void *ptr _ISC_MEM_FLARG);
 char *
 isc__strdup(const char *str _ISC_MEM_FLARG);
+char *
+isc__strndup(const char *str _ISC_MEM_FLARG);
 
 ISC_LANG_ENDDECLS
 

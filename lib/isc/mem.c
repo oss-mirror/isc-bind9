@@ -232,29 +232,6 @@ print_active(isc__mem_t *ctx, FILE *out);
 
 #endif /* ISC_MEM_TRACKLINES */
 
-static void *
-isc___mem_get(isc_mem_t *ctx, size_t size FLARG);
-static void
-isc___mem_put(isc_mem_t *ctx, void *ptr, size_t size FLARG);
-static void
-isc___mem_putanddetach(isc_mem_t **ctxp, void *ptr, size_t size FLARG);
-static void *
-isc___mem_allocate(isc_mem_t *ctx, size_t size FLARG);
-static void *
-isc___mem_reallocate(isc_mem_t *ctx, void *ptr, size_t size FLARG);
-static char *
-isc___mem_strdup(isc_mem_t *mctx, const char *s FLARG);
-static char *
-isc___mem_strndup(isc_mem_t *mctx, const char *s, size_t size FLARG);
-static void
-isc___mem_free(isc_mem_t *ctx, void *ptr FLARG);
-
-static isc_memmethods_t memmethods = {
-	isc___mem_get,	    isc___mem_put,	  isc___mem_putanddetach,
-	isc___mem_allocate, isc___mem_reallocate, isc___mem_strdup,
-	isc___mem_strndup,  isc___mem_free,
-};
-
 #if ISC_MEM_TRACKLINES
 /*!
  * mctx must be locked.
@@ -784,7 +761,6 @@ mem_create(isc_mem_t **ctxp, unsigned int flags) {
 	ctx->water_arg = NULL;
 	ctx->common.impmagic = MEM_MAGIC;
 	ctx->common.magic = ISCAPI_MCTX_MAGIC;
-	ctx->common.methods = (isc_memmethods_t *)&memmethods;
 	ctx->memalloc = default_memalloc;
 	ctx->memfree = default_memfree;
 	ctx->stats = NULL;
@@ -959,7 +935,7 @@ isc_mem_detach(isc_mem_t **ctxp) {
  */
 
 void
-isc___mem_putanddetach(isc_mem_t **ctxp, void *ptr, size_t size FLARG) {
+isc__mem_putanddetach(isc_mem_t **ctxp, void *ptr, size_t size FLARG) {
 	REQUIRE(ctxp != NULL && VALID_CONTEXT(*ctxp));
 	REQUIRE(ptr != NULL);
 
@@ -1026,7 +1002,7 @@ isc_mem_destroy(isc_mem_t **ctxp) {
 }
 
 void *
-isc___mem_get(isc_mem_t *ctx0, size_t size FLARG) {
+isc__mem_get(isc_mem_t *ctx0, size_t size FLARG) {
 	REQUIRE(VALID_CONTEXT(ctx0));
 
 	isc__mem_t *ctx = (isc__mem_t *)ctx0;
@@ -1077,7 +1053,7 @@ isc___mem_get(isc_mem_t *ctx0, size_t size FLARG) {
 }
 
 void
-isc___mem_put(isc_mem_t *ctx0, void *ptr, size_t size FLARG) {
+isc__mem_put(isc_mem_t *ctx0, void *ptr, size_t size FLARG) {
 	REQUIRE(VALID_CONTEXT(ctx0));
 	REQUIRE(ptr != NULL);
 
@@ -1279,7 +1255,7 @@ mem_allocateunlocked(isc_mem_t *ctx0, size_t size) {
 }
 
 void *
-isc___mem_allocate(isc_mem_t *ctx0, size_t size FLARG) {
+isc__mem_allocate(isc_mem_t *ctx0, size_t size FLARG) {
 	REQUIRE(VALID_CONTEXT(ctx0));
 
 	isc__mem_t *ctx = (isc__mem_t *)ctx0;
@@ -1323,7 +1299,7 @@ isc___mem_allocate(isc_mem_t *ctx0, size_t size FLARG) {
 }
 
 void *
-isc___mem_reallocate(isc_mem_t *ctx0, void *ptr, size_t size FLARG) {
+isc__mem_reallocate(isc_mem_t *ctx0, void *ptr, size_t size FLARG) {
 	REQUIRE(VALID_CONTEXT(ctx0));
 
 	void *new_ptr = NULL;
@@ -1363,7 +1339,7 @@ isc___mem_reallocate(isc_mem_t *ctx0, void *ptr, size_t size FLARG) {
 }
 
 void
-isc___mem_free(isc_mem_t *ctx0, void *ptr FLARG) {
+isc__mem_free(isc_mem_t *ctx0, void *ptr FLARG) {
 	REQUIRE(VALID_CONTEXT(ctx0));
 	REQUIRE(ptr != NULL);
 
@@ -1422,7 +1398,7 @@ isc___mem_free(isc_mem_t *ctx0, void *ptr FLARG) {
  */
 
 char *
-isc___mem_strdup(isc_mem_t *mctx0, const char *s FLARG) {
+isc__mem_strdup(isc_mem_t *mctx0, const char *s FLARG) {
 	REQUIRE(VALID_CONTEXT(mctx0));
 	REQUIRE(s != NULL);
 
@@ -1442,7 +1418,7 @@ isc___mem_strdup(isc_mem_t *mctx0, const char *s FLARG) {
 }
 
 char *
-isc___mem_strndup(isc_mem_t *mctx0, const char *s, size_t size FLARG) {
+isc__mem_strndup(isc_mem_t *mctx0, const char *s, size_t size FLARG) {
 	REQUIRE(VALID_CONTEXT(mctx0));
 	REQUIRE(s != NULL);
 
@@ -2450,6 +2426,7 @@ isc_mem_create(isc_mem_t **mctxp) {
 	mem_create(mctxp, isc_mem_defaultflags);
 }
 
+<<<<<<< HEAD
 void *
 isc__mem_get(isc_mem_t *mctx, size_t size FLARG) {
 	REQUIRE(ISCAPI_MCTX_VALID(mctx));
@@ -2506,6 +2483,8 @@ isc__mem_free(isc_mem_t *mctx, void *ptr FLARG) {
 	mctx->methods->memfree(mctx, ptr FLARG_PASS);
 }
 
+=======
+>>>>>>> 532e5a3b4f (Remove an extra level of indirection in memory context routines)
 void
 isc__mem_printactive(isc_mem_t *ctx0, FILE *file) {
 #if ISC_MEM_TRACKLINES
@@ -2576,4 +2555,9 @@ isc__free(void *ptr FLARG) {
 char *
 isc__strdup(const char *s1 FLARG) {
 	return (isc__mem_strdup(isc__mem_mctx, s1 FLARG_PASS));
+}
+
+char *
+isc__strndup(const char *s1 FLARG) {
+	return (isc__mem_strndup(isc__mem_mctx, s1 FLARG_PASS));
 }
