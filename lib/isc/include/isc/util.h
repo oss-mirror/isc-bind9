@@ -48,6 +48,14 @@
 #define ISC_NONSTRING
 #endif /* __GNUC__ */
 
+#if __GNUC__
+#define ISC_CONSTRUCTOR(priority) __attribute__((constructor(priority)))
+#define ISC_DESTRUCTOR(priority)  __attribute__((destructor(priority)))
+#else
+#define ISC_CONSTRUCTOR(priority)
+#define ISC_DESTRUCTOR(priority)
+#endif
+
 /*%
  * The opposite: silent warnings about stored values which are never read.
  */
@@ -339,6 +347,15 @@ mock_assert(const int result, const char *const expression,
 #else /* ifdef __GNUC__ */
 #define ISC_ALIGN(x, a) (((x) + (a)-1) & ~((uintmax_t)(a)-1))
 #endif /* ifdef __GNUC__ */
+
+/*%
+ * Overflow checks
+ */
+#if __has_builtin(__builtin_add_overflow) || __GNUC__ >= 5
+#define ISC_MUL_OVERFLOW(a, b, res) __builtin_mul_overflow(a, b, res)
+#else
+#define ISC_MUL_OVERFLOW(a, b, res) ((*res) = (a) * (b))
+#endif
 
 /*%
  * Misc

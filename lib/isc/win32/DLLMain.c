@@ -12,6 +12,11 @@
 #include <stdio.h>
 #include <windows.h>
 
+void
+isc__mem_initialize(void);
+void
+isc__mem_shutdown(void);
+
 /*
  * Called when we enter the DLL
  */
@@ -27,6 +32,7 @@ __declspec(dllexport) BOOL WINAPI
 		 * Disable DllMain() invocation on Thread creation/destruction
 		 */
 		DisableThreadLibraryCalls(hinstDLL);
+		isc__mem_initialize(); /* priority=101 */
 		break;
 
 	/*
@@ -34,6 +40,7 @@ __declspec(dllexport) BOOL WINAPI
 	 * termination or a call to FreeLibrary.
 	 */
 	case DLL_PROCESS_DETACH:
+		isc__mem_shutdown(); /* priority=101 */
 		break;
 
 	case DLL_THREAD_ATTACH:

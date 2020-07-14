@@ -2520,3 +2520,60 @@ isc__mem_printactive(isc_mem_t *ctx0, FILE *file) {
 	UNUSED(file);
 #endif /* if ISC_MEM_TRACKLINES */
 }
+
+/*
+ * Routines using default memory context
+ */
+
+static isc_mem_t *isc__mem_mctx = NULL;
+
+void
+isc__mem_initialize(void);
+void
+isc__mem_shutdown(void);
+
+ISC_CONSTRUCTOR(101)
+void
+isc__mem_initialize(void) {
+	REQUIRE(isc__mem_mctx == NULL);
+	isc_mem_create(&isc__mem_mctx);
+	isc_mem_setname(isc__mem_mctx, "default", NULL);
+}
+
+ISC_DESTRUCTOR(101)
+void
+isc__mem_shutdown(void) {
+	REQUIRE(isc__mem_mctx != NULL);
+	isc_mem_destroy(&isc__mem_mctx);
+	isc_mem_checkdestroyed(stderr);
+}
+
+void *
+isc__malloc(size_t size FLARG) {
+	return (isc__mem_allocate(isc__mem_mctx, size FLARG_PASS));
+}
+
+void *
+isc__calloc(size_t num, size_t size FLARG) {
+	size_t numsize;
+
+	ISC_MUL_OVERFLOW(num, size, &numsize);
+	void *ptr = isc__mem_allocate(isc__mem_mctx, numsize FLARG_PASS);
+	memset(ptr, 0, numsize);
+	return (ptr);
+}
+
+void *
+isc__realloc(void *ptr, size_t size FLARG) {
+	return (isc__mem_reallocate(isc__mem_mctx, ptr, size FLARG_PASS));
+}
+
+void
+isc__free(void *ptr FLARG) {
+	isc__mem_free(isc__mem_mctx, ptr FLARG_PASS);
+}
+
+char *
+isc__strdup(const char *s1 FLARG) {
+	return (isc__mem_strdup(isc__mem_mctx, s1 FLARG_PASS));
+}

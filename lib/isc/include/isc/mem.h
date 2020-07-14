@@ -604,6 +604,27 @@ char *ISCMEMFUNC(strndup)(isc_mem_t *, const char *, size_t _ISC_MEM_FLARG);
 void *ISCMEMPOOLFUNC(get)(isc_mempool_t *_ISC_MEM_FLARG);
 void  ISCMEMPOOLFUNC(put)(isc_mempool_t *, void *_ISC_MEM_FLARG);
 
+/*
+ * Memory management routines using default memory context
+ */
+
+#define isc_malloc(size)       isc__malloc((size)_ISC_MEM_FILELINE)
+#define isc_calloc(num, size)  isc__calloc((num), (size)_ISC_MEM_FILELINE)
+#define isc_realloc(ptr, size) isc__realloc((ptr), (size)_ISC_MEM_FILELINE)
+#define isc_free(ptr)	       isc__free((ptr)_ISC_MEM_FILELINE)
+#define isc_strdup(str)	       isc__strdup((str)_ISC_MEM_FILELINE)
+
+void *
+isc__malloc(size_t size _ISC_MEM_FLARG);
+void *
+isc__calloc(size_t num, size_t size _ISC_MEM_FLARG);
+void *
+isc__realloc(void *ptr, size_t size _ISC_MEM_FLARG);
+void
+isc__free(void *ptr _ISC_MEM_FLARG);
+char *
+isc__strdup(const char *str _ISC_MEM_FLARG);
+
 ISC_LANG_ENDDECLS
 
 #endif /* ISC_MEM_H */
