@@ -116,6 +116,7 @@ struct isc_nmiface {
 };
 
 typedef enum isc__netievent_type {
+	netievent_udpconnect,
 	netievent_udpsend,
 	netievent_udprecv,
 	netievent_udpstop,
@@ -147,19 +148,11 @@ typedef enum isc__netievent_type {
 	netievent_tcplisten,
 } isc__netievent_type;
 
-/*
- * We have to split it because we can read and write on a socket
- * simultaneously.
- */
 typedef union {
 	isc_nm_recv_cb_t recv;
+	isc_nm_cb_t connect;
 	isc_nm_accept_cb_t accept;
 } isc__nm_readcb_t;
-
-typedef union {
-	isc_nm_cb_t send;
-	isc_nm_cb_t connect;
-} isc__nm_writecb_t;
 
 typedef union {
 	isc_nm_recv_cb_t recv;
@@ -257,6 +250,12 @@ typedef struct isc__netievent_udpsend {
 	isc_sockaddr_t peer;
 	isc__nm_uvreq_t *req;
 } isc__netievent_udpsend_t;
+
+typedef struct isc__netievent_udpconnect {
+	isc__netievent_type type;
+	isc_nmsocket_t *sock;
+	isc_sockaddr_t peer;
+} isc__netievent_udpconnect_t;
 
 typedef struct isc__netievent {
 	isc__netievent_type type;
@@ -675,6 +674,8 @@ isc__nm_udp_stoplistening(isc_nmsocket_t *sock);
 
 void
 isc__nm_async_udplisten(isc__networker_t *worker, isc__netievent_t *ev0);
+void
+isc__nm_async_udpconnect(isc__networker_t *worker, isc__netievent_t *ev0);
 
 void
 isc__nm_async_udpstop(isc__networker_t *worker, isc__netievent_t *ev0);

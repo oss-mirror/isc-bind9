@@ -591,6 +591,9 @@ process_queue(isc__networker_t *worker, isc_queue_t *queue) {
 			uv_stop(&worker->loop);
 			isc_mempool_put(worker->mgr->evpool, ievent);
 			return;
+		case netievent_udpconnect:
+			isc__nm_async_udpconnect(worker, ievent);
+			break;
 		case netievent_udplisten:
 			isc__nm_async_udplisten(worker, ievent);
 			break;
@@ -1102,7 +1105,8 @@ isc__nmhandle_get(isc_nmsocket_t *sock, isc_sockaddr_t *peer,
 	handle->ah_pos = pos;
 	UNLOCK(&sock->lock);
 
-	if (sock->type == isc_nm_tcpsocket) {
+	if (sock->type == isc_nm_tcpsocket ||
+	    (sock->type == isc_nm_udpsocket && sock->client)) {
 		INSIST(sock->statichandle == NULL);
 		sock->statichandle = handle;
 	}
