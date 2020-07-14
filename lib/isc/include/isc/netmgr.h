@@ -208,12 +208,17 @@ isc_nm_pause(isc_nm_t *mgr);
 void
 isc_nm_resume(isc_nm_t *mgr);
 /*%<
- * Resume paused processing. It will return immediately
- * after signalling workers to resume.
+ * Resume paused processing. It will return immediately after signalling
+ * workers to resume.
  */
 
 isc_result_t
 isc_nm_read(isc_nmhandle_t *handle, isc_nm_recv_cb_t cb, void *cbarg);
+/*
+ * Begin (or continue) reading on the socket associated with 'handle', and
+ * update its recv callback to 'cb', which will be called as soon as there
+ * is data to process.
+ */
 
 isc_result_t
 isc_nm_pauseread(isc_nmhandle_t *handle);

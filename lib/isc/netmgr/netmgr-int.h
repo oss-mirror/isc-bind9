@@ -118,12 +118,12 @@ struct isc_nmiface {
 typedef enum isc__netievent_type {
 	netievent_udpconnect,
 	netievent_udpsend,
-	netievent_udprecv,
+	netievent_udpread,
 	netievent_udpstop,
+	netievent_udpclose,
 
 	netievent_tcpconnect,
 	netievent_tcpsend,
-	netievent_tcprecv,
 	netievent_tcpstartread,
 	netievent_tcppauseread,
 	netievent_tcpchildaccept,
@@ -200,7 +200,9 @@ typedef struct isc__netievent__socket {
 } isc__netievent__socket_t;
 
 typedef isc__netievent__socket_t isc__netievent_udplisten_t;
+typedef isc__netievent__socket_t isc__netievent_udpread_t;
 typedef isc__netievent__socket_t isc__netievent_udpstop_t;
+typedef isc__netievent__socket_t isc__netievent_udpclose_t;
 typedef isc__netievent__socket_t isc__netievent_tcpstop_t;
 typedef isc__netievent__socket_t isc__netievent_tcpclose_t;
 typedef isc__netievent__socket_t isc__netievent_startread_t;
@@ -669,6 +671,18 @@ isc__nm_udp_send(isc_nmhandle_t *handle, isc_region_t *region, isc_nm_cb_t cb,
  * Back-end implementation of isc_nm_send() for UDP handles.
  */
 
+isc_result_t
+isc__nm_udp_read(isc_nmhandle_t *handle, isc_nm_recv_cb_t cb, void *cbarg);
+/*
+ * Back-end implementation of isc_nm_read() for UDP handles.
+ */
+
+void
+isc__nm_udp_close(isc_nmsocket_t *sock);
+/*%<
+ * Close a UDP socket.
+ */
+
 void
 isc__nm_udp_stoplistening(isc_nmsocket_t *sock);
 
@@ -681,6 +695,10 @@ void
 isc__nm_async_udpstop(isc__networker_t *worker, isc__netievent_t *ev0);
 void
 isc__nm_async_udpsend(isc__networker_t *worker, isc__netievent_t *ev0);
+void
+isc__nm_async_udpread(isc__networker_t *worker, isc__netievent_t *ev0);
+void
+isc__nm_async_udpclose(isc__networker_t *worker, isc__netievent_t *ev0);
 /*%<
  * Callback handlers for asynchronous UDP events (listen, stoplisten, send).
  */
@@ -694,6 +712,9 @@ isc__nm_tcp_send(isc_nmhandle_t *handle, isc_region_t *region, isc_nm_cb_t cb,
 
 isc_result_t
 isc__nm_tcp_read(isc_nmhandle_t *handle, isc_nm_recv_cb_t cb, void *cbarg);
+/*
+ * Back-end implementation of isc_nm_read() for TCP handles.
+ */
 
 void
 isc__nm_tcp_close(isc_nmsocket_t *sock);
