@@ -3244,7 +3244,9 @@ tcp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 		if (exitcode < 9) {
 			exitcode = 9;
 		}
-		isc_nmhandle_unref(handle);
+		if (handle != NULL) {
+			isc_nmhandle_unref(handle);
+		}
 		l = query->lookup;
 		if ((l->current_query != NULL) &&
 		    (ISC_LINK_LINKED(l->current_query, link))) {
