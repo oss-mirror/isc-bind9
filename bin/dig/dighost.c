@@ -3269,20 +3269,24 @@ tcp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	exitcode = 0;
 
 	query->handle = handle;
-	isc_nmhandle_ref(query->handle);
-
 	if (keep_open) {
+		keepaddr = query->sockaddr;
 		if (keep != NULL) {
 			isc_nmhandle_unref(keep);
 			keep = NULL;
 		}
+
 		keep = query->handle;
+
+		/*
+		 * reference 'keep' twice so the socket won't be closed
+		 * when the next read and send are completed.
+		 */
 		isc_nmhandle_ref(keep);
-		keepaddr = query->sockaddr;
+		isc_nmhandle_ref(keep);
 	}
 
 	launch_next_query(query);
-	isc_nmhandle_unref(handle);
 	UNLOCK_LOOKUP;
 }
 
