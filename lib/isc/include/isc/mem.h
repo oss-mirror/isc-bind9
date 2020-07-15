@@ -32,9 +32,13 @@ typedef void (*isc_mem_water_t)(void *, int);
  * Define ISC_MEM_TRACKLINES=1 to turn on detailed tracing of memory
  * allocation and freeing by file and line number.
  */
+#if !defined(USE_ALLOCATOR_SYSTEM) && !defined(USE_ALLOCATOR_JEMALLOC) && \
+	!defined(USE_ALLOCATOR_TCMALLOC)
 #ifndef ISC_MEM_TRACKLINES
 #define ISC_MEM_TRACKLINES 1
 #endif /* ifndef ISC_MEM_TRACKLINES */
+#endif /* !defined(USE_ALLOCATOR_SYSTEM) && !defined(USE_ALLOCATOR_JEMALLOC) \
+	  && !defined(USE_ALLOCATOR_TCMALLOC) */
 
 /*%
  * Define ISC_MEM_CHECKOVERRUN=1 to turn on checks for using memory outside
@@ -599,6 +603,9 @@ char *
 isc__strdup(const char *str _ISC_MEM_FLARG);
 char *
 isc__strndup(const char *str _ISC_MEM_FLARG);
+
+isc_mem_t *
+isc_get_default_mctx(void);
 
 ISC_LANG_ENDDECLS
 

@@ -108,8 +108,8 @@ isc_test_begin(FILE *logfile, bool start_managers, unsigned int workers) {
 
 	isc_mem_debugging |= ISC_MEM_DEBUGRECORD;
 
-	INSIST(test_mctx == NULL);
-	isc_mem_create(&test_mctx);
+	REQUIRE(test_mctx == NULL);
+	test_mctx = isc_get_default_mctx();
 
 	if (logfile != NULL) {
 		isc_logdestination_t destination;
@@ -156,9 +156,7 @@ isc_test_end(void) {
 	if (test_lctx != NULL) {
 		isc_log_destroy(&test_lctx);
 	}
-	if (test_mctx != NULL) {
-		isc_mem_destroy(&test_mctx);
-	}
+	test_mctx = NULL;
 
 	test_running = false;
 }

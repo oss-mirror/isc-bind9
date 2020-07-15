@@ -64,6 +64,22 @@ _teardown(void **state) {
 #define MP2_FREEMAX 25
 #define MP2_FILLCNT 25
 
+#define ALIGNMENT_SIZE	  sizeof(void *)
+
+static inline size_t
+quantize(size_t size) {
+	/*!
+	 * Round up the result in order to get a size big
+	 * enough to satisfy the request and be aligned on ALIGNMENT_SIZE
+	 * byte boundaries.
+	 */
+
+	if (size == 0U) {
+		return (ALIGNMENT_SIZE);
+	}
+	return ((size + ALIGNMENT_SIZE - 1) & (~(ALIGNMENT_SIZE - 1)));
+}
+
 /* general memory system tests */
 static void
 isc_mem_test(void **state) {
@@ -72,7 +88,7 @@ isc_mem_test(void **state) {
 	void *tmp;
 	isc_mempool_t *mp1 = NULL, *mp2 = NULL;
 	unsigned int i, j;
-	int rval;
+	int rval, mp1_freecount = 0;
 
 	UNUSED(state);
 
@@ -92,6 +108,12 @@ isc_mem_test(void **state) {
 	}
 
 	/*
+	 * The number of free items on the list will be MAX(MP1_FREEMAX,
+	 * MP1_MAXALLOC) aligned to page boundary.
+	 */
+	mp1_freecount = isc_mempool_getfreecount(mp1);
+
+	/*
 	 * Try to allocate one more.  This should fail.
 	 */
 	tmp = isc_mempool_get(mp1);
@@ -107,7 +129,7 @@ isc_mem_test(void **state) {
 	}
 
 	rval = isc_mempool_getfreecount(mp1);
-	assert_int_equal(rval, 10);
+	assert_int_equal(rval, mp1_freecount + 11);
 
 	rval = isc_mempool_getallocated(mp1);
 	assert_int_equal(rval, 19);
@@ -151,6 +173,9 @@ isc_mem_test(void **state) {
 
 	isc_mempool_destroy(&mp1);
 }
+
+#if !defined(USE_ALLOCATOR_SYSTEM) && !defined(USE_ALLOCATOR_JEMALLOC) && \
+	!defined(USE_ALLOCATOR_TCMALLOC)
 
 /* test TotalUse calculation */
 static void
@@ -205,8 +230,7 @@ isc_mem_total_test(void **state) {
 static void
 isc_mem_inuse_test(void **state) {
 	isc_mem_t *mctx2 = NULL;
-	size_t before, after;
-	ssize_t diff;
+	size_t before, meanwhile, after;
 	void *ptr;
 
 	UNUSED(state);
@@ -216,15 +240,21 @@ isc_mem_inuse_test(void **state) {
 
 	before = isc_mem_inuse(mctx2);
 	ptr = isc_mem_allocate(mctx2, 1024000);
+	meanwhile = isc_mem_inuse(mctx2);
 	isc_mem_free(mctx2, ptr);
 	after = isc_mem_inuse(mctx2);
-
-	diff = after - before;
-
-	assert_int_equal(diff, 0);
-
 	isc_mem_destroy(&mctx2);
+
+	fprintf(stderr, "%zu < %zu > %zu\n", before, meanwhile, after);
+
+	assert_int_not_equal(before, meanwhile);
+	assert_true(before < meanwhile);
+	assert_int_not_equal(meanwhile, after);
+	assert_true(after < meanwhile);
+	assert_int_equal(after, before);
 }
+
+#endif
 
 #if ISC_MEM_TRACKLINES
 
@@ -497,11 +527,13 @@ main(void) {
 	const struct CMUnitTest tests[] = {
 		cmocka_unit_test_setup_teardown(isc_mem_test, _setup,
 						_teardown),
+#if !defined(USE_ALLOCATOR_SYSTEM) && !defined(USE_ALLOCATOR_JEMALLOC) && \
+	!defined(USE_ALLOCATOR_TCMALLOC)
 		cmocka_unit_test_setup_teardown(isc_mem_total_test, _setup,
 						_teardown),
 		cmocka_unit_test_setup_teardown(isc_mem_inuse_test, _setup,
 						_teardown),
-
+#endif
 #if !defined(__SANITIZE_THREAD__)
 		cmocka_unit_test_setup_teardown(isc_mem_benchmark, _setup,
 						_teardown),

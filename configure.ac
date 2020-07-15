@@ -1581,6 +1581,31 @@ test -z "$with_dlz_stub" && with_dlz_stub=no
 AC_CHECK_HEADERS([glob.h])
 
 #
+# Support for constructor and destructor attributes
+#
+AX_GCC_FUNC_ATTRIBUTE([constructor])
+AX_GCC_FUNC_ATTRIBUTE([destructor])
+
+#
+# Which memory allocator we should use?
+#
+AC_ARG_WITH([allocator],
+	    [AS_HELP_STRING([--with-allocator=<custom|system|jemalloc|tcmalloc|tcmalloc_minimal>],
+			    [Use different memory allocator (default=custom)])],
+			    [],
+			    [with_allocator=custom])
+
+AS_CASE([$with_allocator],
+	[system], [AC_DEFINE([USE_ALLOCATOR_SYSTEM], [1], [Define if you want to use system memory allocator])],
+	[jemalloc], [PKG_CHECK_MODULES([ALLOCATOR], [jemalloc],
+				       [AC_DEFINE([USE_ALLOCATOR_JEMALLOC], [1], [Define if you want to use jemalloc allocator])])],
+	[tcmalloc*], [PKG_CHECK_MODULES([ALLOCATOR], [lib$with_allocator],
+					[AC_DEFINE([USE_ALLOCATOR_TCMALLOC], [1], [Define if you want to use tcmalloc allocator])])]
+	[:])
+
+AC_MSG_NOTICE([Using $with_allocator memory allocator])
+
+#
 # Files to configure.  These are listed here because we used to
 # specify them as arguments to AC_OUTPUT.
 #

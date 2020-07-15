@@ -1614,7 +1614,6 @@ main(int argc, char *argv[]) {
 		}
 	}
 	isc_mem_destroy(&named_g_mctx);
-	isc_mem_checkdestroyed(stderr);
 
 	named_main_setmemstats(NULL);
 
