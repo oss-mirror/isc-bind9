@@ -251,7 +251,9 @@ dnslisten_readcb(isc_nmhandle_t *handle, isc_result_t eresult,
 
 	if (region == NULL || eresult != ISC_R_SUCCESS) {
 		/* Connection closed */
-		isc_nmhandle_unref(handle);
+		if (eresult != ISC_R_CANCELED) {
+			isc_nmhandle_unref(handle);
+		}
 		dnssock->result = eresult;
 		if (dnssock->self != NULL) {
 			isc__nmsocket_detach(&dnssock->self);
@@ -684,6 +686,7 @@ tcpdnsconnect_cb(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 	dnssock->timer_initialized = true;
 	uv_timer_start(&dnssock->timer, dnstcp_readtimeout,
 		       dnssock->read_timeout, 0);
+
 	/*
 	 * We start reading not asked to - we'll read and buffer
 	 * at most one packet.
@@ -795,5 +798,6 @@ isc__nm_tcpdns_cancelread(isc_nmhandle_t *handle) {
 	if (sock->client && sock->rcb.recv != NULL) {
 		sock->rcb.recv(handle, ISC_R_CANCELED, NULL, sock->rcbarg);
 		isc__nmsocket_clearcb(sock);
+		isc__nm_tcp_cancelread(sock->outerhandle);
 	}
 }
