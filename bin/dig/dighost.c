@@ -2888,7 +2888,16 @@ udp_ready(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	dig_query_t *query = (dig_query_t *)arg;
 	isc_result_t result;
 
-	UNUSED(eresult);
+	if (eresult == ISC_R_CANCELED) {
+		return;
+	} else if (eresult != ISC_R_SUCCESS) {
+		if (eresult != ISC_R_CANCELED) {
+			debug("udp setup failed: %s",
+			      isc_result_totext(eresult));
+		}
+		isc_nmhandle_unref(handle);
+		return;
+	}
 
 	query->handle = handle;
 
@@ -3189,9 +3198,6 @@ tcp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 
 	INSIST(query->waiting_connect);
 
-	query->waiting_connect = false;
-	sockcount++;
-
 	if (eresult == ISC_R_CANCELED) {
 		debug("in cancel handler");
 		isc_sockaddr_format(&query->sockaddr, sockstr, sizeof(sockstr));
@@ -3242,6 +3248,9 @@ tcp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 		UNLOCK_LOOKUP;
 		return;
 	}
+
+	query->waiting_connect = false;
+	sockcount++;
 
 	exitcode = 0;
 
@@ -3529,6 +3538,12 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 
 	debug("recv_done()");
 
+	if (eresult == ISC_R_CANCELED) {
+		debug("recv_done: cancel");
+		clear_query(query);
+		return;
+	}
+
 	LOCK_LOOKUP;
 	recvcount--;
 	debug("recvcount=%d", recvcount);
@@ -3557,25 +3572,16 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	}
 
 	if (eresult != ISC_R_SUCCESS) {
-		if (eresult == ISC_R_CANCELED) {
-			debug("recv_done: cancel");
-			isc_nmhandle_unref(handle);
-			l = query->lookup;
-			clear_query(query);
-			check_next_lookup(l);
-			UNLOCK_LOOKUP;
-			return;
-		} else {
-			char sockstr[ISC_SOCKADDR_FORMATSIZE];
-			isc_sockaddr_format(&query->sockaddr, sockstr,
-					    sizeof(sockstr));
-			dighost_error("communications error to %s: %s\n",
-				      sockstr, isc_result_totext(eresult));
-			if (keep != NULL) {
-				isc_nmhandle_unref(keep);
-				keep = NULL;
-			}
+		char sockstr[ISC_SOCKADDR_FORMATSIZE];
+		isc_sockaddr_format(&query->sockaddr, sockstr,
+				    sizeof(sockstr));
+		dighost_error("communications error to %s: %s\n",
+			      sockstr, isc_result_totext(eresult));
+		if (keep != NULL) {
+			isc_nmhandle_unref(keep);
+			keep = NULL;
 		}
+
 		if (eresult == ISC_R_EOF) {
 			requeue_or_update_exitcode(l);
 		}
