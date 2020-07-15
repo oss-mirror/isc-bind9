@@ -110,7 +110,7 @@ isc_nm_t *netmgr = NULL;
 isc_sockaddr_t localaddr;
 int sendcount = 0;
 int recvcount = 0;
-int sockcount = 0;
+int handlecount = 0;
 int ndots = -1;
 int tries = 3;
 int lookup_counter = 0;
@@ -1561,11 +1561,28 @@ check_if_done(void) {
 	debug("list %s", ISC_LIST_EMPTY(lookup_list) ? "empty" : "full");
 	if (ISC_LIST_EMPTY(lookup_list) && current_lookup == NULL &&
 	    sendcount == 0) {
-		INSIST(sockcount == 0);
+		INSIST(handlecount == 0);
 		INSIST(recvcount == 0);
 		debug("shutting down");
 		dighost_shutdown();
 	}
+}
+
+/*%
+ * If query->handle is set, unref it, set it to NULL, and decrement
+ * the handle counter.
+ */
+static void
+clear_handle(dig_query_t *query) {
+	if (query->handle == NULL) {
+		return;
+	}
+
+	isc_nmhandle_unref(query->handle);
+	query->handle = NULL;
+	handlecount--;
+	debug("handlecount=%d", handlecount);
+	INSIST(handlecount >= 0);
 }
 
 /*%
@@ -1597,13 +1614,7 @@ clear_query(dig_query_t *query) {
 	}
 	INSIST(query->recvspace != NULL);
 
-	if (query->handle != NULL) {
-		isc_nmhandle_unref(query->handle);
-		query->handle = NULL;
-		sockcount--;
-		debug("sockcount=%d", sockcount);
-		INSIST(sockcount >= 0);
-	}
+	clear_handle(query);
 
 	isc_mempool_put(commctx, query->recvspace);
 	isc_mempool_put(commctx, query->tmpsendspace);
@@ -2669,6 +2680,7 @@ cancel_lookup(dig_lookup_t *lookup) {
 			if (query->lookup->tcp_mode) {
 				isc_nm_cancelread(query->handle);
 			}
+			clear_handle(query);
 			check_if_done();
 		} else {
 			clear_query(query);
@@ -2795,7 +2807,7 @@ start_tcp(dig_query_t *query) {
 	INSIST(query->handle == NULL);
 
 	if (keep != NULL && isc_sockaddr_equal(&keepaddr, &query->sockaddr)) {
-		sockcount++;
+		handlecount++;
 		isc_nmhandle_ref(keep);
 		query->handle = keep;
 		query->waiting_connect = false;
@@ -2980,8 +2992,8 @@ start_udp(dig_query_t *query) {
 				   (isc_nmiface_t *)&query->sockaddr,
 				   udp_ready, query, 0);
 	check_result(result, "isc_nm_udpconnect");
-	sockcount++;
-	debug("sockcount=%d", sockcount);
+	handlecount++;
+	debug("handlecount=%d", handlecount);
 }
 
 /*%
@@ -3046,6 +3058,7 @@ connect_timeout(isc_task_t *task, isc_event_t *event) {
 		if (l->tcp_mode) {
 			if (query->handle != NULL) {
 				isc_nm_cancelread(query->handle);
+				clear_handle(query);
 			} else {
 				clear_query(query);
 			}
@@ -3057,6 +3070,7 @@ connect_timeout(isc_task_t *task, isc_event_t *event) {
 	if (l->tcp_mode && query->handle != NULL) {
 		query->timedout = true;
 		isc_nm_cancelread(query->handle);
+		clear_handle(query);
 	}
 
 	if (l->retries > 1) {
@@ -3250,7 +3264,7 @@ tcp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	}
 
 	query->waiting_connect = false;
-	sockcount++;
+	handlecount++;
 
 	exitcode = 0;
 
@@ -4210,8 +4224,7 @@ cancel_all(void) {
 				if (q->lookup->tcp_mode) {
 					isc_nm_cancelread(q->handle);
 				}
-				isc_nmhandle_unref(q->handle);
-				q->handle = NULL;
+				clear_handle(q);
 			} else {
 				clear_query(q);
 			}
@@ -4225,8 +4238,7 @@ cancel_all(void) {
 				if (q->lookup->tcp_mode) {
 					isc_nm_cancelread(q->handle);
 				}
-				isc_nmhandle_unref(q->handle);
-				q->handle = NULL;
+				clear_handle(q);
 			} else {
 				clear_query(q);
 			}
@@ -4273,7 +4285,7 @@ destroy_libs(void) {
 	isc_nm_destroy(&netmgr);
 
 	LOCK_LOOKUP;
-	REQUIRE(sockcount == 0);
+	REQUIRE(handlecount == 0);
 	REQUIRE(recvcount == 0);
 	REQUIRE(sendcount == 0);
 
