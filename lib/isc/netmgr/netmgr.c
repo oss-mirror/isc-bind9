@@ -1228,6 +1228,10 @@ isc_nmhandle_unref(isc_nmhandle_t *handle) {
 		}
 	}
 
+	if (handle == sock->statichandle) {
+		sock->statichandle = NULL;
+	}
+
 	isc__nmsocket_detach(&sock);
 }
 
