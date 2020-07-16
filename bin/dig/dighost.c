@@ -4288,6 +4288,7 @@ destroy_libs(void) {
 		isc_taskmgr_destroy(&taskmgr);
 	}
 
+	debug("freeing netmgr");
 	isc_nm_destroy(&netmgr);
 
 	LOCK_LOOKUP;

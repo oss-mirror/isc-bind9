@@ -103,15 +103,20 @@ status=`expr $status + $ret`
 n=`expr $n + 1`
 echo_i "checking drop edns server setup ($n)"
 ret=0
+echo x
 $DIG $DIGOPTS +edns @10.53.0.2 dropedns soa > dig.out.1.test$n && ret=1
+echo x
 grep "connection timed out; no servers could be reached" dig.out.1.test$n > /dev/null || ret=1
 $DIG $DIGOPTS +noedns @10.53.0.2 dropedns soa > dig.out.2.test$n || ret=1
+echo x
 grep "status: NOERROR" dig.out.2.test$n > /dev/null || ret=1
 grep "EDNS: version:" dig.out.2.test$n > /dev/null && ret=1
 $DIG $DIGOPTS +noedns +tcp @10.53.0.2 dropedns soa > dig.out.3.test$n || ret=1
+echo x
 grep "status: NOERROR" dig.out.3.test$n > /dev/null || ret=1
 grep "EDNS: version:" dig.out.3.test$n > /dev/null && ret=1
 $DIG $DIGOPTS +edns +tcp @10.53.0.2 dropedns soa > dig.out.4.test$n && ret=1
+echo x
 grep "connection timed out; no servers could be reached" dig.out.4.test$n > /dev/null || ret=1
 if [ $ret != 0 ]; then echo_i "failed"; fi
 status=`expr $status + $ret`
