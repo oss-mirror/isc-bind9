@@ -1376,6 +1376,9 @@ isc_nm_cancelread(isc_nmhandle_t *handle) {
 	REQUIRE(VALID_NMHANDLE(handle));
 
 	switch (handle->sock->type) {
+	case isc_nm_udpsocket:
+		isc__nm_udp_cancelread(handle);
+		break;
 	case isc_nm_tcpsocket:
 		isc__nm_tcp_cancelread(handle);
 		break;

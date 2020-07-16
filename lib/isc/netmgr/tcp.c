@@ -1146,7 +1146,7 @@ isc__nm_tcp_cancelread(isc_nmhandle_t *handle) {
 	REQUIRE(sock->type == isc_nm_tcpsocket);
 
 	if (sock->client && sock->rcb.recv != NULL) {
-		sock->rcb.recv(handle, ISC_R_CANCELED, NULL, sock->rcbarg);
+		sock->rcb.recv(handle, ISC_R_EOF, NULL, sock->rcbarg);
 		isc__nmsocket_clearcb(sock);
 	}
 }

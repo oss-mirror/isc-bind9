@@ -82,7 +82,9 @@ alloc_dnsbuf(isc_nmsocket_t *sock, size_t len) {
 static void
 timer_close_cb(uv_handle_t *handle) {
 	isc_nmsocket_t *sock = (isc_nmsocket_t *)uv_handle_get_data(handle);
-	INSIST(VALID_NMSOCK(sock));
+
+	REQUIRE(VALID_NMSOCK(sock));
+
 	atomic_store(&sock->closed, true);
 	tcpdns_close_direct(sock);
 }
@@ -94,7 +96,8 @@ dnstcp_readtimeout(uv_timer_t *timer) {
 
 	REQUIRE(VALID_NMSOCK(sock));
 	REQUIRE(sock->tid == isc_nm_tid());
-	/* Close the TCP connection, it's closing should fire 'our' closing */
+
+	/* Close the TCP connection; its closure should fire ours. */
 	isc_nmhandle_unref(sock->outerhandle);
 	sock->outerhandle = NULL;
 }
@@ -247,7 +250,6 @@ dnslisten_readcb(isc_nmhandle_t *handle, isc_result_t eresult,
 
 	REQUIRE(VALID_NMSOCK(dnssock));
 	REQUIRE(VALID_NMHANDLE(handle));
-	REQUIRE(dnssock->tid == isc_nm_tid());
 
 	if (region == NULL || eresult != ISC_R_SUCCESS) {
 		/* Connection closed */
@@ -796,7 +798,7 @@ isc__nm_tcpdns_cancelread(isc_nmhandle_t *handle) {
 	REQUIRE(sock->type == isc_nm_tcpdnssocket);
 
 	if (sock->client && sock->rcb.recv != NULL) {
-		sock->rcb.recv(handle, ISC_R_CANCELED, NULL, sock->rcbarg);
+		sock->rcb.recv(handle, ISC_R_EOF, NULL, sock->rcbarg);
 		isc__nmsocket_clearcb(sock);
 		isc__nm_tcp_cancelread(sock->outerhandle);
 	}

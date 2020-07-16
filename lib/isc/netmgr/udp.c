@@ -562,6 +562,7 @@ udp_send_cb(uv_udp_send_t *req, int status) {
 static isc_result_t
 udp_send_direct(isc_nmsocket_t *sock, isc__nm_uvreq_t *req,
 		isc_sockaddr_t *peer) {
+	const struct sockaddr *sa = NULL;
 	int rv;
 
 	REQUIRE(sock->tid == isc_nm_tid());
@@ -570,8 +571,9 @@ udp_send_direct(isc_nmsocket_t *sock, isc__nm_uvreq_t *req,
 	if (!isc__nmsocket_active(sock)) {
 		return (ISC_R_CANCELED);
 	}
+
 	isc_nmhandle_ref(req->handle);
-	const struct sockaddr *sa = sock->connected ? NULL : &peer->type.sa;
+	sa = sock->connected ? NULL : &peer->type.sa;
 	rv = uv_udp_send(&req->uv_req.udp_send, &sock->uv_handle.udp,
 			 &req->uvbuf, 1, sa, udp_send_cb);
 	if (rv < 0) {
@@ -836,5 +838,21 @@ isc__nm_udp_close(isc_nmsocket_t *sock) {
 	} else {
 		isc__nm_enqueue_ievent(&sock->mgr->workers[sock->tid],
 				       (isc__netievent_t *)ievent);
+	}
+}
+
+void
+isc__nm_udp_cancelread(isc_nmhandle_t *handle) {
+	isc_nmsocket_t *sock = NULL;
+
+	REQUIRE(VALID_NMHANDLE(handle));
+
+	sock = handle->sock;
+
+	REQUIRE(sock->type == isc_nm_udpsocket);
+
+	if (sock->client && sock->rcb.recv != NULL) {
+		sock->rcb.recv(handle, ISC_R_EOF, NULL, sock->rcbarg);
+		isc__nmsocket_clearcb(sock);
 	}
 }

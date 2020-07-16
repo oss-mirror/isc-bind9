@@ -2677,9 +2677,7 @@ cancel_lookup(dig_lookup_t *lookup) {
 		REQUIRE(DIG_VALID_QUERY(query));
 		next = ISC_LIST_NEXT(query, link);
 		if (query->handle != NULL) {
-			if (query->lookup->tcp_mode) {
-				isc_nm_cancelread(query->handle);
-			}
+			isc_nm_cancelread(query->handle);
 			clear_handle(query);
 			check_if_done();
 		} else {
@@ -3055,21 +3053,23 @@ connect_timeout(isc_task_t *task, isc_event_t *event) {
 	}
 
 	if (try_next_server(l)) {
-		if (l->tcp_mode) {
-			if (query->handle != NULL) {
-				isc_nm_cancelread(query->handle);
-				clear_handle(query);
-			} else {
-				clear_query(query);
-			}
+		if (query->handle != NULL) {
+			UNLOCK_LOOKUP;
+			isc_nm_cancelread(query->handle);
+			LOCK_LOOKUP;
+			clear_handle(query);
+		} else {
+			clear_query(query);
 		}
 		UNLOCK_LOOKUP;
 		return;
 	}
 
-	if (l->tcp_mode && query->handle != NULL) {
+	if (query->handle != NULL) {
 		query->timedout = true;
+		UNLOCK_LOOKUP;
 		isc_nm_cancelread(query->handle);
+		LOCK_LOOKUP;
 		clear_handle(query);
 	}
 
@@ -3255,13 +3255,14 @@ tcp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 			next = NULL;
 		}
 		clear_query(query);
-		if (next != NULL) {
+		if (next == NULL) {
+			check_next_lookup(l);
+			UNLOCK_LOOKUP;
+		} else {
+			UNLOCK_LOOKUP;
 			bringup_timer(next, TCP_TIMEOUT);
 			start_tcp(next);
-		} else {
-			check_next_lookup(l);
 		}
-		UNLOCK_LOOKUP;
 		return;
 	}
 
@@ -3573,9 +3574,6 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 
 	l = query->lookup;
 
-	isc_buffer_init(&b, region->base, region->length);
-	isc_buffer_add(&b, region->length);
-
 	if ((l->tcp_mode) && (query->timer != NULL)) {
 		isc_timer_touch(query->timer);
 	}
@@ -3613,6 +3611,9 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 		UNLOCK_LOOKUP;
 		return;
 	}
+
+	isc_buffer_init(&b, region->base, region->length);
+	isc_buffer_add(&b, region->length);
 
 	peer = isc_nmhandle_peeraddr(handle);
 	if (!l->tcp_mode &&
@@ -4227,9 +4228,9 @@ cancel_all(void) {
 			debug("canceling pending query %p, belonging to %p", q,
 			      current_lookup);
 			if (q->handle != NULL) {
-				if (q->lookup->tcp_mode) {
-					isc_nm_cancelread(q->handle);
-				}
+				UNLOCK_LOOKUP;
+				isc_nm_cancelread(q->handle);
+				LOCK_LOOKUP;
 				clear_handle(q);
 			} else {
 				clear_query(q);
@@ -4241,9 +4242,9 @@ cancel_all(void) {
 			debug("canceling connecting query %p, belonging to %p",
 			      q, current_lookup);
 			if (q->handle != NULL) {
-				if (q->lookup->tcp_mode) {
-					isc_nm_cancelread(q->handle);
-				}
+				UNLOCK_LOOKUP;
+				isc_nm_cancelread(q->handle);
+				LOCK_LOOKUP;
 				clear_handle(q);
 			} else {
 				clear_query(q);

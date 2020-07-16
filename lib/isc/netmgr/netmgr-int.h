@@ -687,6 +687,12 @@ void
 isc__nm_udp_stoplistening(isc_nmsocket_t *sock);
 
 void
+isc__nm_udp_cancelread(isc_nmhandle_t *handle);
+/*%<
+ * Stop reading on a pending UDP handle.
+ */
+
+void
 isc__nm_async_udplisten(isc__networker_t *worker, isc__netievent_t *ev0);
 void
 isc__nm_async_udpconnect(isc__networker_t *worker, isc__netievent_t *ev0);
