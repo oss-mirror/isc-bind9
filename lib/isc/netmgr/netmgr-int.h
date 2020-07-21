@@ -141,6 +141,7 @@ typedef enum isc__netievent_type {
 	netievent_tlsclose,
 	netievent_tlssend,
 	netievent_tlsstartread,
+	netievent_tlsconnect,
 
 	netievent_closecb,
 	netievent_shutdown,
@@ -212,11 +213,8 @@ typedef isc__netievent__socket_t isc__netievent_udpstop_t;
 typedef isc__netievent__socket_t isc__netievent_udpclose_t;
 typedef isc__netievent__socket_t isc__netievent_tcpstop_t;
 typedef isc__netievent__socket_t isc__netievent_tcpclose_t;
-<<<<<<< HEAD
-=======
 typedef isc__netievent__socket_t isc__netievent_tlsclose_t;
 typedef isc__netievent__socket_t isc__netievent_tcpdnsclose_t;
->>>>>>> netmgr: server-side TLS support
 typedef isc__netievent__socket_t isc__netievent_startread_t;
 typedef isc__netievent__socket_t isc__netievent_pauseread_t;
 typedef isc__netievent__socket_t isc__netievent_closecb_t;
@@ -270,6 +268,14 @@ typedef struct isc__netievent_udpconnect {
 	isc_nmsocket_t *sock;
 	isc_sockaddr_t peer;
 } isc__netievent_udpconnect_t;
+
+typedef struct isc__netievent_tlsconnect {
+	isc__netievent_type type;
+	isc_nmsocket_t *sock;
+	SSL_CTX *ctx;
+	isc_sockaddr_t local; /* local address */
+	isc_sockaddr_t peer;  /* peer address */
+} isc__netievent_tlsconnect_t;
 
 typedef struct isc__netievent {
 	isc__netievent_type type;
@@ -390,6 +396,7 @@ struct isc_nmsocket {
 
 	/*% TLS stuff */
 	struct tls {
+		bool server;
 		BIO *app_bio;
 		SSL *ssl;
 		SSL_CTX *ctx;
@@ -811,6 +818,13 @@ isc__nm_async_tlsclose(isc__networker_t *worker, isc__netievent_t *ev0);
 
 void
 isc__nm_async_tlssend(isc__networker_t *worker, isc__netievent_t *ev0);
+
+void
+isc__nm_async_tlsconnect(isc__networker_t *worker, isc__netievent_t *ev0);
+
+void
+isc__nm_async_tls_startread(isc__networker_t *worker, isc__netievent_t *ev0);
+
 /*%<
  * Callback handlers for asynchronouse TLS events.
  */
@@ -876,9 +890,6 @@ isc__nm_tls_resumeread(isc_nmsocket_t *sock);
 
 void
 isc__nm_tls_stoplistening(isc_nmsocket_t *sock);
-
-void
-isc__nm_async_tls_startread(isc__networker_t *worker, isc__netievent_t *ev0);
 
 #define isc__nm_uverr2result(x) \
 	isc___nm_uverr2result(x, true, __FILE__, __LINE__)

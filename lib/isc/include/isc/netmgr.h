@@ -11,12 +11,12 @@
 
 #pragma once
 
-#include <openssl/ssl.h>
-
 #include <isc/mem.h>
 #include <isc/region.h>
 #include <isc/result.h>
 #include <isc/types.h>
+
+#include <openssl/ssl.h>
 
 /*
  * Replacement for isc_sockettype_t provided by socket.h.
@@ -393,6 +393,11 @@ isc_nm_listentls(isc_nm_t *mgr, isc_nmiface_t *iface,
 		 isc_nm_accept_cb_t accept_cb, void *accept_cbarg,
 		 size_t extrahandlesize, int backlog, isc_quota_t *quota,
 		 SSL_CTX *sslctx, isc_nmsocket_t **sockp);
+
+isc_result_t
+isc_nm_tlsconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
+		  isc_nm_accept_cb_t cb, void *cbarg, SSL_CTX *ctx,
+		  size_t extrahandlesize);
 
 void
 isc_nm_maxudp(isc_nm_t *mgr, uint32_t maxudp);
