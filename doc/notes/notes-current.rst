@@ -14,7 +14,9 @@ Notes for BIND 9.17.4
 Security Fixes
 ~~~~~~~~~~~~~~
 
-- None.
+- When compiled with native PKCS#11 support, it was possible to trigger an
+  INSIST when determining number of bits in the PKCS#11 RSA public key with a
+  specially crafted packet. [GL #2037]
 
 Known Issues
 ~~~~~~~~~~~~

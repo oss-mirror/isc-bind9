@@ -1,3 +1,8 @@
+XXXX.	[security]	When compiled with native PKCS#11 support, it was
+			possible to trigger an INSIST when determining number of
+			bits in the PKCS#11 RSA public key with a specially
+			crafted packet. [GL #2037]
+
 5473.	[func]		The rbt hashtable implementation has been changed
 			to use faster hash-function (HalfSipHash2-4) and
 			uses Fibonacci hashing for better distribution.
