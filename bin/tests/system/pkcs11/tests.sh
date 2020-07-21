@@ -137,5 +137,10 @@ echo_i "Checking if all supported algorithms were tested"
 [ "$n" -eq "$(wc -l < supported)" ] || ret=1
 test_done
 
+if [ -n "$PYTHON" ]; then
+    echo_i "Checking for assertion failure in pk11_numbits()"
+    $PYTHON pk11_numbits.py 10.53.0.1 "$PORT"
+fi
+
 echo_i "exit status: $status"
 [ "$status" -eq 0 ] || exit 1
