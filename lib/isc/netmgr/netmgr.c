@@ -595,13 +595,10 @@ process_queue(isc__networker_t *worker, isc_queue_t *queue) {
 			uv_stop(&worker->loop);
 			isc_mempool_put(worker->mgr->evpool, ievent);
 			return;
-<<<<<<< HEAD
 		case netievent_udpconnect:
 			isc__nm_async_udpconnect(worker, ievent);
 			break;
-=======
 
->>>>>>> netmgr: server-side TLS support
 		case netievent_udplisten:
 			isc__nm_async_udplisten(worker, ievent);
 			break;
@@ -611,16 +608,14 @@ process_queue(isc__networker_t *worker, isc_queue_t *queue) {
 		case netievent_udpsend:
 			isc__nm_async_udpsend(worker, ievent);
 			break;
-<<<<<<< HEAD
+
 		case netievent_udpread:
 			isc__nm_async_udpread(worker, ievent);
 			break;
 		case netievent_udpclose:
 			isc__nm_async_udpclose(worker, ievent);
 			break;
-=======
 
->>>>>>> netmgr: server-side TLS support
 		case netievent_tcpconnect:
 			isc__nm_async_tcpconnect(worker, ievent);
 			break;
@@ -1144,7 +1139,7 @@ isc__nmhandle_get(isc_nmsocket_t *sock, isc_sockaddr_t *peer,
 	handle->ah_pos = pos;
 	UNLOCK(&sock->lock);
 
-	if (sock->type == isc_nm_tcpsocket || sock->type == isc_nm_tlssocket
+	if (sock->type == isc_nm_tcpsocket || sock->type == isc_nm_tlssocket ||
 	    (sock->type == isc_nm_udpsocket && sock->client)) {
 		INSIST(sock->statichandle == NULL);
 		sock->statichandle = handle;

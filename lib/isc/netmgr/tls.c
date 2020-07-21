@@ -70,7 +70,7 @@ tls_do_bio(isc_nmsocket_t *sock, int rv) {
 					      region.length);
 				isc_region_t dregion =
 					(isc_region_t){ region.base, rv };
-				sock->rcb.recv(sock->tcphandle, ISC_R_SUCCESS,
+				sock->rcb.recv(sock->statichandle, ISC_R_SUCCESS,
 					       &dregion, sock->rcbarg);
 				free(region.base);
 			}
@@ -116,7 +116,7 @@ tls_do_bio(isc_nmsocket_t *sock, int rv) {
 error:
 	/* XXXWPK TODO log it ! */
 	if (sock->rcb.recv != NULL) {
-		sock->rcb.recv(sock->tcphandle, ISC_R_SUCCESS, NULL,
+		sock->rcb.recv(sock->statichandle, ISC_R_SUCCESS, NULL,
 			       sock->rcbarg);
 	} else {
 		tls_close_direct(sock);
@@ -138,7 +138,7 @@ tls_readcb(isc_nmhandle_t *handle, isc_result_t result, isc_region_t *region,
 		/* TODO accept_cb should be called if we're not initialized yet!
 		 */
 		if (tlssock->rcb.recv != NULL) {
-			tlssock->rcb.recv(tlssock->tcphandle, result, region,
+			tlssock->rcb.recv(tlssock->statichandle, result, region,
 					  tlssock->rcbarg);
 		}
 		isc__nm_tls_close(tlssock);
@@ -152,11 +152,11 @@ tls_readcb(isc_nmhandle_t *handle, isc_result_t result, isc_region_t *region,
 		if (SSL_is_init_finished(tlssock->tls.ssl) == 1) {
 			if (tlssock->server) {
 				tlssock->listener->accept_cb.accept(
-					tlssock->tcphandle, ISC_R_SUCCESS,
+					tlssock->statichandle, ISC_R_SUCCESS,
 					tlssock->listener->accept_cbarg);
 			} else {
 				tlssock->accept_cb.connect(
-					tlssock->tcphandle, ISC_R_SUCCESS,
+					tlssock->statichandle, ISC_R_SUCCESS,
 					tlssock->accept_cbarg);
 			}
 			tlssock->tls.state = IO;
@@ -293,7 +293,7 @@ tls_send_direct(isc_nmsocket_t *sock, isc__nm_uvreq_t *req) {
 	}
 	INSIST((unsigned)rv == req->uvbuf.len);
 	tls_do_bio(sock, TLS_CHECK_RV);
-	req->cb.send(sock->tcphandle, ISC_R_SUCCESS, req->cbarg);
+	req->cb.send(sock->statichandle, ISC_R_SUCCESS, req->cbarg);
 	isc__nm_uvreq_put(&req, sock);
 	return (ISC_R_SUCCESS);
 }
