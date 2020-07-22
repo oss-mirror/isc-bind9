@@ -530,7 +530,7 @@ isc__nm_async_tcpdnssend(isc__networker_t *worker, isc__netievent_t *ev0) {
 
 		r.base = (unsigned char *)req->uvbuf.base;
 		r.length = req->uvbuf.len;
-		result = isc__nm_tcp_send(sock->outerhandle, &r, tcpdnssend_cb,
+		result = isc_nm_send(sock->outerhandle, &r, tcpdnssend_cb,
 					  req);
 	}
 
@@ -573,7 +573,7 @@ isc__nm_tcpdns_send(isc_nmhandle_t *handle, isc_region_t *region,
 		r.base = (unsigned char *)uvreq->uvbuf.base;
 		r.length = uvreq->uvbuf.len;
 
-		return (isc__nm_tcp_send(sock->outerhandle, &r, tcpdnssend_cb,
+		return (isc_nm_send(sock->outerhandle, &r, tcpdnssend_cb,
 					 uvreq));
 	} else {
 		isc__netievent_tcpdnssend_t *ievent = NULL;
@@ -719,7 +719,8 @@ isc_nm_tcpdnsconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 				  .cbarg = cbarg,
 				  .extrahandlesize = extrahandlesize };
 	isc_mem_attach(mgr->mctx, &conn->mctx);
-	return (isc_nm_tcpconnect(mgr, local, peer, tcpdnsconnect_cb, conn, 0));
+	SSL_CTX *ctx = SSL_CTX_new(SSLv23_client_method());
+	return (isc_nm_tlsconnect(mgr, local, peer, tcpdnsconnect_cb, conn, ctx, 0));
 }
 
 isc_result_t

@@ -396,7 +396,7 @@ isc_nm_listentls(isc_nm_t *mgr, isc_nmiface_t *iface,
 
 isc_result_t
 isc_nm_tlsconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
-		  isc_nm_accept_cb_t cb, void *cbarg, SSL_CTX *ctx,
+		  isc_nm_cb_t cb, void *cbarg, SSL_CTX *ctx,
 		  size_t extrahandlesize);
 
 void

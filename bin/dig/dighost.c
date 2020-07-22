@@ -2872,14 +2872,15 @@ send_udp(dig_query_t *query) {
 	query->waiting_senddone = true;
 
 	isc_nmhandle_ref(query->handle);
+	sendcount++;
 	result = isc_nm_send(query->handle, &r, send_done, query);
 	if (result != ISC_R_SUCCESS) {
+		sendcount--;
 		isc_nmhandle_unref(query->handle);
 		return;
 	}
 
 	check_result(result, "isc_nm_send");
-	sendcount++;
 
 	/* XXX qrflag, print_query, etc... */
 	if (!ISC_LIST_EMPTY(query->lookup->q) && query->lookup->qr) {
@@ -3170,9 +3171,9 @@ launch_next_query(dig_query_t *query) {
 			query->handle = keep;
 		}
 		isc_nmhandle_ref(query->handle);
+		sendcount++;
 		isc_nm_send(query->handle, &r, send_done, query);
 		check_result(result, "isc_nm_send");
-		sendcount++;
 		debug("sendcount=%d", sendcount);
 
 		/* XXX qrflag, print_query, etc... */
