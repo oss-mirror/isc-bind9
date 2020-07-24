@@ -20,6 +20,7 @@
 #include <isc/mutex.h>
 #include <isc/platform.h>
 #include <isc/types.h>
+#include <isc/util.h>
 
 /*! \file isc/refcount.h
  * \brief Implements a locked reference counter.
