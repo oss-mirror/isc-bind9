@@ -203,6 +203,11 @@ mark_value(isc_pq_t *pq, node_t **nextp, node_t *prev, uintptr_t *valuep) {
 	node_t *node = *nextp;
 	uintptr_t value = atomic_load(&node->value);
 	for (;;) {
+		if (node != (node_t *)NODE_NEXT(prev, 0)) {
+			release_node(&node);
+			continue;
+		}
+
 		if (!is_marked(value)) {
 			if (atomic_compare_exchange_weak(&node->value, &value,
 							 get_marked(value)))
