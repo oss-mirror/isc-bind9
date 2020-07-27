@@ -9,6 +9,8 @@
  * information regarding copyright ownership.
  */
 
+/* draft-ietf-dnsop-update-timeout-01 */
+
 #ifndef GENERIC_TIMEOUT_H
 #define GENERIC_TIMEOUT_H 1
 
@@ -17,7 +19,7 @@ typedef struct dns_rdata_timeout {
 	isc_mem_t *mctx;
 	dns_rdatatype_t covers;
 	unsigned char count;
-	unsigned char type;
+	unsigned char method;
 	uint64_t when;
 	uint16_t length;
 	unsigned char *data;

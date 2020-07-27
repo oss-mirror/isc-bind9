@@ -11307,13 +11307,20 @@ update_log_cb(void *arg, dns_zone_t *zone, int level, const char *message) {
 }
 
 static isc_result_t
+digest_cb(void *arg, isc_region_t *region) {
+	return (isc_md_update(arg, region->base, region->length));
+}
+
+static isc_result_t
 process_timeout_rr(dns_db_t *db, dns_dbversion_t *ver, dns_diff_t *diff,
 		   dns_name_t *name, dns_rdata_timeout_t *timeout) {
-	bool delete_all;
 	dns_rdataset_t rdataset;
 	dns_fixedname_t fixed;
 	isc_region_t region;
 	isc_result_t result;
+	unsigned char digest[ISC_MAX_MD_SIZE];
+	unsigned int digestlen = sizeof(digest);
+	isc_md_t *md = NULL;
 
 	dns_rdataset_init(&rdataset);
 	dns_fixedname_init(&fixed);
@@ -11325,52 +11332,57 @@ process_timeout_rr(dns_db_t *db, dns_dbversion_t *ver, dns_diff_t *diff,
 	}
 	region.length = timeout->length;
 	region.base = timeout->data;
-	delete_all = timeout->type == 0;
-	while (delete_all || region.length > 0) {
-		dns_rdata_t rdata1 = DNS_RDATA_INIT;
-		unsigned int length;
-		uint16_t rdlen;
-
-		if (!delete_all) {
-			rdlen = region.base[0] << 8 | region.base[1];
-			INSIST(rdlen + 2U >= region.length);
-			isc_region_consume(&region, 2);
-
-			length = region.length;
-			region.length = rdlen;
-			dns_rdata_fromregion(&rdata1, timeout->common.rdclass,
-					     timeout->covers, &region);
-			region.length = length;
-			isc_region_consume(&region, rdlen);
-		} else {
-			/* make sure loop terminates */
-			region.length = 0;
-		}
-
+	do {
 		for (result = dns_rdataset_first(&rdataset);
 		     result == ISC_R_SUCCESS;
 		     result = dns_rdataset_next(&rdataset))
 		{
-			dns_rdata_t rdata2 = DNS_RDATA_INIT;
-			dns_rdataset_current(&rdataset, &rdata2);
-			if (delete_all ||
-			    dns_rdata_compare(&rdata1, &rdata2) == 0) {
-				fprintf(stderr, "delete RR\n");
-				CHECK(update_one_rr(db, ver, diff,
-						    DNS_DIFFOP_DEL, name,
-						    rdataset.ttl, &rdata2));
-				if (!delete_all) {
-					break;
+			dns_rdata_t rdata = DNS_RDATA_INIT;
+			dns_rdataset_current(&rdataset, &rdata);
+			switch (timeout->method) {
+			case 0:
+				INSIST(region.length == 0);
+				break;
+			case 1: {
+				/* First 128 bits of sha256 digest */
+				md = isc_md_new();
+				const isc_md_type_t *md_type = ISC_MD_SHA256;
+
+				if (md == NULL) {
+					CHECK(ISC_R_NOMEMORY);
 				}
+				CHECK(isc_md_init(md, md_type));
+				CHECK(dns_rdata_digest(&rdata, digest_cb, md));
+				CHECK(isc_md_final(md, digest, &digestlen));
+				isc_md_free(md);
+				md = NULL;
+				INSIST(region.length >= 16);
+				INSIST(digestlen >= 16);
+				if (memcmp(digest, region.base, 16) != 0) {
+					continue;
+				}
+				isc_region_consume(&region, 16);
+				break;
+			}
+			default:
+				INSIST(0);
+			}
+			fprintf(stderr, "delete RR\n");
+			CHECK(update_one_rr(db, ver, diff, DNS_DIFFOP_DEL, name,
+					    rdataset.ttl, &rdata));
+			if (timeout->method != 0) {
+				break;
 			}
 		}
 		if (result == ISC_R_NOMORE) {
 			result = ISC_R_SUCCESS;
 		}
-		/* make sure loop terminates */
-		delete_all = false;
-	}
+	} while (region.length > 0);
+
 failure:
+	if (md != NULL) {
+		isc_md_free(md);
+	}
 	if (dns_rdataset_isassociated(&rdataset)) {
 		dns_rdataset_disassociate(&rdataset);
 	}
@@ -11447,7 +11459,7 @@ zone_process_timeout(dns_zone_t *zone) {
 
 			dns_rdataset_current(&rdataset, &rdata);
 			dns_rdata_tostruct(&rdata, &timeout, NULL);
-			switch (timeout.type) {
+			switch (timeout.method) {
 			case 0:
 			case 1:
 				CHECK(process_timeout_rr(db, newver, &diff,

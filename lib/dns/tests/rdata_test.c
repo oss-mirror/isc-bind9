@@ -2457,20 +2457,22 @@ sshfp(void **state) {
 
 static void
 timeout(void **state) {
-	text_ok_t text_ok[] = {
-		/*
-		 * Timeout all A records.
-		 */
-		TEXT_VALID("A 0 0 20190711000000"),
-		/*
-		 * Single Timeout of A record.
-		 */
-		TEXT_VALID("A 1 1 20190711000000 4 1.2.3.4"),
-		/*
-		 * Timeout of 2 A records.
-		 */
-		TEXT_VALID("A 2 1 20190711000000 4 1.2.3.4 4 1.2.3.5"),
-		TEXT_SENTINEL()
+	text_ok_t text_ok[] = { /*
+				 * Timeout all A records.
+				 */
+				TEXT_VALID("A 0 0 20190711000000"),
+				/*
+				 * Single Timeout of A record.
+				 */
+				TEXT_VALID("A 1 1 20190711000000 "
+					   "00112233445566778899AABBCCDDEEFF"),
+				/*
+				 * Timeout of 2 A records.
+				 */
+				TEXT_VALID("A 2 1 20190711000000 "
+					   "00112233445566778899AABBCCDDEEFF "
+					   "00112233445566778899AABBCCDDEEFE"),
+				TEXT_SENTINEL()
 	};
 	wire_ok_t wire_ok[] = { WIRE_SENTINEL() };
 

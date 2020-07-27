@@ -30,6 +30,7 @@
 #include <isc/lex.h>
 #include <isc/log.h>
 #include <isc/managers.h>
+#include <isc/md.h>
 #include <isc/mem.h>
 #include <isc/nonce.h>
 #include <isc/parseint.h>
@@ -1288,16 +1289,22 @@ parse_name(char **cmdlinep, dns_message_t *msg, dns_name_t **namep) {
 	return (STATUS_MORE);
 }
 
+static isc_result_t
+digest_cb(void *arg, isc_region_t *region) {
+	return (isc_md_update(arg, region->base, region->length));
+}
+
 static uint16_t
 parse_rdata(char **cmdlinep, dns_rdataclass_t rdataclass,
 	    dns_rdatatype_t rdatatype, bool istimeout, bool isdate,
 	    uint64_t ttl, dns_message_t *msg, dns_rdata_t *rdata) {
 	char *cmdline = *cmdlinep;
-	isc_buffer_t source, *buf = NULL, *newbuf = NULL;
+	isc_buffer_t source, *buf = NULL, *newbuf = NULL, sb;
 	isc_region_t r;
 	isc_lex_t *lex = NULL;
 	dns_rdatacallbacks_t callbacks;
 	isc_result_t result;
+	dns_rdata_t rdata2 = DNS_RDATA_INIT;
 
 	if (cmdline == NULL) {
 		rdata->flags = DNS_RDATA_UPDATE;
@@ -1317,32 +1324,43 @@ parse_rdata(char **cmdlinep, dns_rdataclass_t rdataclass,
 		result = isc_lex_openbuffer(lex, &source);
 		check_result(result, "isc_lex_openbuffer");
 		isc_buffer_allocate(gmctx, &buf, MAXWIRE);
-		if (istimeout) {
-			isc_stdtime_t now;
-
-			isc_stdtime_get(&now);
-			isc_buffer_putuint16(buf, rdatatype);
-			isc_buffer_putuint8(buf, 1);
-			isc_buffer_putuint8(buf, 1);
-			if (isdate) {
-				isc_buffer_putuint64(buf, ttl);
-			} else {
-				isc_buffer_putuint64(buf,
-						     (uint64_t)(ttl + now));
-			}
-			isc_buffer_add(buf, 2);
-		}
-		result = dns_rdata_fromtext(NULL, rdataclass, rdatatype, lex,
+		sb = *buf;
+		result = dns_rdata_fromtext(&rdata2, rdataclass, rdatatype, lex,
 					    dns_rootname, 0, gmctx, buf,
 					    &callbacks);
 		isc_lex_destroy(&lex);
 		if (result == ISC_R_SUCCESS) {
-			isc_buffer_usedregion(buf, &r);
 			if (istimeout) {
-				r.base[12] = ((r.length - 14) >> 8) & 0xff;
-				r.base[13] = (r.length - 14) & 0xff;
+				const isc_md_type_t *md_type = ISC_MD_SHA256;
+				isc_md_t *md = isc_md_new();
+				isc_stdtime_t now;
+				unsigned char digest[ISC_MAX_MD_SIZE];
+				unsigned int digestlen = sizeof(digest);
+
+				result = isc_md_init(md, md_type);
+				check_result(result, "isc_md_init");
+				result = dns_rdata_digest(&rdata2, digest_cb,
+							  md);
+				check_result(result, "dns_rdata_digest");
+				result = isc_md_final(md, digest, &digestlen);
+				check_result(result, "isc_md_final");
+				isc_md_free(md);
+				*buf = sb;
+
+				isc_stdtime_get(&now);
+				isc_buffer_putuint16(buf, rdatatype);
+				isc_buffer_putuint8(buf, 1);
+				isc_buffer_putuint8(buf, 1);
+				if (isdate) {
+					isc_buffer_putuint64(buf, ttl);
+				} else {
+					isc_buffer_putuint64(
+						buf, (uint64_t)(ttl + now));
+				}
+				isc_buffer_putmem(buf, digest, 16);
 				rdatatype = dns_rdatatype_timeout;
 			}
+			isc_buffer_usedregion(buf, &r);
 			isc_buffer_allocate(gmctx, &newbuf, r.length);
 			isc_buffer_putmem(newbuf, r.base, r.length);
 			isc_buffer_usedregion(newbuf, &r);
@@ -2010,7 +2028,7 @@ doneparsing:
 	rdatalist->type = istimeout ? dns_rdatatype_timeout : rdatatype;
 	rdatalist->rdclass = rdataclass;
 	rdatalist->covers = dns_rdatatype_none;
-	rdatalist->ttl = (dns_ttl_t)ttl;
+	rdatalist->ttl = istimeout ? (dns_ttl_t)0 : (dns_ttl_t)ttl;
 	ISC_LIST_APPEND(rdatalist->rdata, rdata, link);
 	dns_rdatalist_tordataset(rdatalist, rdataset);
 	ISC_LIST_INIT(name->list);
