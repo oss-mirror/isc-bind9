@@ -342,7 +342,6 @@ isc_nm_listentcpdns(isc_nm_t *mgr, isc_nmiface_t *iface, isc_nm_recv_cb_t cb,
 		    void *accept_cbarg, size_t extrahandlesize, int backlog,
 		    isc_quota_t *quota, SSL_CTX *sslctx,
 		    isc_nmsocket_t **sockp) {
-	/* A 'wrapper' socket object with outer set to true TCP socket */
 	isc_nmsocket_t *dnslistensock = isc_mem_get(mgr->mctx,
 						    sizeof(*dnslistensock));
 	isc_result_t result;
@@ -356,7 +355,11 @@ isc_nm_listentcpdns(isc_nm_t *mgr, isc_nmiface_t *iface, isc_nm_recv_cb_t cb,
 	dnslistensock->accept_cbarg = accept_cbarg;
 	dnslistensock->extrahandlesize = extrahandlesize;
 
-	/* We set dnslistensock->outer to a true listening socket */
+	/*
+	 * dnslistensock will be a DNS 'wrapper' around a connected
+	 * stream. We set dnslistensock->outer to a socket listening
+	 * for a TCP or TLS connection.
+	 */
 	if (sslctx != NULL) {
 		result = isc_nm_listentls(mgr, iface, dnslisten_acceptcb,
 					  dnslistensock, extrahandlesize,
@@ -530,8 +533,7 @@ isc__nm_async_tcpdnssend(isc__networker_t *worker, isc__netievent_t *ev0) {
 
 		r.base = (unsigned char *)req->uvbuf.base;
 		r.length = req->uvbuf.len;
-		result = isc_nm_send(sock->outerhandle, &r, tcpdnssend_cb,
-					  req);
+		result = isc_nm_send(sock->outerhandle, &r, tcpdnssend_cb, req);
 	}
 
 	if (result != ISC_R_SUCCESS) {
@@ -574,7 +576,7 @@ isc__nm_tcpdns_send(isc_nmhandle_t *handle, isc_region_t *region,
 		r.length = uvreq->uvbuf.len;
 
 		return (isc_nm_send(sock->outerhandle, &r, tcpdnssend_cb,
-					 uvreq));
+				    uvreq));
 	} else {
 		isc__netievent_tcpdnssend_t *ievent = NULL;
 
@@ -672,6 +674,7 @@ tcpdnsconnect_cb(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 		cb(NULL, result, cbarg);
 		return;
 	}
+
 	INSIST(VALID_NMHANDLE(handle));
 
 	isc_nmsocket_t *dnssock = isc_mem_get(handle->sock->mgr->mctx,
@@ -716,11 +719,12 @@ isc_nm_tcpdnsconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 		     isc_nm_cb_t cb, void *cbarg, size_t extrahandlesize) {
 	tcpconnect_t *conn = isc_mem_get(mgr->mctx, sizeof(tcpconnect_t));
 	*conn = (tcpconnect_t){ .cb = cb,
-				  .cbarg = cbarg,
-				  .extrahandlesize = extrahandlesize };
+				.cbarg = cbarg,
+				.extrahandlesize = extrahandlesize };
 	isc_mem_attach(mgr->mctx, &conn->mctx);
 	SSL_CTX *ctx = SSL_CTX_new(SSLv23_client_method());
-	return (isc_nm_tlsconnect(mgr, local, peer, tcpdnsconnect_cb, conn, ctx, 0));
+	return (isc_nm_tlsconnect(mgr, local, peer, tcpdnsconnect_cb, conn, ctx,
+				  0));
 }
 
 isc_result_t
