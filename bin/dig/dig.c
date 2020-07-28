@@ -287,6 +287,7 @@ help(void) {
 	       "(+[no]tcflag))\n"
 	       "                 +[no]tcp            (TCP mode (+[no]vc))\n"
 	       "                 +timeout=###        (Set query timeout) [5]\n"
+	       "                 +[no]tls            (DNS over TLS mode)\n"
 	       "                 +[no]trace          (Trace delegation down "
 	       "from root "
 	       "[+dnssec])\n"
@@ -1712,6 +1713,13 @@ plus_option(char *option, bool is_batchfile, dig_lookup_t *lookup) {
 				timeout = 1;
 			}
 			break;
+		case 'l':
+			FULLCHECK("tls");
+			lookup->tls_mode = state;
+			if (!lookup->tcp_mode_set) {
+				lookup->tcp_mode = state;
+			}
+			break;
 		case 'o':
 			FULLCHECK("topdown");
 			fprintf(stderr, ";; +topdown option is deprecated");
@@ -2012,6 +2020,7 @@ dash_option(char *option, char *next, dig_lookup_t **lookup,
 			fatal("Couldn't parse port number");
 		}
 		port = num;
+		port_set = true;
 		return (value_from_next);
 	case 'q':
 		if (!config_only) {

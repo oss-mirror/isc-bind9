@@ -722,7 +722,21 @@ isc_nm_tcpdnsconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 				.cbarg = cbarg,
 				.extrahandlesize = extrahandlesize };
 	isc_mem_attach(mgr->mctx, &conn->mctx);
-	SSL_CTX *ctx = SSL_CTX_new(SSLv23_client_method());
+	return (isc_nm_tcpconnect(mgr, local, peer, tcpdnsconnect_cb, conn, 0));
+}
+
+isc_result_t
+isc_nm_tlsdnsconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
+		     isc_nm_cb_t cb, void *cbarg, size_t extrahandlesize) {
+	tcpconnect_t *conn = isc_mem_get(mgr->mctx, sizeof(tcpconnect_t));
+	SSL_CTX *ctx = NULL;
+
+	*conn = (tcpconnect_t){ .cb = cb,
+				.cbarg = cbarg,
+				.extrahandlesize = extrahandlesize };
+	isc_mem_attach(mgr->mctx, &conn->mctx);
+
+	ctx = SSL_CTX_new(SSLv23_client_method());
 	return (isc_nm_tlsconnect(mgr, local, peer, tcpdnsconnect_cb, conn, ctx,
 				  0));
 }

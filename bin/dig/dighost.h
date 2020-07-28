@@ -113,7 +113,8 @@ struct dig_lookup {
 		accept_reply_unexpected_src, /*%  print replies from
 					      * unexpected
 					      *   sources. */
-		setqid;			     /*% use a speciied query ID */
+		setqid,			     /*% use a speciied query ID */
+		tls_mode;		     /*% connect using TLS */
 	char textname[MXNAME];		     /*% Name we're going to be
 					      * looking up */
 	char cmdline[MXNAME];
@@ -215,6 +216,7 @@ extern unsigned int extrabytes;
 extern bool check_ra, have_ipv4, have_ipv6, specified_source, usesearch,
 	showsearch, yaml;
 extern in_port_t port;
+extern bool port_set;
 extern unsigned int timeout;
 extern isc_mem_t *mctx;
 extern int sendcount;

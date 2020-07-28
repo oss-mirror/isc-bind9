@@ -99,6 +99,7 @@ bool check_ra = false, have_ipv4 = false, have_ipv6 = false,
      usesearch = false, showsearch = false, is_dst_up = false,
      keep_open = false, verbose = false, yaml = false;
 in_port_t port = 53;
+bool port_set = false;
 unsigned int timeout = 0;
 unsigned int extrabytes;
 isc_mem_t *mctx = NULL;
@@ -679,6 +680,7 @@ make_empty_lookup(void) {
 	looknew->nsfound = 0;
 	looknew->tcp_mode = false;
 	looknew->tcp_mode_set = false;
+	looknew->tls_mode = false;
 	looknew->comments = true;
 	looknew->stats = true;
 	looknew->section_question = true;
@@ -819,6 +821,7 @@ clone_lookup(dig_lookup_t *lookold, bool servers) {
 	looknew->ns_search_only = lookold->ns_search_only;
 	looknew->tcp_mode = lookold->tcp_mode;
 	looknew->tcp_mode_set = lookold->tcp_mode_set;
+	looknew->tls_mode = lookold->tls_mode;
 	looknew->comments = lookold->comments;
 	looknew->stats = lookold->stats;
 	looknew->section_question = lookold->section_question;
@@ -2764,6 +2767,13 @@ start_tcp(dig_query_t *query) {
 	l = query->lookup;
 	query->waiting_connect = true;
 	query->lookup->current_query = query;
+
+	/*
+	 * For TLS connections, we want to override the default
+	 * port number.
+	 */
+	port = port_set ? port : (l->tls_mode ? 853 : 53);
+
 	result = get_address(query->servname, port, &query->sockaddr);
 	if (result != ISC_R_SUCCESS) {
 		/*
@@ -2825,11 +2835,20 @@ start_tcp(dig_query_t *query) {
 			}
 		}
 
-		result = isc_nm_tcpdnsconnect(netmgr,
+		if (l->tls_mode) {
+			result = isc_nm_tlsdnsconnect(netmgr,
 					      (isc_nmiface_t *)&localaddr,
 					      (isc_nmiface_t *)&query->sockaddr,
 					      tcp_connected, query, 0);
-		check_result(result, "isc_nm_tcpdnsconnect");
+			check_result(result, "isc_nm_tcpdnsconnect");
+		} else {
+			result = isc_nm_tcpdnsconnect(netmgr,
+					      (isc_nmiface_t *)&localaddr,
+					      (isc_nmiface_t *)&query->sockaddr,
+					      tcp_connected, query, 0);
+			check_result(result, "isc_nm_tcpdnsconnect");
+		}
+
 		/* XXX: set DSCP */
 		bringup_timer(query, TCP_TIMEOUT);
 	}
