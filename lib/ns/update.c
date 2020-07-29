@@ -837,6 +837,37 @@ cname_incompatible_rrset_exists(dns_db_t *db, dns_dbversion_t *ver,
 }
 
 /*%
+ * Helper function for timeout_incompatible_rr_exists.
+ */
+static isc_result_t
+timeout_rr_action(void *data, rr_t *rr) {
+	dns_rdata_t *rdata = data;
+	/*
+	 * type[0:1], count[1], method[2], when[3:11], hashes.
+	 */
+	if (rdata->data[0] == rr->rdata.data[0] &&
+	    rdata->data[1] == rr->rdata.data[1] &&
+	    rdata->data[3] != rr->rdata.data[3])
+	{
+		return (ISC_R_EXISTS);
+	}
+	return (ISC_R_SUCCESS);
+}
+
+/*%
+ * Check whether a incompatible timeout record exists.
+ */
+static isc_result_t
+timeout_incompatible_rr_exists(dns_db_t *db, dns_dbversion_t *ver,
+			       dns_name_t *name, dns_rdata_t *rdata,
+			       bool *exists) {
+	isc_result_t result;
+	result = foreach_rr(db, ver, name, rdata->type, dns_rdatatype_none,
+			    timeout_rr_action, rdata);
+	RETURN_EXISTENCE_FLAG;
+}
+
+/*%
  * Helper function for rr_count().
  */
 static isc_result_t
@@ -2977,6 +3008,18 @@ update_action(isc_task_t *task, isc_event_t *event) {
 					continue;
 				}
 				soa_serial_changed = true;
+			}
+			if (rdata.type == dns_rdatatype_timeout) {
+				CHECK(timeout_incompatible_rr_exists(
+					db, ver, name, &rdata, &flag));
+				if (flag) {
+					update_log(client, zone,
+						   LOGLEVEL_PROTOCOL,
+						   "attempt to add TIMEOUT "
+						   "record with method "
+						   "mismatch ignored");
+					continue;
+				}
 			}
 
 			if (dns_rdatatype_atparent(rdata.type) &&
