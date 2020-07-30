@@ -99,6 +99,7 @@
 
 /*%< EDNS0 extended OPT codes */
 #define DNS_OPT_LLQ	      1	 /*%< LLQ opt code */
+#define DNS_OPT_UL	      2	 /*%< Update lease opt code */
 #define DNS_OPT_NSID	      3	 /*%< NSID opt code */
 #define DNS_OPT_CLIENT_SUBNET 8	 /*%< client subnet opt code */
 #define DNS_OPT_EXPIRE	      9	 /*%< EXPIRE opt code */

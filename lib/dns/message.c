@@ -3572,6 +3572,24 @@ dns_message_pseudosectiontoyaml(dns_message_t *msg, dns_pseudosection_t section,
 					ADD_STRING(target, "\n");
 					continue;
 				}
+			} else if (optcode == DNS_OPT_UL) {
+				uint32_t secs;
+				INDENT(style);
+				ADD_STRING(target, "UPDATE-LEASE:");
+				if (optlen == 4U || optlen == 8U) {
+					secs = isc_buffer_getuint32(&optbuf);
+					snprintf(buf, sizeof(buf), " %u", secs);
+					ADD_STRING(target, buf);
+				}
+				if (optlen == 8U) {
+					secs = isc_buffer_getuint32(&optbuf);
+					snprintf(buf, sizeof(buf), "/%u", secs);
+					ADD_STRING(target, buf);
+				}
+				if (optlen == 4U || optlen == 8U) {
+					ADD_STRING(target, "\n");
+					continue;
+				}
 			} else if (optcode == DNS_OPT_NSID) {
 				INDENT(style);
 				ADD_STRING(target, "NSID:");
@@ -3928,6 +3946,23 @@ dns_message_pseudosectiontotext(dns_message_t *msg, dns_pseudosection_t section,
 					if (result != ISC_R_SUCCESS) {
 						return (result);
 					}
+					ADD_STRING(target, "\n");
+					continue;
+				}
+			} else if (optcode == DNS_OPT_UL) {
+				uint32_t secs;
+				ADD_STRING(target, "; UL:");
+				if (optlen == 4U || optlen == 8U) {
+					secs = isc_buffer_getuint32(&optbuf);
+					snprintf(buf, sizeof(buf), " %u", secs);
+					ADD_STRING(target, buf);
+				}
+				if (optlen == 8U) {
+					secs = isc_buffer_getuint32(&optbuf);
+					snprintf(buf, sizeof(buf), "/%u", secs);
+					ADD_STRING(target, buf);
+				}
+				if (optlen == 4U || optlen == 8U) {
 					ADD_STRING(target, "\n");
 					continue;
 				}
