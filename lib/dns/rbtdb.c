@@ -8470,7 +8470,7 @@ settimeouttime(dns_db_t *db, dns_rdataset_t *rdataset, isc_stdtime_t resign) {
 			isc_heap_decreased(heap, header->heap_index);
 		}
 	} else if (resign != 0) {
-		header->attributes |= RDATASET_ATTR_RESIGN;
+		RDATASET_ATTR_SET(header, RDATASET_ATTR_RESIGN);
 		result = when_insert(rbtdb, header->node->locknum, header);
 	}
 	NODE_UNLOCK(&rbtdb->node_locks[header->node->locknum].lock,
