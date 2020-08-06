@@ -123,6 +123,7 @@ libisc_la_SOURCES =		\
 	$(libisc_la_HEADERS)	\
 	$(pk11_HEADERS)		\
 	$(pkcs11_HEADERS)	\
+	netmgr/http.c		\
 	netmgr/netmgr-int.h	\
 	netmgr/netmgr.c		\
 	netmgr/tcp.c		\
@@ -132,6 +133,7 @@ libisc_la_SOURCES =		\
 	netmgr/uv-compat.c	\
 	netmgr/uv-compat.h	\
 	netmgr/uverr2result.c	\
+	netmgr/url-parser/url_parser.c \
 	unix/pk11_api.c		\
 	unix/dir.c		\
 	unix/errno.c		\
