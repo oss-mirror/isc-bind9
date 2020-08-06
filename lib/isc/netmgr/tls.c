@@ -404,6 +404,7 @@ isc__nm_tls_pauseread(isc_nmsocket_t *sock) {
 isc_result_t
 isc__nm_tls_resumeread(isc_nmsocket_t *sock) {
 	atomic_store(&sock->readpaused, false);
+	tls_do_bio(sock, TLS_CHECK_RV);
 	return (ISC_R_SUCCESS);
 }
 
