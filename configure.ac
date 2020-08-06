@@ -131,7 +131,7 @@ AC_CONFIG_FILES([libltdl/Makefile])
 #
 # Set the default CFLAGS and CPPFLAGS
 #
-STD_CFLAGS="-Wall -Wextra -Wwrite-strings -Wcast-qual -Wpointer-arith -Wno-missing-field-initializers -Wformat -Wshadow"
+STD_CFLAGS="-Wall -Wextra -Wwrite-strings -Wpointer-arith -Wno-missing-field-initializers -Wformat -Wshadow"
 
 # These should be always errors
 STD_CFLAGS="$STD_CFLAGS -Werror=implicit-function-declaration -Werror=missing-prototypes -Werror=format-security -Werror=parentheses -Werror=implicit -Werror=strict-prototypes"
