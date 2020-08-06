@@ -563,6 +563,15 @@ LIBS="$LIBS $LIBUV_LIBS"
 AC_CHECK_FUNCS([uv_handle_get_data uv_handle_set_data uv_import])
 AX_RESTORE_FLAGS([libuv])
 
+# libnghttp2
+AC_MSG_CHECKING([for libnghttp2])
+PKG_CHECK_MODULES([LIBNGHTTP2], [libnghttp2 >= 1.40.0], [],
+		  [AC_MSG_ERROR([libnghttp2 not found])])
+AX_SAVE_FLAGS([libnghttp2])
+
+CFLAGS="$CFLAGS $LIBNGHTTP2_CFLAGS"
+LIBS="$LIBS $LIBNGHTTP2_LIBS"
+
 #
 # flockfile is usually provided by pthreads
 #
