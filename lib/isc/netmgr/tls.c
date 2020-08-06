@@ -38,6 +38,16 @@
 
 #define TLS_CHECK_RV INT_MAX
 
+static isc_result_t
+tls_error_to_result(int tls_err) {
+	switch (tls_err) {
+	case SSL_ERROR_ZERO_RETURN:
+		return (ISC_R_EOF);
+	default:
+		return (ISC_R_UNEXPECTED);
+	}
+}
+			
 static void
 tls_do_bio(isc_nmsocket_t *sock, int rv);
 
@@ -60,7 +70,7 @@ tls_senddone(isc_nmhandle_t *handle, isc_result_t eresult, void *cbarg) {
 static void
 tls_do_bio(isc_nmsocket_t *sock, int rv) {
 	isc_result_t result = ISC_R_SUCCESS;
-	int pending, err;
+	int pending, tls_err;
 
 	REQUIRE(sock->tid == isc_nm_tid());
 
@@ -97,11 +107,13 @@ tls_do_bio(isc_nmsocket_t *sock, int rv) {
 		}
 	}
 
-	err = SSL_get_error(sock->tls.ssl, rv);
-	printf("SSL ERR %d\n", err);
-	if (err == 0) {
+	tls_err = SSL_get_error(sock->tls.ssl, rv);
+	isc_log_write(isc_lctx, ISC_LOGCATEGORY_GENERAL,
+		      ISC_LOGMODULE_NETMGR, ISC_LOG_DEBUG(30),
+		      "SSL error code in BIO: %d", tls_err);
+	if (tls_err == 0) {
 		return;
-	} else if (err == SSL_ERROR_WANT_WRITE) {
+	} else if (tls_err == SSL_ERROR_WANT_WRITE) {
 		isc_nm_pauseread(sock->outerhandle);
 		pending = BIO_pending(sock->tls.app_bio);
 		if (pending > 0) {
@@ -115,16 +127,18 @@ tls_do_bio(isc_nmsocket_t *sock, int rv) {
 				goto error;
 			}
 		}
-	} else if (err == SSL_ERROR_WANT_READ) {
+	} else if (tls_err == SSL_ERROR_WANT_READ) {
 		isc_nm_resumeread(sock->outerhandle);
 	} else {
+		result = tls_error_to_result(tls_err);
 		goto error;
 	}
 	return;
 
 error:
-	/* XXXWPK TODO log it ! */
-	printf("ERROR!\n");
+	isc_log_write(isc_lctx, ISC_LOGCATEGORY_GENERAL,
+		      ISC_LOGMODULE_NETMGR, ISC_LOG_ERROR,
+		      "SSL error in BIO: %d", tls_err);
 	if (sock->rcb.recv != NULL) {
 		sock->rcb.recv(sock->statichandle, result, NULL, sock->rcbarg);
 	} else {
