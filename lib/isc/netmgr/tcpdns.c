@@ -814,7 +814,7 @@ isc__nm_async_tcpdnsread(isc__networker_t *worker, isc__netievent_t *ev0) {
 	isc_nmhandle_unref(handle);
 }
 
-void
+bool
 isc__nm_tcpdns_cancelread(isc_nmhandle_t *handle) {
 	isc_nmsocket_t *sock = NULL;
 
@@ -825,8 +825,10 @@ isc__nm_tcpdns_cancelread(isc_nmhandle_t *handle) {
 	REQUIRE(sock->type == isc_nm_tcpdnssocket);
 
 	if (sock->client && sock->rcb.recv != NULL) {
-		sock->rcb.recv(handle, ISC_R_EOF, NULL, sock->rcbarg);
+		sock->rcb.recv(handle, ISC_R_CANCELED, NULL, sock->rcbarg);
 		isc__nmsocket_clearcb(sock);
 		isc__nm_tcp_cancelread(sock->outerhandle);
+		return (true);
 	}
+	return (false);
 }

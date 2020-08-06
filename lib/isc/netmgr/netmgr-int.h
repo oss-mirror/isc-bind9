@@ -716,7 +716,7 @@ isc__nm_udp_close(isc_nmsocket_t *sock);
 void
 isc__nm_udp_stoplistening(isc_nmsocket_t *sock);
 
-void
+bool
 isc__nm_udp_cancelread(isc_nmhandle_t *handle);
 /*%<
  * Stop reading on a pending UDP handle.
@@ -777,7 +777,7 @@ isc__nm_tcp_shutdown(isc_nmsocket_t *sock);
  * sockets.
  */
 
-void
+bool
 isc__nm_tcp_cancelread(isc_nmhandle_t *handle);
 /*%<
  * Stop reading on a connected TCP handle.
@@ -857,7 +857,7 @@ isc__nm_async_tcpdnsread(isc__networker_t *worker, isc__netievent_t *ev0);
 isc_result_t
 isc__nm_tcpdns_read(isc_nmhandle_t *handle, isc_nm_recv_cb_t cb, void *cbarg);
 
-void
+bool
 isc__nm_tcpdns_cancelread(isc_nmhandle_t *handle);
 /*%<
  * Stop reading on a connected TCPDNS handle.

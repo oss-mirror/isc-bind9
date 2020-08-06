@@ -232,11 +232,12 @@ isc_nm_pauseread(isc_nmhandle_t *handle);
  * \li	'handle' is a valid netmgr handle.
  */
 
-void
+bool
 isc_nm_cancelread(isc_nmhandle_t *handle);
 /*%<
  * Cancel reading on a connected socket. Calls the read/recv callback on
- * active handles with a result code of ISC_R_CANCELED.
+ * active handles with a result code of ISC_R_CANCELED. Returns true if
+ * the callback was called
  *
  * Requires:
  * \li	'sock' is a valid netmgr socket

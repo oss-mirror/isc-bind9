@@ -1400,19 +1400,19 @@ isc_nm_read(isc_nmhandle_t *handle, isc_nm_recv_cb_t cb, void *cbarg) {
 	}
 }
 
-void
+bool
 isc_nm_cancelread(isc_nmhandle_t *handle) {
 	REQUIRE(VALID_NMHANDLE(handle));
 
 	switch (handle->sock->type) {
 	case isc_nm_udpsocket:
-		isc__nm_udp_cancelread(handle);
+		return (isc__nm_udp_cancelread(handle));
 		break;
 	case isc_nm_tcpsocket:
-		isc__nm_tcp_cancelread(handle);
+		return (isc__nm_tcp_cancelread(handle));
 		break;
 	case isc_nm_tcpdnssocket:
-		isc__nm_tcpdns_cancelread(handle);
+		return (isc__nm_tcpdns_cancelread(handle));
 		break;
 	default:
 		INSIST(0);

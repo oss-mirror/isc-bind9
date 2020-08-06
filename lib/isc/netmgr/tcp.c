@@ -1135,7 +1135,7 @@ isc__nm_tcp_shutdown(isc_nmsocket_t *sock) {
 	}
 }
 
-void
+bool
 isc__nm_tcp_cancelread(isc_nmhandle_t *handle) {
 	isc_nmsocket_t *sock = NULL;
 
@@ -1148,5 +1148,7 @@ isc__nm_tcp_cancelread(isc_nmhandle_t *handle) {
 	if (sock->client && sock->rcb.recv != NULL) {
 		sock->rcb.recv(handle, ISC_R_EOF, NULL, sock->rcbarg);
 		isc__nmsocket_clearcb(sock);
+		return (true);
 	}
+	return (false);
 }
