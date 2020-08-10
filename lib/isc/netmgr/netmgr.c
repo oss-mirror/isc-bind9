@@ -408,8 +408,7 @@ isc_nm_destroy(isc_nm_t **mgr0) {
 	/*
 	 * Wait for the manager to be dereferenced elsewhere.
 	 */
-	while (isc_refcount_current(&mgr->references) > 1 &&
-	       counter++ < 1000) {
+	while (isc_refcount_current(&mgr->references) > 1 && counter++ < 1000) {
 		/*
 		 * Sometimes libuv gets stuck, pausing and unpausing
 		 * netmgr goes over all events in async queue for all
@@ -1140,7 +1139,8 @@ isc__nmhandle_get(isc_nmsocket_t *sock, isc_sockaddr_t *peer,
 	UNLOCK(&sock->lock);
 
 	if (sock->type == isc_nm_tcpsocket || sock->type == isc_nm_tlssocket ||
-	    (sock->type == isc_nm_udpsocket && sock->client)) {
+	    (sock->type == isc_nm_udpsocket && sock->client))
+	{
 		INSIST(sock->statichandle == NULL);
 		sock->statichandle = handle;
 	}

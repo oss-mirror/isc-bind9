@@ -622,8 +622,8 @@ isc__nm_async_udpconnect(isc__networker_t *worker, isc__netievent_t *ev0) {
 		uv_bind_flags |= UV_UDP_IPV6ONLY;
 	}
 
-	r = uv_udp_bind(&sock->uv_handle.udp,
-			&sock->iface->addr.type.sa, uv_bind_flags);
+	r = uv_udp_bind(&sock->uv_handle.udp, &sock->iface->addr.type.sa,
+			uv_bind_flags);
 	if (r != 0) {
 		isc__nm_incstats(sock->mgr, sock->statsindex[STATID_BINDFAIL]);
 		atomic_store(&sock->connect_error, true);
@@ -714,7 +714,7 @@ isc_nm_udpconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 
 	event = isc__nm_get_ievent(mgr, netievent_udpconnect);
 	event->sock = sock;
-	event->peer = *((isc_sockaddr_t*)peer);
+	event->peer = *((isc_sockaddr_t *)peer);
 
 	/*
 	 * Hold an additional sock reference so async callbacks
@@ -725,7 +725,7 @@ isc_nm_udpconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 	r = isc_random_uniform(mgr->nworkers);
 	if (r == isc_nm_tid()) {
 		isc__nm_async_udpconnect(&mgr->workers[r],
-				      (isc__netievent_t *)event);
+					 (isc__netievent_t *)event);
 		isc__nm_put_ievent(mgr, event);
 	} else {
 		isc__nm_enqueue_ievent(&mgr->workers[r],
