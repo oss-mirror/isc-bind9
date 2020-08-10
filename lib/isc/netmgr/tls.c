@@ -47,7 +47,7 @@ tls_error_to_result(int tls_err) {
 		return (ISC_R_UNEXPECTED);
 	}
 }
-			
+
 static void
 tls_do_bio(isc_nmsocket_t *sock, int rv);
 
@@ -108,9 +108,8 @@ tls_do_bio(isc_nmsocket_t *sock, int rv) {
 	}
 
 	tls_err = SSL_get_error(sock->tls.ssl, rv);
-	isc_log_write(isc_lctx, ISC_LOGCATEGORY_GENERAL,
-		      ISC_LOGMODULE_NETMGR, ISC_LOG_DEBUG(30),
-		      "SSL error code in BIO: %d", tls_err);
+	isc_log_write(isc_lctx, ISC_LOGCATEGORY_GENERAL, ISC_LOGMODULE_NETMGR,
+		      ISC_LOG_DEBUG(30), "SSL error code in BIO: %d", tls_err);
 	if (tls_err == 0) {
 		return;
 	} else if (tls_err == SSL_ERROR_WANT_WRITE) {
@@ -136,9 +135,8 @@ tls_do_bio(isc_nmsocket_t *sock, int rv) {
 	return;
 
 error:
-	isc_log_write(isc_lctx, ISC_LOGCATEGORY_GENERAL,
-		      ISC_LOGMODULE_NETMGR, ISC_LOG_ERROR,
-		      "SSL error in BIO: %d", tls_err);
+	isc_log_write(isc_lctx, ISC_LOGCATEGORY_GENERAL, ISC_LOGMODULE_NETMGR,
+		      ISC_LOG_ERROR, "SSL error in BIO: %d", tls_err);
 	if (sock->rcb.recv != NULL) {
 		sock->rcb.recv(sock->statichandle, result, NULL, sock->rcbarg);
 	} else {
