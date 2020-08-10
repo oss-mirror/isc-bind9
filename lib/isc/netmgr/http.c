@@ -225,7 +225,7 @@ static int
 on_stream_close_callback(nghttp2_session *ngsession, int32_t stream_id,
 			 uint32_t error_code, void *user_data) {
 	UNUSED(error_code);
-	
+
 	http2_session *session = (http2_session *)user_data;
 	int rv;
 	if (session->stream->stream_id == stream_id) {

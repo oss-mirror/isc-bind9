@@ -429,3 +429,7 @@ isc_nm_tlsdnsconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 /*%
  * Establish a DNS client connection over either a TCP or a TLS socket.
  */
+
+isc_result_t
+isc_nm_doh_request(isc_nm_t *mgr, const char *uri, isc_region_t *message,
+		   isc_nm_recv_cb_t cb, void *cbarg, SSL_CTX *ctx);
