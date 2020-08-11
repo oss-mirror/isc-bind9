@@ -19,15 +19,15 @@
 
 #include <isc/base64.h>
 #include <isc/netmgr.h>
+#include <isc/url.h>
 
 #include "netmgr-int.h"
-#include "url-parser/url_parser.h"
 
 #define AUTHEXTRA 7
 
 typedef struct {
 	char *uri;
-	struct http_parser_url u;
+	isc_url_parser_t up;
 
 	char *authority;
 	size_t authoritylen;
@@ -37,12 +37,12 @@ typedef struct {
 	int32_t stream_id;
 	isc_region_t *postdata;
 	size_t postdata_pos;
-} http2_stream;
+} http2_stream_t;
 
 typedef struct {
 	isc_mem_t *mctx;
 	nghttp2_session *ngsession;
-	http2_stream *stream;
+	http2_stream_t *stream;
 	isc_nmhandle_t *handle;
 
 	uint8_t buf[65535];
@@ -55,88 +55,93 @@ typedef struct {
 
 	SSL_CTX *ctx;
 	bool reading;
-} http2_session;
+} http2_session_t;
 
 static bool
-http2_do_bio(http2_session *session);
+http2_do_bio(http2_session_t *session);
 
 static void
 writecb(isc_nmhandle_t *handle, isc_result_t result, void *ptr);
 
 static isc_result_t
-get_http2_stream(isc_mem_t *mctx, http2_stream **streamp, const char *uri,
+get_http2_stream(isc_mem_t *mctx, http2_stream_t **streamp, const char *uri,
 		 uint16_t *port) {
-	INSIST(streamp != NULL && *streamp == NULL);
-	INSIST(uri != NULL);
-	INSIST(port != NULL);
-
+	http2_stream_t *stream = NULL;
 	int rv;
-	http2_stream *stream = isc_mem_get(mctx, sizeof(http2_stream));
+
+	REQUIRE(streamp != NULL && *streamp == NULL);
+	REQUIRE(uri != NULL);
+	REQUIRE(port != NULL);
+
+	stream = isc_mem_get(mctx, sizeof(http2_stream_t));
 	stream->uri = isc_mem_strdup(mctx, uri);
-	rv = http_parser_parse_url(stream->uri, strlen(stream->uri), 0,
-				   &stream->u);
+	rv = isc_url_parse(stream->uri, strlen(stream->uri), 0, &stream->up);
 	if (rv != 0) {
-		isc_mem_put(mctx, stream, sizeof(http2_stream));
+		isc_mem_put(mctx, stream, sizeof(http2_stream_t));
 		isc_mem_free(mctx, stream->uri);
 		return (ISC_R_FAILURE);
 	}
 	stream->stream_id = -1;
 
-	stream->authoritylen = stream->u.field_data[UF_HOST].len;
+	stream->authoritylen = stream->up.field_data[ISC_UF_HOST].len;
 	stream->authority = isc_mem_get(mctx, stream->authoritylen + AUTHEXTRA);
-	memcpy(stream->authority, &uri[stream->u.field_data[UF_HOST].off],
-	       stream->u.field_data[UF_HOST].len);
-	if (stream->u.field_set & (1 << UF_PORT)) {
+	memcpy(stream->authority, &uri[stream->up.field_data[ISC_UF_HOST].off],
+	       stream->up.field_data[ISC_UF_HOST].len);
+	if (stream->up.field_set & (1 << ISC_UF_PORT)) {
 		stream->authoritylen += (size_t)snprintf(
-			stream->authority + stream->u.field_data[UF_HOST].len,
-			AUTHEXTRA, ":%u", stream->u.port);
+			stream->authority +
+				stream->up.field_data[ISC_UF_HOST].len,
+			AUTHEXTRA, ":%u", stream->up.port);
 	}
 
 	/* If we don't have path in URI, we use "/" as path. */
 	stream->pathlen = 1;
-	if (stream->u.field_set & (1 << UF_PATH)) {
-		stream->pathlen = stream->u.field_data[UF_PATH].len;
+	if (stream->up.field_set & (1 << ISC_UF_PATH)) {
+		stream->pathlen = stream->up.field_data[ISC_UF_PATH].len;
 	}
-	if (stream->u.field_set & (1 << UF_QUERY)) {
+	if (stream->up.field_set & (1 << ISC_UF_QUERY)) {
 		/* +1 for '?' character */
 		stream->pathlen +=
-			(size_t)(stream->u.field_data[UF_QUERY].len + 1);
+			(size_t)(stream->up.field_data[ISC_UF_QUERY].len + 1);
 	}
 
 	stream->path = isc_mem_get(mctx, stream->pathlen);
-	if (stream->u.field_set & (1 << UF_PATH)) {
-		memcpy(stream->path, &uri[stream->u.field_data[UF_PATH].off],
-		       stream->u.field_data[UF_PATH].len);
+	if (stream->up.field_set & (1 << ISC_UF_PATH)) {
+		memcpy(stream->path,
+		       &uri[stream->up.field_data[ISC_UF_PATH].off],
+		       stream->up.field_data[ISC_UF_PATH].len);
 	} else {
 		stream->path[0] = '/';
 	}
-	if (stream->u.field_set & (1 << UF_QUERY)) {
+
+	if (stream->up.field_set & (1 << ISC_UF_QUERY)) {
 		stream->path[stream->pathlen -
-			     stream->u.field_data[UF_QUERY].len - 1] = '?';
+			     stream->up.field_data[ISC_UF_QUERY].len - 1] = '?';
 		memcpy(stream->path + stream->pathlen -
-			       stream->u.field_data[UF_QUERY].len,
-		       &uri[stream->u.field_data[UF_QUERY].off],
-		       stream->u.field_data[UF_QUERY].len);
+			       stream->up.field_data[ISC_UF_QUERY].len,
+		       &uri[stream->up.field_data[ISC_UF_QUERY].off],
+		       stream->up.field_data[ISC_UF_QUERY].len);
 	}
 
-	if (!(stream->u.field_set & (1 << UF_PORT))) {
-		*port = 443;
-	} else {
-		*port = stream->u.port;
+	*port = 443;
+	if ((stream->up.field_set & (1 << ISC_UF_PORT)) != 0) {
+		*port = stream->up.port;
 	}
+
 	*streamp = stream;
+
 	return (ISC_R_SUCCESS);
 }
 
 static void
-put_http2_stream(isc_mem_t *mctx, http2_stream *stream) {
+put_http2_stream(isc_mem_t *mctx, http2_stream_t *stream) {
 	isc_mem_put(mctx, stream->path, stream->pathlen);
 	isc_mem_put(mctx, stream->authority, stream->authoritylen + AUTHEXTRA);
-	isc_mem_put(mctx, stream, sizeof(http2_stream));
+	isc_mem_put(mctx, stream, sizeof(http2_stream_t));
 }
 
 static void
-delete_http2_session(http2_session *session) {
+delete_http2_session(http2_session_t *session) {
 	if (session->handle != NULL) {
 		isc_nmhandle_unref(session->handle);
 		session->handle = NULL;
@@ -150,7 +155,7 @@ delete_http2_session(http2_session *session) {
 		session->stream = NULL;
 	}
 
-	isc_mem_putanddetach(&session->mctx, session, sizeof(http2_session));
+	isc_mem_putanddetach(&session->mctx, session, sizeof(http2_session_t));
 }
 
 #if 0
@@ -158,9 +163,11 @@ delete_http2_session(http2_session *session) {
 on_header_callback(nghttp2_session *ngsession, const nghttp2_frame *frame,
 		   const uint8_t *name, size_t namelen, const uint8_t *value,
 		   size_t valuelen, uint8_t flags, void *user_data) {
-	http2_session *session = (http2_session *)user_data;
+	http2_session_t *session = (http2_session_t *)user_data;
+
 	UNUSED(ngsession);
 	UNUSED(flags);
+
 	switch (frame->hd.type) {
 	case NGHTTP2_HEADERS:
 		if (frame->headers.cat == NGHTTP2_HCAT_RESPONSE &&
@@ -169,14 +176,17 @@ on_header_callback(nghttp2_session *ngsession, const nghttp2_frame *frame,
 			break;
 		}
 	}
+
 	return (0);
 }
 
 static int
-on_begin_headers_callback(nghttp2_session *ngsession, const nghttp2_frame *frame,
-			  void *user_data) {
-	http2_session *session = (http2_session *)user_data;
+on_begin_headers_callback(nghttp2_session *ngsession,
+			  const nghttp2_frame *frame, void *user_data) {
+	http2_session_t *session = (http2_session_t *)user_data;
+
 	UNUSED(ngsession);
+
 	switch (frame->hd.type) {
 	case NGHTTP2_HEADERS:
 		if (frame->headers.cat == NGHTTP2_HCAT_RESPONSE &&
@@ -186,13 +196,16 @@ on_begin_headers_callback(nghttp2_session *ngsession, const nghttp2_frame *frame
 		}
 		break;
 	}
+
 	return (0);
 }
 
 on_frame_recv_callback(nghttp2_session *ngsession, const nghttp2_frame *frame,
 		       void *user_data) {
-	http2_session *session = (http2_session *)user_data;
+	http2_session_t *session = (http2_session_t *)user_data;
+
 	UNUSED(ngsession);
+
 	switch (frame->hd.type) {
 	case NGHTTP2_HEADERS:
 		if (frame->headers.cat == NGHTTP2_HCAT_RESPONSE &&
@@ -202,6 +215,7 @@ on_frame_recv_callback(nghttp2_session *ngsession, const nghttp2_frame *frame,
 		}
 		break;
 	}
+
 	return (0);
 }
 #endif
@@ -210,31 +224,36 @@ static int
 on_data_chunk_recv_callback(nghttp2_session *ngsession, uint8_t flags,
 			    int32_t stream_id, const uint8_t *data, size_t len,
 			    void *user_data) {
-	http2_session *session = (http2_session *)user_data;
+	http2_session_t *session = (http2_session_t *)user_data;
+
 	UNUSED(ngsession);
 	UNUSED(flags);
+
 	if (session->stream->stream_id == stream_id) {
 		/* TODO buffer overrun! */
 		memmove(session->rbuf + session->rbufsize, data, len);
 		session->rbufsize += len;
 	}
+
 	return (0);
 }
 
 static int
 on_stream_close_callback(nghttp2_session *ngsession, int32_t stream_id,
 			 uint32_t error_code, void *user_data) {
+	http2_session_t *session = NULL;
+
 	UNUSED(error_code);
 
-	http2_session *session = (http2_session *)user_data;
-	int rv;
+	session = (http2_session_t *)user_data;
 	if (session->stream->stream_id == stream_id) {
-		rv = nghttp2_session_terminate_session(ngsession,
-						       NGHTTP2_NO_ERROR);
+		int rv = nghttp2_session_terminate_session(ngsession,
+							   NGHTTP2_NO_ERROR);
 		if (rv != 0) {
 			return (NGHTTP2_ERR_CALLBACK_FAILURE);
 		}
 	}
+
 	session->cb(NULL, ISC_R_SUCCESS,
 		    &(isc_region_t){ session->rbuf, session->rbufsize },
 		    session->cbarg);
@@ -244,9 +263,11 @@ on_stream_close_callback(nghttp2_session *ngsession, int32_t stream_id,
 }
 
 #ifndef OPENSSL_NO_NEXTPROTONEG
-/* NPN TLS extension client callback. We check that server advertised
-   the HTTP/2 protocol the nghttp2 library supports. If not, exit
-   the program. */
+/*
+ * NPN TLS extension client callback. We check that server advertised
+ * the HTTP/2 protocol the nghttp2 library supports. If not, exit the
+ * program.
+ */
 static int
 select_next_proto_cb(SSL *ssl, unsigned char **out, unsigned char *outlen,
 		     const unsigned char *in, unsigned int inlen, void *arg) {
@@ -263,12 +284,14 @@ select_next_proto_cb(SSL *ssl, unsigned char **out, unsigned char *outlen,
 /* Create SSL_CTX. */
 static SSL_CTX *
 create_ssl_ctx(void) {
-	SSL_CTX *ssl_ctx;
+	SSL_CTX *ssl_ctx = NULL;
+
 	ssl_ctx = SSL_CTX_new(SSLv23_client_method());
 	if (!ssl_ctx) {
 		/* TODO */
 		abort();
 	}
+
 	SSL_CTX_set_options(
 		ssl_ctx, SSL_OP_ALL | SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 |
 				 SSL_OP_NO_COMPRESSION |
@@ -285,8 +308,8 @@ create_ssl_ctx(void) {
 }
 
 static void
-initialize_nghttp2_session(http2_session *session) {
-	nghttp2_session_callbacks *callbacks;
+initialize_nghttp2_session(http2_session_t *session) {
+	nghttp2_session_callbacks *callbacks = NULL;
 
 	nghttp2_session_callbacks_new(&callbacks);
 
@@ -315,7 +338,7 @@ initialize_nghttp2_session(http2_session *session) {
 }
 
 static void
-send_client_connection_header(http2_session *session) {
+send_client_connection_header(http2_session_t *session) {
 	nghttp2_settings_entry iv[1] = {
 		{ NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 100 }
 	};
@@ -326,6 +349,7 @@ send_client_connection_header(http2_session *session) {
 	if (rv != 0) {
 		/* TODO */
 	}
+
 	http2_do_bio(session);
 }
 
@@ -345,44 +369,51 @@ static ssize_t
 post_read_callback(nghttp2_session *ngsession, int32_t stream_id, uint8_t *buf,
 		   size_t length, uint32_t *data_flags,
 		   nghttp2_data_source *source, void *user_data) {
-	http2_session *session = (http2_session *)user_data;
+	http2_session_t *session = (http2_session_t *)user_data;
+
 	UNUSED(ngsession);
 	UNUSED(source);
 
 	if (session->stream->stream_id == stream_id) {
 		size_t len = session->stream->postdata->length -
 			     session->stream->postdata_pos;
+
 		if (len > length) {
 			len = length;
 		}
+
 		memcpy(buf,
 		       session->stream->postdata->base +
 			       session->stream->postdata_pos,
 		       len);
 		session->stream->postdata_pos += len;
+
 		if (session->stream->postdata_pos ==
 		    session->stream->postdata->length) {
 			*data_flags |= NGHTTP2_DATA_FLAG_EOF;
 		}
+
 		return (len);
 	}
+
 	return (0);
 }
 
 /* Send HTTP request to the remote peer */
 static isc_result_t
-submit_request(http2_session *session) {
+submit_request(http2_session_t *session) {
 	int32_t stream_id;
-	http2_stream *stream = session->stream;
+	http2_stream_t *stream = session->stream;
 	char *uri = stream->uri;
-	struct http_parser_url *u = &stream->u;
+	isc_url_parser_t *up = &stream->up;
 	char p[64];
+
 	snprintf(p, 64, "%u", stream->postdata->length);
 
 	nghttp2_nv hdrs[] = {
 		MAKE_NV2(":method", "POST"),
-		MAKE_NV(":scheme", &uri[u->field_data[UF_SCHEMA].off],
-			u->field_data[UF_SCHEMA].len),
+		MAKE_NV(":scheme", &uri[up->field_data[ISC_UF_SCHEMA].off],
+			up->field_data[ISC_UF_SCHEMA].len),
 		MAKE_NV(":authority", stream->authority, stream->authoritylen),
 		MAKE_NV(":path", stream->path, stream->pathlen),
 		MAKE_NV2("content-type", "application/dns-message"),
@@ -396,8 +427,10 @@ submit_request(http2_session *session) {
 	if (stream_id < 0) {
 		return (ISC_R_FAILURE);
 	}
+
 	stream->stream_id = stream_id;
 	http2_do_bio(session);
+
 	return (ISC_R_SUCCESS);
 }
 
@@ -407,13 +440,16 @@ submit_request(http2_session *session) {
 static void
 readcb(isc_nmhandle_t *handle, isc_result_t result, isc_region_t *region,
        void *data) {
+	http2_session_t *session = NULL;
+	ssize_t readlen;
+
 	UNUSED(handle);
 	UNUSED(result);
-	http2_session *session = (http2_session *)data;
 
-	ssize_t readlen = nghttp2_session_mem_recv(
-		session->ngsession, region->base, region->length);
+	session = (http2_session_t *)data;
 
+	readlen = nghttp2_session_mem_recv(session->ngsession, region->base,
+					   region->length);
 	if (readlen < 0) {
 		delete_http2_session(session);
 		/* TODO callback! */
@@ -432,7 +468,7 @@ readcb(isc_nmhandle_t *handle, isc_result_t result, isc_region_t *region,
 }
 
 static bool
-http2_do_bio(http2_session *session) {
+http2_do_bio(http2_session_t *session) {
 	if (nghttp2_session_want_read(session->ngsession) == 0 &&
 	    nghttp2_session_want_write(session->ngsession) == 0)
 	{
@@ -450,6 +486,7 @@ http2_do_bio(http2_session *session) {
 			size_t readlen = nghttp2_session_mem_recv(
 				session->ngsession, session->buf,
 				session->bufsize);
+
 			if (readlen == session->bufsize) {
 				session->bufsize = 0;
 			} else {
@@ -457,6 +494,7 @@ http2_do_bio(http2_session *session) {
 					session->bufsize - readlen);
 				session->bufsize -= readlen;
 			}
+
 			http2_do_bio(session);
 			return (false);
 		} else {
@@ -470,6 +508,7 @@ http2_do_bio(http2_session *session) {
 
 	if (nghttp2_session_want_write(session->ngsession) != 0) {
 		const uint8_t *data;
+		size_t sz;
 
 		/*
 		 * XXXWPK TODO
@@ -480,7 +519,7 @@ http2_do_bio(http2_session *session) {
 		 * application should be responsible to buffer up small chunks
 		 * of data as necessary to avoid this situation.
 		 */
-		size_t sz = nghttp2_session_mem_send(session->ngsession, &data);
+		sz = nghttp2_session_mem_send(session->ngsession, &data);
 		isc_region_t region;
 		region.base = malloc(sz);
 		region.length = sz;
@@ -492,24 +531,30 @@ http2_do_bio(http2_session *session) {
 		}
 		return (true);
 	}
+
 	return (false);
 }
 
 static void
 writecb(isc_nmhandle_t *handle, isc_result_t result, void *ptr) {
+	http2_session_t *session = NULL;
+
 	UNUSED(handle);
 	UNUSED(result);
-	http2_session *session = (http2_session *)ptr;
+
+	session = (http2_session_t *)ptr;
 	http2_do_bio(session);
 }
 
 static void
 connect_cb(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
-	http2_session *session = (http2_session *)arg;
+	http2_session_t *session = (http2_session_t *)arg;
+
 	if (result != ISC_R_SUCCESS) {
 		delete_http2_session(session);
 		return;
 	}
+
 	session->handle = handle;
 	isc_nmhandle_ref(handle);
 
@@ -524,7 +569,8 @@ connect_cb(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 			}
 #endif
 
-			if (alpn == NULL || alpnlen != 2 || memcmp("h2", alpn, 2) != 0)
+			if (alpn == NULL || alpnlen != 2 ||
+			    memcmp("h2", alpn, 2) != 0)
 			{
 				fprintf(stderr, "h2 is not negotiated\n");
 				delete_http2_session(session);
@@ -541,19 +587,20 @@ isc_result_t
 isc_nm_doh_request(isc_nm_t *mgr, const char *uri, isc_region_t *message,
 		   isc_nm_recv_cb_t cb, void *cbarg, SSL_CTX *ctx) {
 	uint16_t port;
-	char *host;
-	http2_session *session;
+	char *host = NULL;
+	http2_session_t *session = NULL;
 	struct addrinfo hints;
-	struct addrinfo *res;
+	struct addrinfo *res = NULL;
 	isc_sockaddr_t local, peer;
 	isc_result_t result;
+	int s;
 
 	if (ctx == NULL) {
 		ctx = create_ssl_ctx();
 	}
 
-	session = isc_mem_get(mgr->mctx, sizeof(http2_session));
-	*session = (http2_session){ .cb = cb, .cbarg = cbarg, .ctx = ctx };
+	session = isc_mem_get(mgr->mctx, sizeof(http2_session_t));
+	*session = (http2_session_t){ .cb = cb, .cbarg = cbarg, .ctx = ctx };
 	isc_mem_attach(mgr->mctx, &session->mctx);
 
 	result = get_http2_stream(mgr->mctx, &session->stream, uri, &port);
@@ -571,12 +618,12 @@ isc_nm_doh_request(isc_nm_t *mgr, const char *uri, isc_region_t *message,
 	hints.ai_flags |= AI_CANONNAME;
 	host = strndup(
 		&session->stream
-			 ->uri[session->stream->u.field_data[UF_HOST].off],
-		session->stream->u.field_data[UF_HOST].len);
+			 ->uri[session->stream->up.field_data[ISC_UF_HOST].off],
+		session->stream->up.field_data[ISC_UF_HOST].len);
 
-	int s = getaddrinfo(host, NULL, &hints, &res);
-
+	s = getaddrinfo(host, NULL, &hints, &res);
 	free(host);
+
 	if (s != 0) {
 		return (ISC_R_FAILURE);
 	}

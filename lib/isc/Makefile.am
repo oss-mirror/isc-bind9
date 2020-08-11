@@ -133,7 +133,6 @@ libisc_la_SOURCES =		\
 	netmgr/uv-compat.c	\
 	netmgr/uv-compat.h	\
 	netmgr/uverr2result.c	\
-	netmgr/url-parser/url_parser.c \
 	unix/pk11_api.c		\
 	unix/dir.c		\
 	unix/errno.c		\
@@ -150,6 +149,7 @@ libisc_la_SOURCES =		\
 	unix/stdtime.c		\
 	unix/syslog.c		\
 	unix/time.c		\
+	url.c			\
 	pk11.c			\
 	pk11_result.c		\
 	aes.c			\
