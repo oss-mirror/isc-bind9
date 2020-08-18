@@ -45,6 +45,8 @@ typedef struct {
 	http2_stream_t *stream;
 	isc_nmhandle_t *handle;
 
+	isc_region_t r;
+
 	uint8_t buf[65535];
 	size_t bufsize;
 	uint8_t rbuf[65535];
@@ -287,10 +289,7 @@ create_ssl_ctx(void) {
 	SSL_CTX *ssl_ctx = NULL;
 
 	ssl_ctx = SSL_CTX_new(SSLv23_client_method());
-	if (!ssl_ctx) {
-		/* TODO */
-		abort();
-	}
+	RUNTIME_CHECK(ssl_ctx != NULL);
 
 	SSL_CTX_set_options(
 		ssl_ctx, SSL_OP_ALL | SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 |
@@ -507,6 +506,7 @@ http2_do_bio(http2_session_t *session) {
 	}
 
 	if (nghttp2_session_want_write(session->ngsession) != 0) {
+		isc_result_t result;
 		const uint8_t *data;
 		size_t sz;
 
@@ -520,15 +520,13 @@ http2_do_bio(http2_session_t *session) {
 		 * of data as necessary to avoid this situation.
 		 */
 		sz = nghttp2_session_mem_send(session->ngsession, &data);
-		isc_region_t region;
-		region.base = malloc(sz);
-		region.length = sz;
-		memcpy(region.base, data, sz);
-		isc_result_t result = isc_nm_send(session->handle, &region,
-						  writecb, session);
-		if (result != ISC_R_SUCCESS) {
-			abort();
-		}
+		session->r.base = isc_mem_get(session->mctx, sz);
+		session->r.length = sz;
+		memcpy(session->r.base, data, sz);
+		result = isc_nm_send(session->handle, &session->r, writecb,
+				     session);
+		RUNTIME_CHECK(result == ISC_R_SUCCESS);
+
 		return (true);
 	}
 
@@ -536,14 +534,14 @@ http2_do_bio(http2_session_t *session) {
 }
 
 static void
-writecb(isc_nmhandle_t *handle, isc_result_t result, void *ptr) {
-	http2_session_t *session = NULL;
+writecb(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
+	http2_session_t *session = (http2_session_t *)arg;
 
 	UNUSED(handle);
 	UNUSED(result);
 
-	session = (http2_session_t *)ptr;
 	http2_do_bio(session);
+	isc_mem_put(session->mctx, session->r.base, session->r.length);
 }
 
 static void
@@ -577,6 +575,7 @@ connect_cb(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 				return;
 			}
 #endif
+
 	initialize_nghttp2_session(session);
 	send_client_connection_header(session);
 	submit_request(session);

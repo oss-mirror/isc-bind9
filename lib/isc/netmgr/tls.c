@@ -80,16 +80,22 @@ tls_do_bio(isc_nmsocket_t *sock, int rv) {
 		if (rv == 1) {
 			if (sock->rcb.recv != NULL &&
 			    !atomic_load(&sock->readpaused)) {
-				isc_region_t region = { malloc(4096), 4096 };
+				isc_region_t region = {
+					isc_mem_get(sock->mgr->mctx, 4096),
+					4096
+				};
+				isc_region_t dregion;
+
 				memset(region.base, 0, region.length);
 				rv = SSL_read(sock->tls.ssl, region.base,
 					      region.length);
-				isc_region_t dregion =
-					(isc_region_t){ region.base, rv };
+
+				dregion = (isc_region_t){ region.base, rv };
 				sock->rcb.recv(sock->statichandle,
 					       ISC_R_SUCCESS, &dregion,
 					       sock->rcbarg);
-				free(region.base);
+				isc_mem_put(sock->mgr->mctx, region.base,
+					    4096);
 			}
 		}
 	}
@@ -185,6 +191,7 @@ tls_readcb(isc_nmhandle_t *handle, isc_result_t result, isc_region_t *region,
 					tlssock->accept_cbarg);
 			}
 			tlssock->tls.state = IO;
+
 			/* We need to do it again - to flush incoming buffer */
 			tls_do_bio(tlssock, TLS_CHECK_RV);
 		}
@@ -255,14 +262,10 @@ tlslisten_acceptcb(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 	tlssock->tls.ctx = tlslistensock->tls.ctx;
 
 	result = initialize_tls(tlssock, true);
-	if (result != ISC_R_SUCCESS) {
-		isc__nmsocket_detach(&tlssock);
-		abort();
-		/* TODO log about it! */
-		return (result);
-	}
+	RUNTIME_CHECK(result == ISC_R_SUCCESS);
+	/* TODO: catch failure code, detach tlssock, and log the error */
 
-	return (ISC_R_SUCCESS);
+	return (result);
 }
 
 isc_result_t
