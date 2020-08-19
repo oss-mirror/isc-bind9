@@ -1046,9 +1046,9 @@ free_rbtdb(dns_rbtdb_t *rbtdb, bool log, isc_event_t *event) {
 	REQUIRE(rbtdb->future_version == NULL);
 
 	if (rbtdb->current_version != NULL) {
-		isc_refcount_decrementz(&rbtdb->current_version->references);
 		UNLINK(rbtdb->open_versions, rbtdb->current_version, link);
 		isc_rwlock_destroy(&rbtdb->current_version->glue_rwlock);
+		isc_refcount_decrementz(&rbtdb->current_version->references);
 		isc_refcount_destroy(&rbtdb->current_version->references);
 		isc_rwlock_destroy(&rbtdb->current_version->rwlock);
 		isc_mem_put(rbtdb->common.mctx, rbtdb->current_version,
@@ -1306,6 +1306,7 @@ allocate_version(isc_mem_t *mctx, rbtdb_serial_t serial,
 
 	result = isc_rwlock_init(&version->glue_rwlock, 0, 0);
 	if (result != ISC_R_SUCCESS) {
+		isc_refcount_decrementz(&version->references);
 		isc_refcount_destroy(&version->references);
 		isc_mem_put(mctx, version, sizeof(*version));
 		return (NULL);
@@ -1368,6 +1369,7 @@ newversion(dns_db_t *db, dns_dbversion_t **versionp) {
 		if (result != ISC_R_SUCCESS) {
 			free_gluetable(version);
 			isc_rwlock_destroy(&version->glue_rwlock);
+			isc_refcount_decrementz(&version->references);
 			isc_refcount_destroy(&version->references);
 			isc_mem_put(rbtdb->common.mctx, version,
 				    sizeof(*version));
@@ -2512,6 +2514,7 @@ closeversion(dns_db_t *db, dns_dbversion_t **versionp, bool commit) {
 
 	REQUIRE(VALID_RBTDB(rbtdb));
 	version = (rbtdb_version_t *)*versionp;
+	*versionp = NULL;
 	INSIST(version->rbtdb == rbtdb);
 
 	cleanup_version = NULL;
@@ -2525,7 +2528,7 @@ closeversion(dns_db_t *db, dns_dbversion_t **versionp, bool commit) {
 			INSIST(!version->writer);
 			RBTDB_UNLOCK(&rbtdb->lock, isc_rwlocktype_read);
 		}
-		goto end;
+		return;
 	}
 
 	/*
@@ -2771,9 +2774,6 @@ closeversion(dns_db_t *db, dns_dbversion_t **versionp, bool commit) {
 			RWUNLOCK(&rbtdb->tree_lock, isc_rwlocktype_write);
 		}
 	}
-
-end:
-	*versionp = NULL;
 }
 
 /*
@@ -8703,6 +8703,7 @@ dns_rbtdb_create(isc_mem_t *mctx, const dns_name_t *origin, dns_dbtype_t type,
 	rbtdb->current_serial = 1;
 	rbtdb->least_serial = 1;
 	rbtdb->next_serial = 2;
+	ISC_LIST_INIT(rbtdb->open_versions);
 	rbtdb->current_version = allocate_version(mctx, 1, 1, false);
 	if (rbtdb->current_version == NULL) {
 		isc_refcount_decrementz(&rbtdb->references);
@@ -8722,6 +8723,7 @@ dns_rbtdb_create(isc_mem_t *mctx, const dns_name_t *origin, dns_dbtype_t type,
 	if (result != ISC_R_SUCCESS) {
 		free_gluetable(rbtdb->current_version);
 		isc_rwlock_destroy(&rbtdb->current_version->glue_rwlock);
+		isc_refcount_decrementz(&rbtdb->current_version->references);
 		isc_refcount_destroy(&rbtdb->current_version->references);
 		isc_mem_put(mctx, rbtdb->current_version,
 			    sizeof(*rbtdb->current_version));
@@ -8734,7 +8736,6 @@ dns_rbtdb_create(isc_mem_t *mctx, const dns_name_t *origin, dns_dbtype_t type,
 	rbtdb->current_version->records = 0;
 	rbtdb->current_version->xfrsize = 0;
 	rbtdb->future_version = NULL;
-	ISC_LIST_INIT(rbtdb->open_versions);
 	/*
 	 * Keep the current version in the open list so that list operation
 	 * won't happen in normal lookup operations.
