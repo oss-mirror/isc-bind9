@@ -1516,6 +1516,7 @@ main(int argc, char **argv) {
 		}
 	}
 
+	chdir(TESTS);
 
 	return (cmocka_run_group_tests(tests, NULL, NULL));
 }
