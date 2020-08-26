@@ -183,7 +183,8 @@ struct ns_client {
 	isc_task_t *	 task;
 	dns_view_t *	 view;
 	dns_dispatch_t * dispatch;
-	isc_nmhandle_t * handle;
+	isc_nmhandle_t * handle; /* For active processing */
+	isc_nmhandle_t * cbhandle; /* Waiting for the callback */
 	unsigned char *	 tcpbuf;
 	dns_message_t *	 message;
 	unsigned char *	 sendbuf;

@@ -775,8 +775,7 @@ nmsocket_cleanup(isc_nmsocket_t *sock, bool dofree) {
 	sock->statichandle = NULL;
 
 	if (sock->outerhandle != NULL) {
-		isc_nmhandle_unref(sock->outerhandle);
-		sock->outerhandle = NULL;
+		isc_nmhandle_detach(&sock->outerhandle);
 	}
 
 	if (sock->outer != NULL) {
@@ -1149,10 +1148,12 @@ isc__nmhandle_get(isc_nmsocket_t *sock, isc_sockaddr_t *peer,
 }
 
 void
-isc_nmhandle_ref(isc_nmhandle_t *handle) {
+isc_nmhandle_attach(isc_nmhandle_t *handle, isc_nmhandle_t **handlep) {
 	REQUIRE(VALID_NMHANDLE(handle));
+	REQUIRE(handlep != NULL && *handlep == NULL);
 
 	isc_refcount_increment(&handle->references);
+	*handlep = handle;
 }
 
 bool
@@ -1208,9 +1209,12 @@ nmhandle_deactivate(isc_nmsocket_t *sock, isc_nmhandle_t *handle) {
 }
 
 void
-isc_nmhandle_unref(isc_nmhandle_t *handle) {
+isc_nmhandle_detach(isc_nmhandle_t **handlep) {
 	isc_nmsocket_t *sock = NULL;
-
+	REQUIRE(handlep != NULL);
+	isc_nmhandle_t *handle = *handlep;
+	*handlep = NULL;
+	
 	REQUIRE(VALID_NMHANDLE(handle));
 
 	if (isc_refcount_decrement(&handle->references) > 1) {
@@ -1354,7 +1358,7 @@ isc__nm_uvreq_put(isc__nm_uvreq_t **req0, isc_nmsocket_t *sock) {
 	}
 
 	if (handle != NULL) {
-		isc_nmhandle_unref(handle);
+		isc_nmhandle_detach(&handle);
 	}
 
 	isc__nmsocket_detach(&sock);

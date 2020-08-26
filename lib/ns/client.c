@@ -284,7 +284,7 @@ client_senddone(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 			      "send failed: %s", isc_result_totext(result));
 	}
 
-	isc_nmhandle_unref(handle);
+	isc_nmhandle_detach(&handle);
 }
 
 static void
@@ -329,9 +329,9 @@ client_sendpkg(ns_client_t *client, isc_buffer_t *buffer) {
 
 	isc_buffer_usedregion(buffer, &r);
 
-	INSIST(client->handle != NULL);
+	INSIST(client->cbhandle != NULL);
 
-	return (isc_nm_send(client->handle, &r, client_senddone, client));
+	return (isc_nm_send(client->cbhandle, &r, client_senddone, client));
 }
 
 void
@@ -383,7 +383,7 @@ done:
 	}
 
 	ns_client_drop(client, result);
-	isc_nmhandle_unref(client->handle);
+	isc_nmhandle_detach(&client->cbhandle);
 }
 
 void
@@ -591,11 +591,11 @@ renderend:
 
 		respsize = isc_buffer_usedlength(&buffer);
 
-		isc_nmhandle_ref(client->handle);
+		isc_nmhandle_attach(client->handle, &client->cbhandle);
 		result = client_sendpkg(client, &buffer);
 		if (result != ISC_R_SUCCESS) {
 			/* We won't get a callback to clean it up */
-			isc_nmhandle_unref(client->handle);
+			isc_nmhandle_detach(&client->cbhandle);
 		}
 
 		switch (isc_sockaddr_pf(&client->peeraddr)) {
@@ -626,11 +626,11 @@ renderend:
 
 		respsize = isc_buffer_usedlength(&buffer);
 
-		isc_nmhandle_ref(client->handle);
+		isc_nmhandle_attach(client->handle, &client->cbhandle);
 		result = client_sendpkg(client, &buffer);
 		if (result != ISC_R_SUCCESS) {
 			/* We won't get a callback to clean it up */
-			isc_nmhandle_unref(client->handle);
+			isc_nmhandle_detach(&client->cbhandle);
 		}
 
 		switch (isc_sockaddr_pf(&client->peeraddr)) {
@@ -1678,11 +1678,9 @@ ns__client_request(isc_nmhandle_t *handle, isc_result_t eresult,
 	client->state = NS_CLIENTSTATE_READY;
 
 	isc_task_pause(client->task);
-	if (client->handle == NULL) {
-		isc_nmhandle_setdata(handle, client, ns__client_reset_cb,
-				     ns__client_put_cb);
-		client->handle = handle;
-	}
+	isc_nmhandle_setdata(handle, client, ns__client_reset_cb,
+			     ns__client_put_cb);
+
 	if (isc_nmhandle_is_stream(handle)) {
 		client->attributes |= NS_CLIENTATTR_TCP;
 	}
@@ -1697,7 +1695,7 @@ ns__client_request(isc_nmhandle_t *handle, isc_result_t eresult,
 	isc_buffer_add(&tbuffer, region->length);
 	buffer = &tbuffer;
 
-	client->peeraddr = isc_nmhandle_peeraddr(client->handle);
+	client->peeraddr = isc_nmhandle_peeraddr(handle);
 
 	client->peeraddr_valid = true;
 
@@ -1969,7 +1967,7 @@ ns__client_request(isc_nmhandle_t *handle, isc_result_t eresult,
 					 &client->manager->interface->addr);
 	} else {
 		isc_sockaddr_t sockaddr =
-			isc_nmhandle_localaddr(client->handle);
+			isc_nmhandle_localaddr(handle);
 		isc_netaddr_fromsockaddr(&client->destaddr, &sockaddr);
 	}
 
@@ -2174,7 +2172,7 @@ ns__client_request(isc_nmhandle_t *handle, isc_result_t eresult,
 			    &client->requesttime, NULL, buffer);
 #endif /* HAVE_DNSTAP */
 
-		isc_nmhandle_ref(client->handle);
+		isc_nmhandle_attach(handle, &client->handle);
 		ns_query_start(client);
 		break;
 	case dns_opcode_update:
@@ -2185,13 +2183,13 @@ ns__client_request(isc_nmhandle_t *handle, isc_result_t eresult,
 			    &client->requesttime, NULL, buffer);
 #endif /* HAVE_DNSTAP */
 		ns_client_settimeout(client, 60);
-		isc_nmhandle_ref(client->handle);
+		isc_nmhandle_attach(handle, &client->handle);
 		ns_update_start(client, sigresult);
 		break;
 	case dns_opcode_notify:
 		CTRACE("notify");
 		ns_client_settimeout(client, 60);
-		isc_nmhandle_ref(client->handle);
+		isc_nmhandle_attach(handle, &client->handle);
 		ns_notify_start(client);
 		break;
 	case dns_opcode_iquery:

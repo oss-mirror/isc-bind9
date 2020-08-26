@@ -1,4 +1,4 @@
-/*
+	/*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
  * This Source Code Form is subject to the terms of the Mozilla Public
@@ -1577,15 +1577,12 @@ check_if_done(void) {
  */
 static void
 clear_handle(dig_query_t *query) {
-	if (query->handle == NULL) {
-		return;
+	if (query->handle != NULL) {
+		isc_nmhandle_detach(&query->handle);
+		handlecount--;
+		debug("handlecount=%d", handlecount);
+		INSIST(handlecount >= 0);
 	}
-
-	isc_nmhandle_unref(query->handle);
-	query->handle = NULL;
-	handlecount--;
-	debug("handlecount=%d", handlecount);
-	INSIST(handlecount >= 0);
 }
 
 /*%
@@ -2593,6 +2590,8 @@ setup_lookup(dig_lookup_t *lookup) {
 		query->byte_count = 0;
 		query->ixfr_axfr = false;
 		query->handle = NULL;
+		query->readhandle = NULL;
+		query->sendhandle = NULL;
 		query->recvspace = isc_mempool_get(commctx);
 		query->tmpsendspace = isc_mempool_get(commctx);
 		if (query->recvspace == NULL) {
@@ -2626,7 +2625,7 @@ send_done(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	dig_lookup_t *l = NULL;
 
 	REQUIRE(DIG_VALID_QUERY(query));
-	REQUIRE(handle == query->handle);
+	REQUIRE(handle == query->sendhandle);
 	INSIST(!free_now);
 
 	debug("send_done()");
@@ -2640,7 +2639,7 @@ send_done(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 		if (eresult != ISC_R_CANCELED) {
 			debug("send failed: %s", isc_result_totext(eresult));
 		}
-		isc_nmhandle_unref(handle);
+		isc_nmhandle_detach(&handle);
 		return;
 	}
 
@@ -2681,7 +2680,7 @@ cancel_lookup(dig_lookup_t *lookup) {
 		next = ISC_LIST_NEXT(query, link);
 		if (query->handle != NULL) {
 			isc_nm_cancelread(query->handle);
-			clear_handle(query);
+//			clear_handle(query);
 			check_if_done();
 		} else {
 			clear_query(query);
@@ -2816,14 +2815,12 @@ start_tcp(dig_query_t *query) {
 
 	if (keep != NULL && isc_sockaddr_equal(&keepaddr, &query->sockaddr)) {
 		handlecount++;
-		isc_nmhandle_ref(keep);
-		query->handle = keep;
+		isc_nmhandle_attach(keep, &query->handle);
 		query->waiting_connect = false;
 		launch_next_query(query);
 	} else {
 		if (keep != NULL) {
-			isc_nmhandle_unref(keep);
-			keep = NULL;
+			isc_nmhandle_detach(&keep);
 		}
 
 		if (!specified_source) {
@@ -2890,12 +2887,12 @@ send_udp(dig_query_t *query) {
 	TIME_NOW(&query->time_sent);
 	query->waiting_senddone = true;
 
-	isc_nmhandle_ref(query->handle);
+	isc_nmhandle_attach(query->handle, &query->sendhandle);
 	sendcount++;
-	result = isc_nm_send(query->handle, &r, send_done, query);
+	result = isc_nm_send(query->sendhandle, &r, send_done, query);
 	if (result != ISC_R_SUCCESS) {
 		sendcount--;
-		isc_nmhandle_unref(query->handle);
+		isc_nmhandle_detach(&query->sendhandle);
 		return;
 	}
 
@@ -2925,7 +2922,7 @@ udp_ready(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 			debug("udp setup failed: %s",
 			      isc_result_totext(eresult));
 		}
-		isc_nmhandle_unref(handle);
+		isc_nmhandle_detach(&handle);
 		return;
 	}
 
@@ -2933,8 +2930,8 @@ udp_ready(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 
 	debug("recving with lookup=%p, query=%p, handle=%p",
 	      query->lookup, query, query->handle);
-	isc_nmhandle_ref(query->handle);
-	result = isc_nm_read(query->handle, recv_done, query);
+	isc_nmhandle_attach(query->handle, &query->readhandle);
+	result = isc_nm_read(query->readhandle, recv_done, query);
 	check_result(result, "isc_nm_read");
 	recvcount++;
 	debug("recvcount=%d", recvcount);
@@ -3174,8 +3171,8 @@ launch_next_query(dig_query_t *query) {
 		return;
 	}
 
-	isc_nmhandle_ref(query->handle);
-	result = isc_nm_read(query->handle, recv_done, query);
+	isc_nmhandle_attach(query->handle, &query->readhandle);
+	result = isc_nm_read(query->readhandle, recv_done, query);
 	check_result(result, "isc_nm_read");
 	recvcount++;
 	debug("recvcount=%d", recvcount);
@@ -3186,12 +3183,13 @@ launch_next_query(dig_query_t *query) {
 		query->waiting_senddone = true;
 		isc_buffer_usedregion(&query->sendbuf, &r);
 		if (keep != NULL) {
-			isc_nmhandle_unref(query->handle);
+			isc_nmhandle_detach(&query->handle);
+			/* XXXWPK no attach?!? */
 			query->handle = keep;
 		}
-		isc_nmhandle_ref(query->handle);
+		isc_nmhandle_attach(query->handle, &query->sendhandle);
 		sendcount++;
-		isc_nm_send(query->handle, &r, send_done, query);
+		isc_nm_send(query->sendhandle, &r, send_done, query);
 		check_result(result, "isc_nm_send");
 		debug("sendcount=%d", sendcount);
 
@@ -3242,7 +3240,7 @@ tcp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 					query->lookup->textname,
 					isc_result_totext(ISC_R_TIMEDOUT));
 		}
-		isc_nmhandle_unref(handle);
+		isc_nmhandle_detach(&handle);
 		l = query->lookup;
 		clear_query(query);
 		check_next_lookup(l);
@@ -3265,7 +3263,7 @@ tcp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 			exitcode = 9;
 		}
 		if (handle != NULL) {
-			isc_nmhandle_unref(handle);
+			isc_nmhandle_detach(&handle);
 		}
 		l = query->lookup;
 		if ((l->current_query != NULL) &&
@@ -3295,8 +3293,7 @@ tcp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	if (keep_open) {
 		keepaddr = query->sockaddr;
 		if (keep != NULL) {
-			isc_nmhandle_unref(keep);
-			keep = NULL;
+			isc_nmhandle_detach(&keep);
 		}
 
 		keep = query->handle;
@@ -3305,8 +3302,9 @@ tcp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 		 * reference 'keep' twice so the socket won't be closed
 		 * when the next read and send are completed.
 		 */
-		isc_nmhandle_ref(keep);
-		isc_nmhandle_ref(keep);
+		isc_nmhandle_attach(query->handle, &keep);
+		keep = NULL;
+		isc_nmhandle_attach(query->handle, &keep); /* XXXWTF? */
 	}
 
 	launch_next_query(query);
@@ -3602,7 +3600,7 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 		      isc_result_totext(eresult));
 		query->waiting_connect = false;
 
-		isc_nmhandle_unref(handle);
+		isc_nmhandle_detach(&handle);
 		clear_query(query);
 		check_next_lookup(l);
 		UNLOCK_LOOKUP;
@@ -3616,15 +3614,14 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 		dighost_error("communications error to %s: %s\n",
 			      sockstr, isc_result_totext(eresult));
 		if (keep != NULL) {
-			isc_nmhandle_unref(keep);
-			keep = NULL;
+			isc_nmhandle_detach(&keep);
 		}
 
 		if (eresult == ISC_R_EOF) {
 			requeue_or_update_exitcode(l);
 		}
 
-		isc_nmhandle_unref(handle);
+		isc_nmhandle_detach(&handle);
 		clear_query(query);
 		cancel_lookup(l);
 		check_next_lookup(l);
@@ -3699,7 +3696,7 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 						"message");
 			}
 			if (fail) {
-				isc_nmhandle_unref(handle);
+				isc_nmhandle_detach(&handle);
 				clear_query(query);
 				cancel_lookup(l);
 				check_next_lookup(l);
@@ -3767,7 +3764,7 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 		}
 		query->waiting_connect = false;
 		dns_message_destroy(&msg);
-		isc_nmhandle_unref(handle);
+		isc_nmhandle_detach(&handle);
 		clear_query(query);
 		cancel_lookup(l);
 		check_next_lookup(l);
@@ -3790,7 +3787,7 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 
 		dns_message_destroy(&msg);
 		if (l->tcp_mode) {
-			isc_nmhandle_unref(handle);
+			isc_nmhandle_detach(&handle);
 			clear_query(query);
 			cancel_lookup(l);
 			check_next_lookup(l);
@@ -3842,7 +3839,7 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 		if (!match) {
 			dns_message_destroy(&msg);
 			if (l->tcp_mode) {
-				isc_nmhandle_unref(handle);
+				isc_nmhandle_detach(&handle);
 				clear_query(query);
 				cancel_lookup(l);
 				check_next_lookup(l);
@@ -3867,7 +3864,7 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 			n->rdtype = l->qrdtype;
 		}
 		dns_message_destroy(&msg);
-		isc_nmhandle_unref(handle);
+		isc_nmhandle_detach(&handle);
 		clear_query(query);
 		cancel_lookup(l);
 		check_next_lookup(l);
@@ -3886,7 +3883,7 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 			n->rdtype = l->qrdtype;
 		}
 		dns_message_destroy(&msg);
-		isc_nmhandle_unref(handle);
+		isc_nmhandle_detach(&handle);
 		clear_query(query);
 		cancel_lookup(l);
 		check_next_lookup(l);
@@ -3910,7 +3907,7 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 				n->rdtype = l->qrdtype;
 			}
 			dns_message_destroy(&msg);
-			isc_nmhandle_unref(handle);
+			isc_nmhandle_detach(&handle);
 			clear_query(query);
 			cancel_lookup(l);
 			check_next_lookup(l);
@@ -3951,7 +3948,7 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 			clear_query(query);
 			check_next_lookup(l);
 			dns_message_destroy(&msg);
-			isc_nmhandle_unref(handle);
+			isc_nmhandle_detach(&handle);
 			UNLOCK_LOOKUP;
 			return;
 		}
@@ -4084,7 +4081,7 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	if (l->doing_xfr) {
 		if (query != l->xfr_q) {
 			dns_message_destroy(&msg);
-			isc_nmhandle_unref(handle);
+			isc_nmhandle_detach(&handle);
 			query->waiting_connect = false;
 			UNLOCK_LOOKUP;
 			return;
@@ -4112,15 +4109,17 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 		    query->lookup->trace_root || docancel) {
 			dns_message_destroy(&msg);
 			cancel_lookup(l);
+		} else {
+			clear_query(query);
 		}
-		clear_query(query);
+		
 		check_next_lookup(l);
 	}
 	if (msg != NULL) {
 		dns_message_destroy(&msg);
 	}
 
-	isc_nmhandle_unref(handle);
+	isc_nmhandle_detach(&handle);
 	UNLOCK_LOOKUP;
 	return;
 
@@ -4292,8 +4291,7 @@ destroy_libs(void) {
 #endif /* HAVE_LIBIDN2 */
 
 	if (keep != NULL) {
-		isc_nmhandle_unref(keep);
-		keep = NULL;
+		isc_nmhandle_detach(&keep);
 	}
 	debug("destroy_libs()");
 	if (global_task != NULL) {

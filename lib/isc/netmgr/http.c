@@ -145,8 +145,7 @@ put_http2_stream(isc_mem_t *mctx, http2_stream_t *stream) {
 static void
 delete_http2_session(http2_session_t *session) {
 	if (session->handle != NULL) {
-		isc_nmhandle_unref(session->handle);
-		session->handle = NULL;
+		isc_nmhandle_detach(&session->handle);
 	}
 	if (session->ngsession != NULL) {
 		nghttp2_session_del(session->ngsession);
@@ -552,9 +551,7 @@ connect_cb(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 		delete_http2_session(session);
 		return;
 	}
-
-	session->handle = handle;
-	isc_nmhandle_ref(handle);
+	isc_nmhandle_attach(handle, &session->handle);
 
 #if 0
 /* TODO H2 */

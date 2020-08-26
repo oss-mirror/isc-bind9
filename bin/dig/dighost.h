@@ -181,6 +181,8 @@ struct dig_query {
 	isc_buffer_t sendbuf;
 	char *recvspace, *tmpsendspace, lengthspace[4];
 	isc_nmhandle_t *handle;
+	isc_nmhandle_t *readhandle;
+	isc_nmhandle_t *sendhandle;
 	ISC_LINK(dig_query_t) link;
 	ISC_LINK(dig_query_t) clink;
 	isc_sockaddr_t sockaddr;

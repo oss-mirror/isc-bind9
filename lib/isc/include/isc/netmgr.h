@@ -112,9 +112,9 @@ isc_nmsocket_close(isc_nmsocket_t **sockp);
  */
 
 void
-isc_nmhandle_ref(isc_nmhandle_t *handle);
+isc_nmhandle_attach(isc_nmhandle_t *handle, isc_nmhandle_t **dest);
 void
-isc_nmhandle_unref(isc_nmhandle_t *handle);
+isc_nmhandle_detach(isc_nmhandle_t **handlep);
 /*%<
  * Increment/decrement the reference counter in a netmgr handle,
  * but (unlike the attach/detach functions) do not change the pointer
@@ -426,10 +426,16 @@ isc_nm_tcpdnsconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 isc_result_t
 isc_nm_tlsdnsconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 		     isc_nm_cb_t cb, void *cbarg, size_t extrahandlesize);
-/*%
+/*%<
  * Establish a DNS client connection over either a TCP or a TLS socket.
  */
 
 isc_result_t
+
 isc_nm_doh_request(isc_nm_t *mgr, const char *uri, isc_region_t *message,
 		   isc_nm_recv_cb_t cb, void *cbarg, SSL_CTX *ctx);
+/*%<
+ * Perform a DoH request on the uri provided. message is the DNS message
+ * that will be POSTed to URI, cb is called with a NULL handle,
+ * ctx can be NULL (it will be created).
+ */

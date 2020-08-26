@@ -54,7 +54,7 @@ respond(ns_client_t *client, isc_result_t result) {
 	}
 	if (msg_result != ISC_R_SUCCESS) {
 		ns_client_drop(client, msg_result);
-		isc_nmhandle_unref(client->handle);
+		isc_nmhandle_detach(&client->handle);
 		return;
 	}
 	message->rcode = rcode;
@@ -65,7 +65,7 @@ respond(ns_client_t *client, isc_result_t result) {
 	}
 
 	ns_client_send(client);
-	isc_nmhandle_unref(client->handle);
+	isc_nmhandle_detach(&client->handle);
 }
 
 void

@@ -221,7 +221,7 @@ control_senddone(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 
 	conn->sending = false;
 
-	isc_nmhandle_unref(handle);
+	isc_nmhandle_detach(&handle);
 
 	if (result == ISC_R_CANCELED) {
 		return;
@@ -324,11 +324,12 @@ control_respond(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 	r.base = conn->buffer->base;
 	r.length = conn->buffer->used;
 
-	isc_nmhandle_ref(handle);
+	isc_nmhandle_t *cbhandle = NULL;
+	isc_nmhandle_attach(handle, &cbhandle);
 	conn->sending = true;
-	result = isc_nm_send(handle, &r, control_senddone, conn);
+	result = isc_nm_send(cbhandle, &r, control_senddone, conn);
 	if (result != ISC_R_SUCCESS) {
-		isc_nmhandle_unref(handle);
+		isc_nmhandle_detach(&cbhandle);
 		conn->sending = false;
 	}
 
@@ -361,12 +362,13 @@ control_command(isc_task_t *task, isc_event_t *event) {
 	 * ensure the handle isn't cleaned up if we're running
 	 * an "rndc stop" command.
 	 */
-	isc_nmhandle_ref(conn->handle);
+	isc_nmhandle_t *tmp = NULL;
+	isc_nmhandle_attach(conn->handle, &tmp);
 	conn->result = named_control_docommand(conn->request,
 					       listener->readonly, &conn->text);
 	control_respond(conn->handle, conn->result, conn);
-	isc_nmhandle_unref(conn->handle);
-	isc_nmhandle_unref(conn->handle);
+	isc_nmhandle_detach(&tmp);
+	isc_nmhandle_detach(&conn->handle);
 	isc_event_free(&event);
 }
 
@@ -513,7 +515,8 @@ control_recvmessage(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 	/*
 	 * Trigger the command.
 	 */
-	isc_nmhandle_ref(handle);
+	isc_nmhandle_t *cbhandle = NULL;
+	isc_nmhandle_attach(handle, &cbhandle);
 	event = isc_event_allocate(listener->mctx, conn, NAMED_EVENT_COMMAND,
 				   control_command, conn, sizeof(isc_event_t));
 	isc_task_send(named_g_server->task, &event);

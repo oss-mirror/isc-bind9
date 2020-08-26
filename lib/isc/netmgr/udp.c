@@ -421,7 +421,7 @@ udp_recv_cb(uv_udp_t *handle, ssize_t nrecv, const uv_buf_t *buf,
 	 * If the recv callback wants to hold on to the handle,
 	 * it needs to attach to it.
 	 */
-	isc_nmhandle_unref(nmhandle);
+	isc_nmhandle_detach(&nmhandle);
 }
 
 /*
@@ -449,7 +449,7 @@ isc__nm_udp_send(isc_nmhandle_t *handle, isc_region_t *region, isc_nm_cb_t cb,
 	 * we need to do so here.
 	 */
 	if (maxudp != 0 && region->length > maxudp) {
-		isc_nmhandle_unref(handle);
+		isc_nmhandle_detach(&handle);
 		return (ISC_R_SUCCESS);
 	}
 
@@ -488,8 +488,7 @@ isc__nm_udp_send(isc_nmhandle_t *handle, isc_region_t *region, isc_nm_cb_t cb,
 	uvreq->uvbuf.base = (char *)region->base;
 	uvreq->uvbuf.len = region->length;
 
-	uvreq->handle = handle;
-	isc_nmhandle_ref(uvreq->handle);
+	isc_nmhandle_attach(handle, &uvreq->handle);
 
 	uvreq->cb.send = cb;
 	uvreq->cbarg = cbarg;
@@ -551,7 +550,6 @@ udp_send_cb(uv_udp_send_t *req, int status) {
 	}
 
 	uvreq->cb.send(uvreq->handle, result, uvreq->cbarg);
-	isc_nmhandle_unref(uvreq->handle);
 	isc__nm_uvreq_put(&uvreq, uvreq->sock);
 }
 
@@ -572,7 +570,6 @@ udp_send_direct(isc_nmsocket_t *sock, isc__nm_uvreq_t *req,
 		return (ISC_R_CANCELED);
 	}
 
-	isc_nmhandle_ref(req->handle);
 	sa = sock->connected ? NULL : &peer->type.sa;
 	rv = uv_udp_send(&req->uv_req.udp_send, &sock->uv_handle.udp,
 			 &req->uvbuf, 1, sa, udp_send_cb);

@@ -70,7 +70,7 @@ tls_senddone(isc_nmhandle_t *handle, isc_result_t eresult, void *cbarg) {
 static void
 tls_do_bio(isc_nmsocket_t *sock, int rv) {
 	isc_result_t result = ISC_R_SUCCESS;
-	int pending, tls_err;
+	int pending, tls_err = 0;
 
 	REQUIRE(sock->tid == isc_nm_tid());
 
@@ -247,8 +247,7 @@ tlslisten_acceptcb(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 
 	tlssock->extrahandlesize = tlslistensock->extrahandlesize;
 	isc__nmsocket_attach(tlslistensock, &tlssock->listener);
-	isc_nmhandle_ref(handle);
-	tlssock->outerhandle = handle;
+	isc_nmhandle_attach(handle, &tlssock->outerhandle);
 	tlssock->peer = handle->sock->peer;
 	tlssock->read_timeout = handle->sock->mgr->init;
 	tlssock->tid = isc_nm_tid();
@@ -352,8 +351,7 @@ isc__nm_tls_send(isc_nmhandle_t *handle, isc_region_t *region, isc_nm_cb_t cb,
 	uvreq = isc__nm_uvreq_get(sock->mgr, sock);
 	uvreq->uvbuf.base = (char *)region->base;
 	uvreq->uvbuf.len = region->length;
-	uvreq->handle = handle;
-	isc_nmhandle_ref(uvreq->handle);
+	isc_nmhandle_attach(handle, &uvreq->handle);
 	uvreq->cb.send = cb;
 	uvreq->cbarg = cbarg;
 
@@ -439,8 +437,7 @@ tls_close_direct(isc_nmsocket_t *sock) {
 		 */
 		if (sock->outerhandle != NULL) {
 			isc_nm_pauseread(sock->outerhandle);
-			isc_nmhandle_unref(sock->outerhandle);
-			sock->outerhandle = NULL;
+			isc_nmhandle_detach(&sock->outerhandle);
 		}
 		if (sock->listener != NULL) {
 			isc__nmsocket_detach(&sock->listener);
@@ -550,8 +547,7 @@ tls_connect_cb(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 
 	INSIST(VALID_NMHANDLE(handle));
 
-	tlssock->outerhandle = handle;
-	isc_nmhandle_ref(handle);
+	isc_nmhandle_attach(handle, &tlssock->outerhandle);
 	result = initialize_tls(tlssock, false);
 	if (result != ISC_R_SUCCESS) {
 		tlssock->accept_cb.connect(NULL, result, tlssock->accept_cbarg);
