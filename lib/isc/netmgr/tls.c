@@ -81,8 +81,7 @@ tls_do_bio(isc_nmsocket_t *sock, int rv) {
 			if (sock->rcb.recv != NULL &&
 			    !atomic_load(&sock->readpaused)) {
 				isc_region_t region = {
-					isc_mem_get(sock->mgr->mctx, 4096),
-					4096
+					isc_mem_get(sock->mgr->mctx, 4096), 4096
 				};
 				isc_region_t dregion;
 
@@ -94,8 +93,7 @@ tls_do_bio(isc_nmsocket_t *sock, int rv) {
 				sock->rcb.recv(sock->statichandle,
 					       ISC_R_SUCCESS, &dregion,
 					       sock->rcbarg);
-				isc_mem_put(sock->mgr->mctx, region.base,
-					    4096);
+				isc_mem_put(sock->mgr->mctx, region.base, 4096);
 			}
 		}
 	}

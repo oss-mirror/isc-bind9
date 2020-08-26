@@ -419,7 +419,7 @@ isc_nm_destroy(isc_nm_t **mgr0) {
 		isc_nm_resume(mgr);
 #ifdef WIN32
 		_sleep(10);
-#else  /* ifdef WIN32 */
+#else /* ifdef WIN32 */
 		usleep(10000);
 #endif /* ifdef WIN32 */
 	}
@@ -549,7 +549,7 @@ nm_thread(isc_threadarg_t worker0) {
 			 */
 #ifdef WIN32
 			_sleep(100);
-#else  /* ifdef WIN32 */
+#else /* ifdef WIN32 */
 			usleep(100000);
 #endif /* ifdef WIN32 */
 		}
@@ -1214,7 +1214,7 @@ isc_nmhandle_detach(isc_nmhandle_t **handlep) {
 	REQUIRE(handlep != NULL);
 	isc_nmhandle_t *handle = *handlep;
 	*handlep = NULL;
-	
+
 	REQUIRE(VALID_NMHANDLE(handle));
 
 	if (isc_refcount_decrement(&handle->references) > 1) {

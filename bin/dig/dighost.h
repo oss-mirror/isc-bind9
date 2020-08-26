@@ -169,8 +169,8 @@ struct dig_query {
 	unsigned int magic;
 	dig_lookup_t *lookup;
 	bool waiting_connect, pending_free, waiting_senddone, first_pass,
-		first_soa_rcvd, second_rr_rcvd, first_repeat_rcvd,
-		warn_id, timedout;
+		first_soa_rcvd, second_rr_rcvd, first_repeat_rcvd, warn_id,
+		timedout;
 	uint32_t first_rr_serial;
 	uint32_t second_rr_serial;
 	uint32_t msg_count;

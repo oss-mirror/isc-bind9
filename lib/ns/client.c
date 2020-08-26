@@ -129,7 +129,7 @@
 
 #if defined(_WIN32) && !defined(_WIN64)
 LIBNS_EXTERNAL_DATA atomic_uint_fast32_t ns_client_requests;
-#else  /* if defined(_WIN32) && !defined(_WIN64) */
+#else /* if defined(_WIN32) && !defined(_WIN64) */
 LIBNS_EXTERNAL_DATA atomic_uint_fast64_t ns_client_requests;
 #endif /* if defined(_WIN32) && !defined(_WIN64) */
 
@@ -1966,8 +1966,7 @@ ns__client_request(isc_nmhandle_t *handle, isc_result_t eresult,
 		isc_netaddr_fromsockaddr(&client->destaddr,
 					 &client->manager->interface->addr);
 	} else {
-		isc_sockaddr_t sockaddr =
-			isc_nmhandle_localaddr(handle);
+		isc_sockaddr_t sockaddr = isc_nmhandle_localaddr(handle);
 		isc_netaddr_fromsockaddr(&client->destaddr, &sockaddr);
 	}
 

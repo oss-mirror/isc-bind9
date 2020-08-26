@@ -5178,7 +5178,7 @@ query_trace(query_ctx_t *qctx) {
 		 (int)qctx->client->query.authdbset,
 		 (int)qctx->client->query.isreferral);
 	CCTRACE(ISC_LOG_DEBUG(3), mbuf);
-#else  /* ifdef WANT_QUERYTRACE */
+#else /* ifdef WANT_QUERYTRACE */
 	UNUSED(qctx);
 #endif /* ifdef WANT_QUERYTRACE */
 }
@@ -6194,7 +6194,7 @@ ns__query_sfcache(query_ctx_t *qctx) {
 			qctx->view->failcache, qctx->client->query.qname,
 			qctx->qtype, &flags, &qctx->client->tnow);
 	}
-#else  /* ifdef ENABLE_AFL */
+#else /* ifdef ENABLE_AFL */
 	failcache = dns_badcache_find(qctx->view->failcache,
 				      qctx->client->query.qname, qctx->qtype,
 				      &flags, &qctx->client->tnow);
@@ -8344,7 +8344,7 @@ query_nodata(query_ctx_t *qctx, isc_result_t res) {
 
 #ifdef dns64_bis_return_excluded_addresses
 	if (qctx->dns64)
-#else  /* ifdef dns64_bis_return_excluded_addresses */
+#else /* ifdef dns64_bis_return_excluded_addresses */
 	if (qctx->dns64 && !qctx->dns64_exclude)
 #endif /* ifdef dns64_bis_return_excluded_addresses */
 	{
@@ -11060,7 +11060,9 @@ log_query(ns_client_t *client, unsigned int flags, unsigned int extflags) {
 		      TCP(client) ? "T" : "",
 		      ((extflags & DNS_MESSAGEEXTFLAG_DO) != 0) ? "D" : "",
 		      ((flags & DNS_MESSAGEFLAG_CD) != 0) ? "C" : "",
-		      HAVECOOKIE(client) ? "V" : WANTCOOKIE(client) ? "K" : "",
+		      HAVECOOKIE(client)   ? "V"
+		      : WANTCOOKIE(client) ? "K"
+					   : "",
 		      onbuf, ecsbuf);
 }
 

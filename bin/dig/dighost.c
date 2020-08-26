@@ -1,4 +1,4 @@
-	/*
+/*
  * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
  * This Source Code Form is subject to the terms of the Mozilla Public
@@ -398,7 +398,7 @@ warn(const char *format, ...) {
 	va_end(args);
 	fprintf(stderr, "\n");
 }
-#else  /* if TARGET_OS_IPHONE */
+#else /* if TARGET_OS_IPHONE */
 void
 warn(const char *format, ...) {
 	va_list args;
@@ -656,7 +656,7 @@ make_empty_lookup(void) {
 #ifdef HAVE_LIBIDN2
 	looknew->idnin = isatty(1) ? (getenv("IDN_DISABLE") == NULL) : false;
 	looknew->idnout = looknew->idnin;
-#else  /* ifdef HAVE_LIBIDN2 */
+#else /* ifdef HAVE_LIBIDN2 */
 	looknew->idnin = false;
 	looknew->idnout = false;
 #endif /* HAVE_LIBIDN2 */
@@ -2247,7 +2247,7 @@ setup_lookup(dig_lookup_t *lookup) {
 #if TARGET_OS_IPHONE
 			check_next_lookup(current_lookup);
 			return (false);
-#else  /* if TARGET_OS_IPHONE */
+#else /* if TARGET_OS_IPHONE */
 			digexit();
 #endif /* if TARGET_OS_IPHONE */
 		}
@@ -2680,7 +2680,6 @@ cancel_lookup(dig_lookup_t *lookup) {
 		next = ISC_LIST_NEXT(query, link);
 		if (query->handle != NULL) {
 			isc_nm_cancelread(query->handle);
-//			clear_handle(query);
 			check_if_done();
 		} else {
 			clear_query(query);
@@ -2833,16 +2832,16 @@ start_tcp(dig_query_t *query) {
 		}
 
 		if (l->tls_mode) {
-			result = isc_nm_tlsdnsconnect(netmgr,
-					      (isc_nmiface_t *)&localaddr,
-					      (isc_nmiface_t *)&query->sockaddr,
-					      tcp_connected, query, 0);
+			result = isc_nm_tlsdnsconnect(
+				netmgr, (isc_nmiface_t *)&localaddr,
+				(isc_nmiface_t *)&query->sockaddr,
+				tcp_connected, query, 0);
 			check_result(result, "isc_nm_tcpdnsconnect");
 		} else {
-			result = isc_nm_tcpdnsconnect(netmgr,
-					      (isc_nmiface_t *)&localaddr,
-					      (isc_nmiface_t *)&query->sockaddr,
-					      tcp_connected, query, 0);
+			result = isc_nm_tcpdnsconnect(
+				netmgr, (isc_nmiface_t *)&localaddr,
+				(isc_nmiface_t *)&query->sockaddr,
+				tcp_connected, query, 0);
 			check_result(result, "isc_nm_tcpdnsconnect");
 		}
 
@@ -2928,8 +2927,8 @@ udp_ready(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 
 	query->handle = handle;
 
-	debug("recving with lookup=%p, query=%p, handle=%p",
-	      query->lookup, query, query->handle);
+	debug("recving with lookup=%p, query=%p, handle=%p", query->lookup,
+	      query, query->handle);
 	isc_nmhandle_attach(query->handle, &query->readhandle);
 	result = isc_nm_read(query->readhandle, recv_done, query);
 	check_result(result, "isc_nm_read");
@@ -2971,8 +2970,7 @@ start_udp(dig_query_t *query) {
 		return;
 	}
 
-	if (!l->mapped &&
-	    isc_sockaddr_pf(&query->sockaddr) == AF_INET6 &&
+	if (!l->mapped && isc_sockaddr_pf(&query->sockaddr) == AF_INET6 &&
 	    IN6_IS_ADDR_V4MAPPED(&query->sockaddr.type.sin6.sin6_addr))
 	{
 		isc_netaddr_t netaddr;
@@ -2994,18 +2992,17 @@ start_udp(dig_query_t *query) {
 	}
 
 	if (!specified_source) {
-		if ((isc_sockaddr_pf(&query->sockaddr) == AF_INET) &&
-		    have_ipv4) {
+		if ((isc_sockaddr_pf(&query->sockaddr) == AF_INET) && have_ipv4)
+		{
 			isc_sockaddr_any(&localaddr);
 		} else {
 			isc_sockaddr_any6(&localaddr);
 		}
 	}
 
-	result = isc_nm_udpconnect(netmgr,
-				   (isc_nmiface_t *)&localaddr,
-				   (isc_nmiface_t *)&query->sockaddr,
-				   udp_ready, query, 0);
+	result = isc_nm_udpconnect(netmgr, (isc_nmiface_t *)&localaddr,
+				   (isc_nmiface_t *)&query->sockaddr, udp_ready,
+				   query, 0);
 	check_result(result, "isc_nm_udpconnect");
 	handlecount++;
 	debug("handlecount=%d", handlecount);
@@ -3557,7 +3554,7 @@ ednsvers(dns_rdataset_t *opt) {
 static void
 recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	  void *arg) {
-	dig_query_t *query = (dig_query_t *) arg;
+	dig_query_t *query = (dig_query_t *)arg;
 	isc_buffer_t b;
 	dns_message_t *msg = NULL;
 	isc_result_t result;
@@ -3596,8 +3593,7 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 		isc_timer_touch(query->timer);
 	}
 	if ((!l->pending && !l->ns_search_only) || cancel_now) {
-		debug("no longer pending.  Got %s",
-		      isc_result_totext(eresult));
+		debug("no longer pending.  Got %s", isc_result_totext(eresult));
 		query->waiting_connect = false;
 
 		isc_nmhandle_detach(&handle);
@@ -3609,10 +3605,9 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 
 	if (eresult != ISC_R_SUCCESS) {
 		char sockstr[ISC_SOCKADDR_FORMATSIZE];
-		isc_sockaddr_format(&query->sockaddr, sockstr,
-				    sizeof(sockstr));
-		dighost_error("communications error to %s: %s\n",
-			      sockstr, isc_result_totext(eresult));
+		isc_sockaddr_format(&query->sockaddr, sockstr, sizeof(sockstr));
+		dighost_error("communications error to %s: %s\n", sockstr,
+			      isc_result_totext(eresult));
 		if (keep != NULL) {
 			isc_nmhandle_detach(&keep);
 		}
@@ -4098,8 +4093,8 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 		}
 	} else {
 		if (msg->rcode == dns_rcode_noerror || l->origin == NULL) {
-			dighost_received(isc_buffer_usedlength(&b),
-					 &peer, query);
+			dighost_received(isc_buffer_usedlength(&b), &peer,
+					 query);
 		}
 
 		if (!query->lookup->ns_search_only) {
@@ -4112,7 +4107,7 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 		} else {
 			clear_query(query);
 		}
-		
+
 		check_next_lookup(l);
 	}
 	if (msg != NULL) {

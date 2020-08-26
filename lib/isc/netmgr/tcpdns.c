@@ -147,7 +147,7 @@ dnslisten_acceptcb(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 	dnssock->timer_initialized = true;
 	uv_timer_start(&dnssock->timer, dnstcp_readtimeout,
 		       dnssock->read_timeout, 0);
-	
+
 	isc_nmhandle_t *cbhandle = NULL;
 	isc_nmhandle_attach(handle, &cbhandle);
 	result = isc_nm_read(cbhandle, dnslisten_readcb, dnssock);
