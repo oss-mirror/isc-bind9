@@ -769,7 +769,7 @@ isc__nm_async_udpread(isc__networker_t *worker, isc__netievent_t *ev0) {
 
 	UNUSED(worker);
 
-	uv_udp_recv_start(&sock->uv_handle.udp, isc__nm_alloc_cb, udp_read_cb);
+	uv_udp_recv_start(&sock->uv_handle.udp, udp_alloc_cb, udp_read_cb);
 }
 
 isc_result_t
