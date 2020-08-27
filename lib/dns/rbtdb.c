@@ -1920,6 +1920,10 @@ new_reference(dns_rbtdb_t *rbtdb, dns_rbtnode_t *node,
 	{
 		ISC_LIST_UNLINK(rbtdb->deadnodes[node->locknum], node,
 				deadlink);
+		if (rbtdb->cachestats != NULL) {
+			isc_stats_decrement(rbtdb->cachestats,
+					    dns_cachestatscounter_deadnodes);
+		}
 	}
 	if (isc_refcount_increment0(&node->references) == 0) {
 		/* this is the first reference to the node */
@@ -1965,9 +1969,18 @@ cleanup_dead_nodes(dns_rbtdb_t *rbtdb, int bucketnum) {
 	dns_rbtnode_t *node;
 	int count = 10; /* XXXJT: should be adjustable */
 
+	if (rbtdb->cachestats != NULL) {
+		isc_stats_increment(rbtdb->cachestats,
+				    dns_cachestatscounter_cleanup_dead_nodes_calls);
+	}
+
 	node = ISC_LIST_HEAD(rbtdb->deadnodes[bucketnum]);
 	while (node != NULL && count > 0) {
 		ISC_LIST_UNLINK(rbtdb->deadnodes[bucketnum], node, deadlink);
+		if (rbtdb->cachestats != NULL) {
+			isc_stats_decrement(rbtdb->cachestats,
+					    dns_cachestatscounter_deadnodes);
+		}
 
 		/*
 		 * We might have reactivated this node without a tree write
@@ -1996,6 +2009,10 @@ cleanup_dead_nodes(dns_rbtdb_t *rbtdb, int bucketnum) {
 			 */
 			ISC_LIST_APPEND(rbtdb->deadnodes[bucketnum], node,
 					deadlink);
+			if (rbtdb->cachestats != NULL) {
+				isc_stats_increment(rbtdb->cachestats,
+						    dns_cachestatscounter_deadnodes);
+			}
 		}
 		node = ISC_LIST_HEAD(rbtdb->deadnodes[bucketnum]);
 		count--;
@@ -2044,6 +2061,10 @@ reactivate_node(dns_rbtdb_t *rbtdb, dns_rbtnode_t *node,
 		if (ISC_LINK_LINKED(node, deadlink)) {
 			ISC_LIST_UNLINK(rbtdb->deadnodes[node->locknum], node,
 					deadlink);
+			if (rbtdb->cachestats != NULL) {
+				isc_stats_decrement(rbtdb->cachestats,
+						    dns_cachestatscounter_deadnodes);
+			}
 		}
 		if (maybe_cleanup) {
 			cleanup_dead_nodes(rbtdb, node->locknum);
@@ -2195,6 +2216,10 @@ decrement_reference(dns_rbtdb_t *rbtdb, dns_rbtnode_t *node,
 		if (!ISC_LINK_LINKED(node, deadlink)) {
 			ISC_LIST_APPEND(rbtdb->deadnodes[bucket], node,
 					deadlink);
+			if (rbtdb->cachestats != NULL) {
+				isc_stats_increment(rbtdb->cachestats,
+						    dns_cachestatscounter_deadnodes);
+			}
 		}
 	}
 
@@ -2270,6 +2295,10 @@ prune_tree(isc_task_t *task, isc_event_t *event) {
 			if (ISC_LINK_LINKED(parent, deadlink)) {
 				ISC_LIST_UNLINK(rbtdb->deadnodes[locknum],
 						parent, deadlink);
+				if (rbtdb->cachestats != NULL) {
+					isc_stats_decrement(rbtdb->cachestats,
+							    dns_cachestatscounter_deadnodes);
+				}
 			}
 			new_reference(rbtdb, parent, isc_rwlocktype_write);
 		} else {
@@ -10560,6 +10589,11 @@ overmem_purge(dns_rbtdb_t *rbtdb, unsigned int locknum_start, isc_stdtime_t now,
 	rdatasetheader_t *header, *header_prev;
 	unsigned int locknum;
 	int purgecount = 2;
+
+	if (rbtdb->cachestats != NULL) {
+		isc_stats_increment(rbtdb->cachestats,
+				    dns_cachestatscounter_overmem_purge_calls);
+	}
 
 	for (locknum = (locknum_start + 1) % rbtdb->node_lock_count;
 	     locknum != locknum_start && purgecount > 0;

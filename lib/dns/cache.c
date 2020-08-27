@@ -693,6 +693,9 @@ overmem_cleaning_action(isc_task_t *task, isc_event_t *event) {
 
 	LOCK(&cleaner->lock);
 
+	isc_stats_increment(cleaner->cache->stats,
+			    dns_cachestatscounter_overmem_cleaning_action_calls);
+
 	if (cleaner->overmem) {
 		if (cleaner->state == cleaner_s_idle) {
 			want_cleaning = true;
@@ -752,6 +755,8 @@ incremental_cleaning_action(isc_task_t *task, isc_event_t *event) {
 	}
 
 	INSIST(CLEANER_BUSY(cleaner));
+
+	isc_stats_increment(cleaner->cache->stats, dns_cachestatscounter_incremental_cleaning_action_calls);
 
 	n_names = cleaner->increment;
 
@@ -1320,6 +1325,22 @@ dns_cache_dumpstats(dns_cache_t *cache, FILE *fp) {
 		"cache database nodes");
 	fprintf(fp, "%20" PRIu64 " %s\n", (uint64_t)dns_db_hashsize(cache->db),
 		"cache database hash buckets");
+	fprintf(fp, "%20" PRIu64 " %s\n", values[dns_cachestatscounter_deadnodes],
+		"deadnodes");
+
+
+	fprintf(fp, "%20" PRIu64 " %s\n",
+		values[dns_cachestatscounter_incremental_cleaning_action_calls],
+		"calls to incremental_cleaning_action()");
+	fprintf(fp, "%20" PRIu64 " %s\n",
+		values[dns_cachestatscounter_overmem_cleaning_action_calls],
+		"calls to overmem_cleaning_action()");
+	fprintf(fp, "%20" PRIu64 " %s\n",
+		values[dns_cachestatscounter_overmem_purge_calls],
+		"calls to overmem_purge()");
+	fprintf(fp, "%20" PRIu64 " %s\n",
+		values[dns_cachestatscounter_cleanup_dead_nodes_calls],
+		"calls to cleanup_dead_nodes()");
 
 	fprintf(fp, "%20" PRIu64 " %s\n", (uint64_t)isc_mem_total(cache->mctx),
 		"cache tree memory total");
