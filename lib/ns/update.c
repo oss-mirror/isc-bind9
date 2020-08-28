@@ -1567,7 +1567,9 @@ send_update_event(ns_client_t *client, dns_zone_t *zone) {
 	client->nupdates++;
 	event->ev_arg = client;
 
-	isc_nmhandle_attach(client->handle, &client->cbhandle);
+	if (client->cbhandle == NULL) {
+		isc_nmhandle_attach(client->handle, &client->cbhandle);
+	}
 	dns_zone_gettask(zone, &zonetask);
 	isc_task_send(zonetask, ISC_EVENT_PTR(&event));
 
@@ -1585,7 +1587,7 @@ respond(ns_client_t *client, isc_result_t result) {
 	client->message->rcode = dns_result_torcode(result);
 
 	ns_client_send(client);
-	isc_nmhandle_detach(&client->handle);
+	isc_nmhandle_detach(&client->reqhandle);
 	return;
 
 msg_failure:
@@ -1594,7 +1596,7 @@ msg_failure:
 		      "could not create update response message: %s",
 		      isc_result_totext(msg_result));
 	ns_client_drop(client, msg_result);
-	isc_nmhandle_detach(&client->handle);
+	isc_nmhandle_detach(&client->reqhandle);
 }
 
 void
@@ -1673,6 +1675,8 @@ ns_update_start(ns_client_t *client, isc_result_t sigresult) {
 	default:
 		FAILC(DNS_R_NOTAUTH, "not authoritative for update zone");
 	}
+
+	isc_nmhandle_detach(&client->reqhandle);
 	return;
 
 failure:
@@ -1690,6 +1694,7 @@ failure:
 	if (zone != NULL) {
 		dns_zone_detach(&zone);
 	}
+	isc_nmhandle_detach(&client->reqhandle);
 }
 
 /*%
@@ -3497,6 +3502,10 @@ common:
 	}
 	uev->ev_type = DNS_EVENT_UPDATEDONE;
 	uev->ev_action = updatedone_action;
+
+	if (client->cbhandle == NULL) {
+		isc_nmhandle_attach(client->handle, &client->cbhandle);
+	}
 	isc_task_send(client->task, &event);
 
 	INSIST(ver == NULL);
@@ -3510,8 +3519,9 @@ updatedone_action(isc_task_t *task, isc_event_t *event) {
 
 	UNUSED(task);
 
-	INSIST(event->ev_type == DNS_EVENT_UPDATEDONE);
-	INSIST(task == client->task);
+	REQUIRE(event->ev_type == DNS_EVENT_UPDATEDONE);
+	REQUIRE(task == client->task);
+	REQUIRE(client->cbhandle == client->handle);
 
 	INSIST(client->nupdates > 0);
 	switch (uev->result) {
@@ -3636,7 +3646,9 @@ send_forward_event(ns_client_t *client, dns_zone_t *zone) {
 		      namebuf, classbuf);
 
 	dns_zone_gettask(zone, &zonetask);
-	isc_nmhandle_attach(client->handle, &client->cbhandle);
+	if (client->cbhandle == NULL) {
+		isc_nmhandle_attach(client->handle, &client->cbhandle);
+	}
 	isc_task_send(zonetask, ISC_EVENT_PTR(&event));
 
 	if (event != NULL) {

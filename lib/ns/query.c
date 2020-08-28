@@ -2475,7 +2475,7 @@ prefetch_done(isc_task_t *task, isc_event_t *event) {
 	}
 
 	free_devent(client, &event, &devent);
-	isc_nmhandle_detach(&client->cbhandle);
+	isc_nmhandle_detach(&client->fetchhandle);
 }
 
 static void
@@ -2518,7 +2518,7 @@ query_prefetch(ns_client_t *client, dns_name_t *qname,
 		peeraddr = NULL;
 	}
 
-	isc_nmhandle_attach(client->handle, &client->cbhandle);
+	isc_nmhandle_attach(client->handle, &client->fetchhandle);
 	options = client->query.fetchoptions | DNS_FETCHOPT_PREFETCH;
 	result = dns_resolver_createfetch(
 		client->view->resolver, qname, rdataset->type, NULL, NULL, NULL,
@@ -2527,7 +2527,7 @@ query_prefetch(ns_client_t *client, dns_name_t *qname,
 		&client->query.prefetch);
 	if (result != ISC_R_SUCCESS) {
 		ns_client_putrdataset(client, &tmprdataset);
-		isc_nmhandle_detach(&client->cbhandle);
+		isc_nmhandle_detach(&client->fetchhandle);
 	}
 
 	dns_rdataset_clearprefetch(rdataset);
@@ -2732,7 +2732,7 @@ query_rpzfetch(ns_client_t *client, dns_name_t *qname, dns_rdatatype_t type) {
 	}
 
 	options = client->query.fetchoptions;
-	isc_nmhandle_attach(client->handle, &client->cbhandle);
+	isc_nmhandle_attach(client->handle, &client->fetchhandle);
 	result = dns_resolver_createfetch(
 		client->view->resolver, qname, type, NULL, NULL, NULL, peeraddr,
 		client->message->id, options, 0, NULL, client->task,
@@ -2740,7 +2740,7 @@ query_rpzfetch(ns_client_t *client, dns_name_t *qname, dns_rdatatype_t type) {
 		&client->query.prefetch);
 	if (result != ISC_R_SUCCESS) {
 		ns_client_putrdataset(client, &tmprdataset);
-		isc_nmhandle_detach(&client->cbhandle);
+		isc_nmhandle_detach(&client->fetchhandle);
 	}
 }
 
@@ -5748,7 +5748,7 @@ fetch_callback(isc_task_t *task, isc_event_t *event) {
 	}
 
 	dns_resolver_destroyfetch(&fetch);
-	isc_nmhandle_detach(&client->cbhandle);
+	isc_nmhandle_detach(&client->fetchhandle);
 }
 
 /*%
@@ -5940,14 +5940,14 @@ ns_query_recurse(ns_client_t *client, dns_rdatatype_t qtype, dns_name_t *qname,
 		peeraddr = &client->peeraddr;
 	}
 
-	isc_nmhandle_attach(client->handle, &client->cbhandle);
+	isc_nmhandle_attach(client->handle, &client->fetchhandle);
 	result = dns_resolver_createfetch(
 		client->view->resolver, qname, qtype, qdomain, nameservers,
 		NULL, peeraddr, client->message->id, client->query.fetchoptions,
 		0, NULL, client->task, fetch_callback, client, rdataset,
 		sigrdataset, &client->query.fetch);
 	if (result != ISC_R_SUCCESS) {
-		isc_nmhandle_detach(&client->cbhandle);
+		isc_nmhandle_detach(&client->fetchhandle);
 		ns_client_putrdataset(client, &rdataset);
 		if (sigrdataset != NULL) {
 			ns_client_putrdataset(client, &sigrdataset);
