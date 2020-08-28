@@ -3538,8 +3538,12 @@ updatedone_action(isc_task_t *task, isc_event_t *event) {
 	if (uev->zone != NULL) {
 		dns_zone_detach(&uev->zone);
 	}
+
 	client->nupdates--;
+
+	isc_nmhandle_attach(client->handle, &client->reqhandle);
 	respond(client, uev->result);
+
 	isc_event_free(&event);
 	isc_nmhandle_detach(&client->cbhandle);
 }
@@ -3547,7 +3551,6 @@ updatedone_action(isc_task_t *task, isc_event_t *event) {
 /*%
  * Update forwarding support.
  */
-
 static void
 forward_fail(isc_task_t *task, isc_event_t *event) {
 	ns_client_t *client = (ns_client_t *)event->ev_arg;
@@ -3612,11 +3615,13 @@ forward_action(isc_task_t *task, isc_event_t *event) {
 		isc_task_send(client->task, &event);
 		inc_stats(client, zone, ns_statscounter_updatefwdfail);
 		dns_zone_detach(&zone);
-	} else {
-		inc_stats(client, zone, ns_statscounter_updatereqfwd);
+		isc_task_detach(&task);
+		return;
 	}
 
 	isc_task_detach(&task);
+	isc_event_free(&event);
+	isc_nmhandle_detach(&client->cbhandle);
 }
 
 static isc_result_t

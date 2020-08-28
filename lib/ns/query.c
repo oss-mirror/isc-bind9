@@ -550,7 +550,7 @@ query_send(ns_client_t *client) {
 
 	inc_stats(client, counter);
 	ns_client_send(client);
-	isc_nmhandle_detach(&client->handle);
+	isc_nmhandle_detach(&client->reqhandle);
 }
 
 static void
@@ -577,7 +577,7 @@ query_error(ns_client_t *client, isc_result_t result, int line) {
 	log_queryerror(client, result, line, loglevel);
 
 	ns_client_error(client, result);
-	isc_nmhandle_detach(&client->handle);
+	isc_nmhandle_detach(&client->reqhandle);
 }
 
 static void
@@ -590,7 +590,7 @@ query_next(ns_client_t *client, isc_result_t result) {
 		inc_stats(client, ns_statscounter_failure);
 	}
 	ns_client_drop(client, result);
-	isc_nmhandle_detach(&client->handle);
+	isc_nmhandle_detach(&client->reqhandle);
 }
 
 static inline void
@@ -5703,6 +5703,9 @@ fetch_callback(isc_task_t *task, isc_event_t *event) {
 	}
 	UNLOCK(&client->manager->reclock);
 
+	isc_nmhandle_attach(client->handle, &client->reqhandle);
+	isc_nmhandle_detach(&client->fetchhandle);
+
 	client->query.attributes &= ~NS_QUERYATTR_RECURSING;
 	client->state = NS_CLIENTSTATE_WORKING;
 
@@ -5748,7 +5751,6 @@ fetch_callback(isc_task_t *task, isc_event_t *event) {
 	}
 
 	dns_resolver_destroyfetch(&fetch);
-	isc_nmhandle_detach(&client->fetchhandle);
 }
 
 /*%

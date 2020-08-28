@@ -287,7 +287,6 @@ help(void) {
 	       "(+[no]tcflag))\n"
 	       "                 +[no]tcp            (TCP mode (+[no]vc))\n"
 	       "                 +timeout=###        (Set query timeout) [5]\n"
-	       "                 +[no]tls            (DNS over TLS mode)\n"
 	       "                 +[no]trace          (Trace delegation down "
 	       "from root "
 	       "[+dnssec])\n"
@@ -643,6 +642,7 @@ printmessage(dig_query_t *query, const isc_buffer_t *msgbuf, dns_message_t *msg,
 	if (yaml) {
 		enum { Q = 0x1, R = 0x2 }; /* Q:query; R:ecursive */
 		unsigned int tflag = 0;
+		isc_sockaddr_t saddr;
 		char sockstr[ISC_SOCKADDR_FORMATSIZE];
 		uint16_t sport;
 		char *hash;
@@ -713,9 +713,10 @@ printmessage(dig_query_t *query, const isc_buffer_t *msgbuf, dns_message_t *msg,
 			printf("    response_port: %u\n", sport);
 		}
 
-		if (query->handle != NULL) {
-			isc_sockaddr_t saddr =
-				isc_nmhandle_localaddr(query->handle);
+		if (query->sock != NULL &&
+		    isc_socket_getsockname(query->sock, &saddr) ==
+			    ISC_R_SUCCESS)
+		{
 			sport = isc_sockaddr_getport(&saddr);
 			isc_sockaddr_format(&saddr, sockstr, sizeof(sockstr));
 			hash = strchr(sockstr, '#');
@@ -1713,13 +1714,6 @@ plus_option(char *option, bool is_batchfile, dig_lookup_t *lookup) {
 				timeout = 1;
 			}
 			break;
-		case 'l':
-			FULLCHECK("tls");
-			lookup->tls_mode = state;
-			if (!lookup->tcp_mode_set) {
-				lookup->tcp_mode = state;
-			}
-			break;
 		case 'o':
 			FULLCHECK("topdown");
 			fprintf(stderr, ";; +topdown option is deprecated");
@@ -1973,10 +1967,10 @@ dash_option(char *option, char *next, dig_lookup_t **lookup,
 			srcport = 0;
 		}
 		if (have_ipv6 && inet_pton(AF_INET6, value, &in6) == 1) {
-			isc_sockaddr_fromin6(&localaddr, &in6, srcport);
+			isc_sockaddr_fromin6(&bind_address, &in6, srcport);
 			isc_net_disableipv4();
 		} else if (have_ipv4 && inet_pton(AF_INET, value, &in4) == 1) {
-			isc_sockaddr_fromin(&localaddr, &in4, srcport);
+			isc_sockaddr_fromin(&bind_address, &in4, srcport);
 			isc_net_disableipv6();
 		} else {
 			if (hash != NULL) {
@@ -2020,7 +2014,6 @@ dash_option(char *option, char *next, dig_lookup_t **lookup,
 			fatal("Couldn't parse port number");
 		}
 		port = num;
-		port_set = true;
 		return (value_from_next);
 	case 'q':
 		if (!config_only) {

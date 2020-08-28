@@ -113,8 +113,7 @@ struct dig_lookup {
 		accept_reply_unexpected_src, /*%  print replies from
 					      * unexpected
 					      *   sources. */
-		setqid,			     /*% use a speciied query ID */
-		tls_mode;		     /*% connect using TLS */
+		setqid;			     /*% use a speciied query ID */
 	char textname[MXNAME];		     /*% Name we're going to be
 					      * looking up */
 	char cmdline[MXNAME];
@@ -169,8 +168,8 @@ struct dig_query {
 	unsigned int magic;
 	dig_lookup_t *lookup;
 	bool waiting_connect, pending_free, waiting_senddone, first_pass,
-		first_soa_rcvd, second_rr_rcvd, first_repeat_rcvd, warn_id,
-		timedout;
+		first_soa_rcvd, second_rr_rcvd, first_repeat_rcvd, recv_made,
+		warn_id, timedout;
 	uint32_t first_rr_serial;
 	uint32_t second_rr_serial;
 	uint32_t msg_count;
@@ -178,11 +177,9 @@ struct dig_query {
 	bool ixfr_axfr;
 	char *servname;
 	char *userarg;
-	isc_buffer_t sendbuf;
+	isc_buffer_t recvbuf, lengthbuf, tmpsendbuf, sendbuf;
 	char *recvspace, *tmpsendspace, lengthspace[4];
-	isc_nmhandle_t *handle;
-	isc_nmhandle_t *readhandle;
-	isc_nmhandle_t *sendhandle;
+	isc_socket_t *sock;
 	ISC_LINK(dig_query_t) link;
 	ISC_LINK(dig_query_t) clink;
 	isc_sockaddr_t sockaddr;
@@ -218,14 +215,13 @@ extern unsigned int extrabytes;
 extern bool check_ra, have_ipv4, have_ipv6, specified_source, usesearch,
 	showsearch, yaml;
 extern in_port_t port;
-extern bool port_set;
 extern unsigned int timeout;
 extern isc_mem_t *mctx;
 extern int sendcount;
 extern int ndots;
 extern int lookup_counter;
 extern int exitcode;
-extern isc_sockaddr_t localaddr;
+extern isc_sockaddr_t bind_address;
 extern char keynametext[MXNAME];
 extern char keyfile[MXNAME];
 extern char keysecret[MXNAME];

@@ -916,10 +916,13 @@ flush_lookup_list(void) {
 	while (l != NULL) {
 		q = ISC_LIST_HEAD(l->q);
 		while (q != NULL) {
-			if (q->handle != NULL) {
-				isc_nm_cancelread(q->handle);
-				isc_nmhandle_detach(&q->handle);
+			if (q->sock != NULL) {
+				isc_socket_cancel(q->sock, NULL,
+						  ISC_SOCKCANCEL_ALL);
+				isc_socket_detach(&q->sock);
 			}
+			isc_buffer_invalidate(&q->recvbuf);
+			isc_buffer_invalidate(&q->lengthbuf);
 			qp = q;
 			q = ISC_LIST_NEXT(q, link);
 			ISC_LIST_DEQUEUE(l->q, qp, link);
