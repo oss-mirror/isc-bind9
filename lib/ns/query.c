@@ -5703,7 +5703,10 @@ fetch_callback(isc_task_t *task, isc_event_t *event) {
 	}
 	UNLOCK(&client->manager->reclock);
 
-	isc_nmhandle_attach(client->handle, &client->reqhandle);
+	if (client->reqhandle == NULL) {
+		isc_nmhandle_attach(client->handle, &client->reqhandle);
+	}
+
 	isc_nmhandle_detach(&client->fetchhandle);
 
 	client->query.attributes &= ~NS_QUERYATTR_RECURSING;

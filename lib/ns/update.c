@@ -1587,7 +1587,6 @@ respond(ns_client_t *client, isc_result_t result) {
 	client->message->rcode = dns_result_torcode(result);
 
 	ns_client_send(client);
-	isc_nmhandle_detach(&client->reqhandle);
 	return;
 
 msg_failure:
@@ -3541,7 +3540,6 @@ updatedone_action(isc_task_t *task, isc_event_t *event) {
 
 	client->nupdates--;
 
-	isc_nmhandle_attach(client->handle, &client->reqhandle);
 	respond(client, uev->result);
 
 	isc_event_free(&event);
@@ -3617,17 +3615,16 @@ forward_action(isc_task_t *task, isc_event_t *event) {
 
 	result = dns_zone_forwardupdate(zone, client->message, forward_callback,
 					event);
-	if (result == ISC_R_SUCCESS) {
+	if (result != ISC_R_SUCCESS) {
+		uev->ev_type = DNS_EVENT_UPDATEDONE;
+		uev->ev_action = forward_fail;
+		isc_task_send(client->task, &event);
+		inc_stats(client, zone, ns_statscounter_updatefwdfail);
+		dns_zone_detach(&zone);
+	} else {
 		inc_stats(client, zone, ns_statscounter_updatereqfwd);
-		isc_task_detach(&task);
-		return;
 	}
 
-	uev->ev_type = DNS_EVENT_UPDATEDONE;
-	uev->ev_action = forward_fail;
-	isc_task_send(client->task, &event);
-	inc_stats(client, zone, ns_statscounter_updatefwdfail);
-	dns_zone_detach(&zone);
 	isc_task_detach(&task);
 }
 
