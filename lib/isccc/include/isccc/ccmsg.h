@@ -45,6 +45,7 @@ typedef struct isccc_ccmsg {
 	unsigned int	maxsize;
 	isc_mem_t *	mctx;
 	isc_nmhandle_t *handle;
+	isc_nmhandle_t *readhandle;
 	isc_nm_cb_t	cb;
 	void *		cbarg;
 	bool		reading;

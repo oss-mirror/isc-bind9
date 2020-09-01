@@ -108,7 +108,9 @@ recv_data(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 done:
 	isc_nm_pauseread(handle);
 	ccmsg->cb(handle, ccmsg->result, ccmsg->cbarg);
-	isc_nmhandle_detach(&handle);
+	if (ccmsg->readhandle != NULL) {
+		isc_nmhandle_detach(&ccmsg->readhandle);
+	}
 }
 
 void
@@ -148,20 +150,21 @@ isccc_ccmsg_readmessage(isccc_ccmsg_t *ccmsg, isc_nm_cb_t cb, void *cbarg) {
 	ccmsg->cbarg = cbarg;
 	ccmsg->result = ISC_R_UNEXPECTED; /* unknown right now */
 	ccmsg->length_received = false;
-	isc_nmhandle_t *cbhandle = NULL;
 
-	isc_nmhandle_attach(ccmsg->handle, &cbhandle);
+	if (ccmsg->readhandle == NULL) {
+		isc_nmhandle_attach(ccmsg->handle, &ccmsg->readhandle);
+	}
 	if (ccmsg->reading) {
-		result = isc_nm_resumeread(cbhandle);
+		result = isc_nm_resumeread(ccmsg->readhandle);
 	} else {
-		result = isc_nm_read(cbhandle, recv_data, ccmsg);
+		result = isc_nm_read(ccmsg->readhandle, recv_data, ccmsg);
 		ccmsg->reading = true;
 	}
 	if (result == ISC_R_CANCELED) {
 		ccmsg->reading = false;
 	} else if (result != ISC_R_SUCCESS) {
 		ccmsg->reading = false;
-		isc_nmhandle_detach(&cbhandle);
+		isc_nmhandle_detach(&ccmsg->readhandle);
 	}
 
 	return (result);
@@ -172,7 +175,9 @@ isccc_ccmsg_cancelread(isccc_ccmsg_t *ccmsg) {
 	REQUIRE(VALID_CCMSG(ccmsg));
 
 	if (ccmsg->reading) {
-		isc_nm_cancelread(ccmsg->handle);
+		isc_nm_cancelread(ccmsg->readhandle);
+		isc_nmhandle_detach(&ccmsg->readhandle);
+		ccmsg->reading = false;
 	}
 }
 
