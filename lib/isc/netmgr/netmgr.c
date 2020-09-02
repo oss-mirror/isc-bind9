@@ -1226,6 +1226,10 @@ nmhandle_deactivate(isc_nmsocket_t *sock, isc_nmhandle_t *handle) {
 	INSIST(sock->ah_size > handle->ah_pos);
 	INSIST(atomic_load(&sock->ah) > 0);
 
+#ifdef NETMGR_TRACE
+	ISC_LIST_UNLINK(sock->active_handles, handle, active_link);
+#endif
+
 	sock->ah_handles[handle->ah_pos] = NULL;
 	handlenum = atomic_fetch_sub(&sock->ah, 1) - 1;
 	sock->ah_frees[handlenum] = handle->ah_pos;
@@ -1236,9 +1240,6 @@ nmhandle_deactivate(isc_nmsocket_t *sock, isc_nmhandle_t *handle) {
 	if (!reuse) {
 		nmhandle_free(sock, handle);
 	}
-#ifdef NETMGR_TRACE
-	ISC_LIST_UNLINK(sock->active_handles, handle, active_link);
-#endif
 	UNLOCK(&sock->lock);
 }
 
