@@ -33,6 +33,10 @@
 #include "netmgr-int.h"
 #include "uv-compat.h"
 
+#ifdef NETMGR_TRACE
+#include <execinfo.h>
+#endif
+
 /*%
  * How many isc_nmhandles and isc_nm_uvreqs will we be
  * caching for reuse in a socket.
@@ -156,6 +160,10 @@ isc_nm_start(isc_mem_t *mctx, uint32_t workers) {
 	atomic_init(&mgr->maxudp, 0);
 	atomic_init(&mgr->paused, false);
 	atomic_init(&mgr->interlocked, false);
+
+#ifdef NETMGR_TRACE
+	ISC_LIST_INIT(mgr->active_sockets);
+#endif
 
 	/*
 	 * Default TCP timeout values.
@@ -423,7 +431,9 @@ isc_nm_destroy(isc_nm_t **mgr0) {
 		usleep(10000);
 #endif /* ifdef WIN32 */
 	}
-
+#ifdef NETMGR_TRACE
+	INSIST(ISC_LIST_EMPTY(mgr->active_sockets));
+#endif
 	INSIST(counter <= 1000);
 
 	/*
@@ -792,7 +802,11 @@ nmsocket_cleanup(isc_nmsocket_t *sock, bool dofree) {
 	isc_mem_free(sock->mgr->mctx, sock->ah_handles);
 	isc_mutex_destroy(&sock->lock);
 	isc_condition_destroy(&sock->cond);
-
+#ifdef NETMGR_TRACE
+	LOCK(&sock->mgr->lock);
+	ISC_LIST_UNLINK(sock->mgr->active_sockets, sock, active_link);
+	UNLOCK(&sock->mgr->lock);
+#endif
 	if (dofree) {
 		isc_nm_t *mgr = sock->mgr;
 		isc_mem_put(mgr->mctx, sock, sizeof(*sock));
@@ -950,6 +964,15 @@ isc__nmsocket_init(isc_nmsocket_t *sock, isc_nm_t *mgr, isc_nmsocket_type type,
 				  .inactivereqs = isc_astack_new(
 					  mgr->mctx, ISC_NM_REQS_STACK_SIZE) };
 
+#ifdef NETMGR_TRACE
+	sock->backtrace_size = backtrace(sock->backtrace, TRACE_SIZE);
+	ISC_LINK_INIT(sock, active_link);
+	ISC_LIST_INIT(sock->active_handles);
+	LOCK(&mgr->lock);
+	ISC_LIST_APPEND(mgr->active_sockets, sock, active_link);
+	UNLOCK(&mgr->lock);
+#endif
+
 	isc_nm_attach(mgr, &sock->mgr);
 	sock->uv_handle.handle.data = sock;
 
@@ -1038,6 +1061,9 @@ alloc_handle(isc_nmsocket_t *sock) {
 			    sizeof(isc_nmhandle_t) + sock->extrahandlesize);
 
 	*handle = (isc_nmhandle_t){ .magic = NMHANDLE_MAGIC };
+#ifdef NETMGR_TRACE
+	ISC_LINK_INIT(handle, active_link);
+#endif
 	isc_refcount_init(&handle->references, 1);
 
 	return (handle);
@@ -1062,6 +1088,10 @@ isc__nmhandle_get(isc_nmsocket_t *sock, isc_sockaddr_t *peer,
 	}
 
 	isc__nmsocket_attach(sock, &handle->sock);
+
+#ifdef NETMGR_TRACE
+	handle->backtrace_size = backtrace(handle->backtrace, TRACE_SIZE);
+#endif
 
 	if (peer != NULL) {
 		memcpy(&handle->peer, peer, sizeof(isc_sockaddr_t));
@@ -1103,6 +1133,9 @@ isc__nmhandle_get(isc_nmsocket_t *sock, isc_sockaddr_t *peer,
 	INSIST(sock->ah_handles[pos] == NULL);
 	sock->ah_handles[pos] = handle;
 	handle->ah_pos = pos;
+#ifdef NETMGR_TRACE
+	ISC_LIST_APPEND(sock->active_handles, handle, active_link);
+#endif
 	UNLOCK(&sock->lock);
 
 	if (sock->type == isc_nm_tcpsocket ||
@@ -1163,6 +1196,10 @@ nmhandle_deactivate(isc_nmsocket_t *sock, isc_nmhandle_t *handle) {
 	INSIST(sock->ah_handles[handle->ah_pos] == handle);
 	INSIST(sock->ah_size > handle->ah_pos);
 	INSIST(atomic_load(&sock->ah) > 0);
+
+#ifdef NETMGR_TRACE
+	ISC_LIST_UNLINK(sock->active_handles, handle, active_link);
+#endif
 
 	sock->ah_handles[handle->ah_pos] = NULL;
 	handlenum = atomic_fetch_sub(&sock->ah, 1) - 1;
