@@ -24,6 +24,7 @@
 #include <isc/log.h>
 #include <isc/mem.h>
 #include <isc/net.h>
+#include <isc/netmgr.h>
 #include <isc/print.h>
 #include <isc/random.h>
 #include <isc/refcount.h>
@@ -89,6 +90,7 @@ static uint32_t serial;
 static bool quiet = false;
 static bool showresult = false;
 static bool shuttingdown = false;
+isc_nmhandle_t *readhandle = NULL, *sendhandle = NULL;
 
 static void
 rndc_startconnect(isc_sockaddr_t *addr);
@@ -288,19 +290,21 @@ get_addresses(const char *host, in_port_t port) {
 
 static void
 rndc_senddone(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
+	REQUIRE(handle == sendhandle);
+
 	UNUSED(arg);
 
 	if (result != ISC_R_SUCCESS) {
 		fatal("send failed: %s", isc_result_totext(result));
 	}
 
+	isc_nmhandle_detach(&sendhandle);
 	if (atomic_fetch_sub_release(&sends, 1) == 1 &&
 	    atomic_load_acquire(&recvs) == 0)
 	{
 		shuttingdown = true;
 		isc_task_shutdown(rndc_task);
 		isc_app_shutdown();
-		isc_nmhandle_detach(&handle);
 	}
 }
 
@@ -318,7 +322,10 @@ rndc_recvdone(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 	atomic_fetch_sub_release(&recvs, 1);
 
 	if (shuttingdown && (result == ISC_R_EOF || result == ISC_R_CANCELED)) {
-		isc_nmhandle_detach(&handle);
+		if (readhandle != NULL) {
+			INSIST(handle == readhandle);
+			isc_nmhandle_detach(&readhandle);
+		}
 		return;
 	} else if (result == ISC_R_EOF) {
 		fatal("connection to remote host closed.\n"
@@ -378,6 +385,7 @@ rndc_recvdone(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 
 	if (atomic_load_acquire(&sends) == 0 &&
 	    atomic_load_acquire(&recvs) == 0) {
+		isc_nmhandle_detach(&readhandle);
 		shuttingdown = true;
 		isc_task_shutdown(rndc_task);
 		isc_app_shutdown();
@@ -397,12 +405,13 @@ rndc_recvnonce(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 	isccc_sexpr_t *data;
 	isc_buffer_t b;
 
+	REQUIRE(handle == readhandle);
 	REQUIRE(ccmsg != NULL);
 
 	atomic_fetch_sub_release(&recvs, 1);
 
 	if (shuttingdown && result == ISC_R_EOF) {
-		isc_nmhandle_detach(&handle);
+		isc_nmhandle_detach(&readhandle);
 		return;
 	} else if (result == ISC_R_EOF) {
 		fatal("connection to remote host closed.\n"
@@ -470,6 +479,9 @@ rndc_recvnonce(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 	   isccc_ccmsg_readmessage(ccmsg, rndc_recvdone, ccmsg));
 	atomic_fetch_add_relaxed(&recvs, 1);
 
+	if (sendhandle == NULL) {
+		isc_nmhandle_attach(handle, &sendhandle);
+	}
 	DO("send message", isc_nm_send(handle, &r, rndc_senddone, NULL));
 	atomic_fetch_add_relaxed(&sends, 1);
 
@@ -533,14 +545,17 @@ rndc_connected(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 	isccc_ccmsg_init(rndc_mctx, handle, ccmsg);
 	isccc_ccmsg_setmaxsize(ccmsg, 1024 * 1024);
 
-	isc_nmhandle_t *cbhandle = NULL;
-	isc_nmhandle_attach(handle, &cbhandle);
-
+	if (readhandle == NULL) {
+		isc_nmhandle_attach(handle, &readhandle);
+	}
 	DO("schedule recv",
 	   isccc_ccmsg_readmessage(ccmsg, rndc_recvnonce, ccmsg));
 	atomic_fetch_add_relaxed(&recvs, 1);
 
-	DO("send message", isc_nm_send(cbhandle, &r, rndc_senddone, NULL));
+	if (sendhandle == NULL) {
+		isc_nmhandle_attach(handle, &sendhandle);
+	}
+	DO("send message", isc_nm_send(handle, &r, rndc_senddone, NULL));
 	atomic_fetch_add_relaxed(&sends, 1);
 
 	isccc_sexpr_free(&request);

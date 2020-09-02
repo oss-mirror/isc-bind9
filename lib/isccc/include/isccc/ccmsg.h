@@ -45,7 +45,6 @@ typedef struct isccc_ccmsg {
 	unsigned int	maxsize;
 	isc_mem_t *	mctx;
 	isc_nmhandle_t *handle;
-	isc_nmhandle_t *readhandle;
 	isc_nm_cb_t	cb;
 	void *		cbarg;
 	bool		reading;
@@ -59,7 +58,9 @@ void
 isccc_ccmsg_init(isc_mem_t *mctx, isc_nmhandle_t *handle, isccc_ccmsg_t *ccmsg);
 /*%
  * Associate a cc message state with a given memory context and
- * netmgr handle.
+ * netmgr handle. (Note that the caller must hold a reference to
+ * the handle during asynchronous ccmsg operations; the ccmsg code
+ * does not hold the reference itself.)
  *
  * Requires:
  *
