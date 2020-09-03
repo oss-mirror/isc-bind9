@@ -251,9 +251,6 @@ dnslisten_readcb(isc_nmhandle_t *handle, isc_result_t eresult,
 
 	if (region == NULL || eresult != ISC_R_SUCCESS) {
 		/* Connection closed */
-		if (eresult != ISC_R_CANCELED) {
-			isc_nmhandle_detach(&handle);
-		}
 		dnssock->result = eresult;
 		if (dnssock->self != NULL) {
 			isc__nmsocket_detach(&dnssock->self);
@@ -262,6 +259,7 @@ dnslisten_readcb(isc_nmhandle_t *handle, isc_result_t eresult,
 		if (dnssock->outerhandle != NULL) {
 			isc_nmhandle_detach(&dnssock->outerhandle);
 		}
+		isc_nmhandle_detach(&handle);
 		return;
 	}
 
