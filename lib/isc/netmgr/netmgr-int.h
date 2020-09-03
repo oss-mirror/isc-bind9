@@ -52,8 +52,12 @@
 #define ISC_NETMGR_RECVBUF_SIZE (65536)
 #endif
 
-#define NETMGR_TRACE 1
-
+/* 
+ * Define NETMGR_TRACE to activate tracing of handles and sockets.
+ * This will impair performance but enables us to quickly determine,
+ * if netmgr resources haven't been cleaned up on shutdown, which ones
+ * are still in use.
+ */
 #ifdef NETMGR_TRACE
 #define TRACE_SIZE 8
 #endif
