@@ -398,10 +398,12 @@ control_recvmessage(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 			listener->controls->shuttingdown = true;
 			isc_task_purge(named_g_server->task, NULL,
 				       NAMED_EVENT_COMMAND, NULL);
-		} else if (result == ISC_R_EOF) {
-			isc_nmhandle_detach(&conn->readhandle);
-		} else {
+		} else if (result != ISC_R_EOF) {
 			log_invalid(&conn->ccmsg, result);
+		}
+
+		if (conn->readhandle != NULL) {
+			isc_nmhandle_detach(&conn->readhandle);
 		}
 
 		return;
@@ -429,6 +431,9 @@ control_recvmessage(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 			    REGION_SIZE(conn->secret));
 		if (result != ISCCC_R_BADAUTH) {
 			log_invalid(&conn->ccmsg, result);
+			if (conn->readhandle != NULL) {
+				isc_nmhandle_detach(&conn->readhandle);
+			}
 			return;
 		}
 	}
@@ -539,6 +544,10 @@ cleanup:
 	}
 	if (conn->text != NULL) {
 		isc_buffer_free(&conn->text);
+	}
+
+	if (conn->readhandle != NULL) {
+		isc_nmhandle_detach(&conn->readhandle);
 	}
 }
 
