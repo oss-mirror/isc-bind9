@@ -32,9 +32,9 @@
  */
 
 extern void
-__wrap_isc_nmhandle_unref(isc_nmhandle_t *handle);
+__wrap_isc_nmhandle_detach(isc_nmhandle_t **handlep);
 
 void
-isc_nmhandle_unref(isc_nmhandle_t *handle) {
-	__wrap_isc_nmhandle_unref(handle);
+__wrap_isc_nmhandle_detach(isc_nmhandle_t **handlep) {
+	__wrap_isc_nmhandle_detach(handlep);
 }

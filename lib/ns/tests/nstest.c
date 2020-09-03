@@ -78,10 +78,11 @@ atomic_uint_fast32_t client_refs[32];
 atomic_uintptr_t client_addrs[32];
 
 void
-__wrap_isc_nmhandle_unref(isc_nmhandle_t *handle);
+__wrap_isc_nmhandle_detach(isc_nmhandle_t **handlep);
 
 void
-__wrap_isc_nmhandle_unref(isc_nmhandle_t *handle) {
+__wrap_isc_nmhandle_detach(isc_nmhandle_t **handlep) {
+	isc_nmhandle_t *handle = *handlep;
 	ns_client_t *client = (ns_client_t *)handle;
 	int i;
 
@@ -99,6 +100,8 @@ __wrap_isc_nmhandle_unref(isc_nmhandle_t *handle) {
 		ns__client_put_cb(client);
 		isc_mem_put(mctx, client, sizeof(ns_client_t));
 	}
+
+	*handlep = NULL;
 	return;
 }
 
@@ -813,14 +816,14 @@ ns_test_qctx_create(const ns_test_qctx_create_params_t *params,
 	 * Reference count for "client" is now at 2, so decrement it in order
 	 * for it to drop to zero when "qctx" gets destroyed.
 	 */
-	isc_nmhandle_unref(client->handle);
+	isc_nmhandle_detach(&client->handle);
 
 	return (ISC_R_SUCCESS);
 
 destroy_query:
 	dns_message_destroy(&client->message);
 detach_client:
-	isc_nmhandle_unref(client->handle);
+	isc_nmhandle_detach(&client->handle);
 
 	return (result);
 }
@@ -842,7 +845,7 @@ ns_test_qctx_destroy(query_ctx_t **qctxp) {
 		dns_db_detach(&qctx->db);
 	}
 	if (qctx->client != NULL) {
-		isc_nmhandle_unref(qctx->client->handle);
+		isc_nmhandle_detach(&qctx->client->handle);
 	}
 
 	isc_mem_put(mctx, qctx, sizeof(*qctx));

@@ -1192,7 +1192,7 @@ failure:
 			      NS_LOGMODULE_XFER_OUT, ISC_LOG_DEBUG(3),
 			      "zone transfer setup failed");
 		ns_client_error(client, result);
-		isc_nmhandle_unref(client->handle);
+		isc_nmhandle_detach(&client->handle);
 	}
 }
 
@@ -1580,7 +1580,7 @@ sendstream(xfrout_ctx_t *xfr) {
 		xfrout_log(xfr, ISC_LOG_DEBUG(8), "sending IXFR UDP response");
 		ns_client_send(xfr->client);
 		xfr->stream->methods->pause(xfr->stream);
-		isc_nmhandle_unref(xfr->client->handle);
+		isc_nmhandle_detach(&xfr->client->handle);
 		xfrout_ctx_destroy(&xfr);
 		return;
 	}
@@ -1718,7 +1718,7 @@ xfrout_senddone(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 
 		xfrout_ctx_destroy(&xfr);
 		/* We're done, unreference the handle */
-		isc_nmhandle_unref(handle);
+		isc_nmhandle_detach(&handle);
 	}
 }
 
@@ -1744,7 +1744,7 @@ xfrout_maybe_destroy(xfrout_ctx_t *xfr) {
 	} else {
 #endif /* if 0 */
 	ns_client_drop(xfr->client, ISC_R_CANCELED);
-	isc_nmhandle_unref(xfr->client->handle);
+	isc_nmhandle_detach(&xfr->client->handle);
 	xfrout_ctx_destroy(&xfr);
 #if 0
 }
