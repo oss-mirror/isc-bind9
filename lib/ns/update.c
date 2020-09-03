@@ -1567,8 +1567,8 @@ send_update_event(ns_client_t *client, dns_zone_t *zone) {
 	client->nupdates++;
 	event->ev_arg = client;
 
-	if (client->cbhandle == NULL) {
-		isc_nmhandle_attach(client->handle, &client->cbhandle);
+	if (client->updatehandle == NULL) {
+		isc_nmhandle_attach(client->handle, &client->updatehandle);
 	}
 	dns_zone_gettask(zone, &zonetask);
 	isc_task_send(zonetask, ISC_EVENT_PTR(&event));
@@ -3502,8 +3502,8 @@ common:
 	uev->ev_type = DNS_EVENT_UPDATEDONE;
 	uev->ev_action = updatedone_action;
 
-	if (client->cbhandle == NULL) {
-		isc_nmhandle_attach(client->handle, &client->cbhandle);
+	if (client->updatehandle == NULL) {
+		isc_nmhandle_attach(client->handle, &client->updatehandle);
 	}
 	isc_task_send(client->task, &event);
 
@@ -3520,7 +3520,7 @@ updatedone_action(isc_task_t *task, isc_event_t *event) {
 
 	REQUIRE(event->ev_type == DNS_EVENT_UPDATEDONE);
 	REQUIRE(task == client->task);
-	REQUIRE(client->cbhandle == client->handle);
+	REQUIRE(client->updatehandle == client->handle);
 
 	INSIST(client->nupdates > 0);
 	switch (uev->result) {
@@ -3543,7 +3543,7 @@ updatedone_action(isc_task_t *task, isc_event_t *event) {
 	respond(client, uev->result);
 
 	isc_event_free(&event);
-	isc_nmhandle_detach(&client->cbhandle);
+	isc_nmhandle_detach(&client->updatehandle);
 }
 
 /*%
@@ -3559,7 +3559,7 @@ forward_fail(isc_task_t *task, isc_event_t *event) {
 	client->nupdates--;
 	respond(client, DNS_R_SERVFAIL);
 	isc_event_free(&event);
-	isc_nmhandle_detach(&client->cbhandle);
+	isc_nmhandle_detach(&client->updatehandle);
 }
 
 static void
@@ -3580,8 +3580,8 @@ forward_callback(void *arg, isc_result_t result, dns_message_t *answer) {
 		inc_stats(client, zone, ns_statscounter_updaterespfwd);
 	}
 
-	if (client->cbhandle == NULL) {
-		isc_nmhandle_attach(client->handle, &client->cbhandle);
+	if (client->updatehandle == NULL) {
+		isc_nmhandle_attach(client->handle, &client->updatehandle);
 	}
 	isc_task_send(client->task, ISC_EVENT_PTR(&uev));
 	dns_zone_detach(&zone);
@@ -3599,7 +3599,7 @@ forward_done(isc_task_t *task, isc_event_t *event) {
 	ns_client_sendraw(client, uev->answer);
 	dns_message_destroy(&uev->answer);
 	isc_event_free(&event);
-	isc_nmhandle_detach(&client->cbhandle);
+	isc_nmhandle_detach(&client->updatehandle);
 }
 
 static void
@@ -3609,8 +3609,8 @@ forward_action(isc_task_t *task, isc_event_t *event) {
 	ns_client_t *client = (ns_client_t *)event->ev_arg;
 	isc_result_t result;
 
-	if (client->cbhandle == NULL) {
-		isc_nmhandle_attach(client->handle, &client->cbhandle);
+	if (client->updatehandle == NULL) {
+		isc_nmhandle_attach(client->handle, &client->updatehandle);
 	}
 
 	result = dns_zone_forwardupdate(zone, client->message, forward_callback,
@@ -3655,8 +3655,8 @@ send_forward_event(ns_client_t *client, dns_zone_t *zone) {
 		      namebuf, classbuf);
 
 	dns_zone_gettask(zone, &zonetask);
-	if (client->cbhandle == NULL) {
-		isc_nmhandle_attach(client->handle, &client->cbhandle);
+	if (client->updatehandle == NULL) {
+		isc_nmhandle_attach(client->handle, &client->updatehandle);
 	}
 	isc_task_send(zonetask, ISC_EVENT_PTR(&event));
 

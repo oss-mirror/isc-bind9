@@ -409,15 +409,11 @@ ns_client_send(ns_client_t *client) {
 	isc_region_t zr;
 #endif /* HAVE_DNSTAP */
 
+	REQUIRE(NS_CLIENT_VALID(client));
+
 	/*
 	 * XXXWPK TODO
 	 * Delay the response according to the -T delay option
-	 */
-
-	REQUIRE(NS_CLIENT_VALID(client));
-	/*
-	 * We need to do it to make sure the client and handle
-	 * won't disappear from under us with client_senddone.
 	 */
 
 	env = ns_interfacemgr_getaclenv(client->manager->interface->mgr);

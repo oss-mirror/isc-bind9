@@ -161,7 +161,9 @@ isc_nm_start(isc_mem_t *mctx, uint32_t workers) {
 	atomic_init(&mgr->paused, false);
 	atomic_init(&mgr->interlocked, false);
 
+#ifdef NETMGR_TRACE
 	ISC_LIST_INIT(mgr->active_sockets);
+#endif
 
 	/*
 	 * Default TCP timeout values.
@@ -1172,6 +1174,7 @@ isc__nmhandle_get(isc_nmsocket_t *sock, isc_sockaddr_t *peer,
 	    (sock->type == isc_nm_udpsocket && sock->client))
 	{
 		INSIST(sock->statichandle == NULL);
+		/* Note: statichandle is assigned, not attached. */
 		sock->statichandle = handle;
 	}
 
@@ -1246,15 +1249,18 @@ nmhandle_deactivate(isc_nmsocket_t *sock, isc_nmhandle_t *handle) {
 void
 isc_nmhandle_detach(isc_nmhandle_t **handlep) {
 	isc_nmsocket_t *sock = NULL;
-	REQUIRE(handlep != NULL);
-	isc_nmhandle_t *handle = *handlep;
-	*handlep = NULL;
+	isc_nmhandle_t *handle = NULL;
 
-	REQUIRE(VALID_NMHANDLE(handle));
+	REQUIRE(handlep != NULL);
+	REQUIRE(VALID_NMHANDLE(*handlep));
+
+	handle = *handlep;
+	*handlep = NULL;
 
 	if (isc_refcount_decrement(&handle->references) > 1) {
 		return;
 	}
+
 	/* We need an acquire memory barrier here */
 	(void)isc_refcount_current(&handle->references);
 
@@ -1289,6 +1295,7 @@ isc_nmhandle_detach(isc_nmhandle_t **handlep) {
 	}
 
 	if (handle == sock->statichandle) {
+		/* statichandle is assigned, not attached. */
 		sock->statichandle = NULL;
 	}
 
