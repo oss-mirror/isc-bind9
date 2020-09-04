@@ -364,12 +364,18 @@ control_command(isc_task_t *task, isc_event_t *event) {
 
 	UNUSED(task);
 
+	if (listener->controls->shuttingdown) {
+		goto done;
+	}
+
 	conn->result = named_control_docommand(conn->request,
 					       listener->readonly, &conn->text);
 	control_respond(conn->handle, conn->result, conn);
 
-	isc_nmhandle_detach(&conn->cmdhandle);
-
+done:
+	if (conn->cmdhandle != NULL) {
+		isc_nmhandle_detach(&conn->cmdhandle);
+	}
 	isc_event_free(&event);
 }
 
@@ -390,6 +396,9 @@ control_recvmessage(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 		if (conn->readhandle != NULL) {
 			isc_nmhandle_detach(&conn->readhandle);
 		}
+		if (conn->cmdhandle != NULL) {
+			isc_nmhandle_detach(&conn->cmdhandle);
+		}
 		return;
 	}
 
@@ -401,6 +410,9 @@ control_recvmessage(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 			listener->controls->shuttingdown = true;
 			isc_task_purge(named_g_server->task, NULL,
 				       NAMED_EVENT_COMMAND, NULL);
+			if (conn->cmdhandle != NULL) {
+				isc_nmhandle_detach(&conn->cmdhandle);
+			}
 		} else if (result != ISC_R_EOF) {
 			log_invalid(&conn->ccmsg, result);
 		}
