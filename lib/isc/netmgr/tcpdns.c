@@ -270,6 +270,10 @@ dnslisten_readcb(isc_nmhandle_t *handle, isc_result_t eresult,
 	if (region == NULL || eresult != ISC_R_SUCCESS) {
 		/* Connection closed */
 		dnssock->result = eresult;
+		if (atomic_load(&dnssock->client) && dnssock->recv_cb != NULL) {
+			dnssock->recv_cb(dnssock->statichandle, eresult, NULL,
+					 dnssock->recv_cbarg);
+		}
 		if (dnssock->self != NULL) {
 			isc__nmsocket_detach(&dnssock->self);
 		}
@@ -277,7 +281,15 @@ dnslisten_readcb(isc_nmhandle_t *handle, isc_result_t eresult,
 		if (dnssock->outerhandle != NULL) {
 			isc_nmhandle_detach(&dnssock->outerhandle);
 		}
-		isc_nmhandle_detach(&handle);
+
+		/*
+		 * Server connections will hold two handle references when
+		 * shut down, but client (tcpdnsconnect) connections have
+		 * only one.
+		 */
+		if (!atomic_load(&dnssock->client)) {
+			isc_nmhandle_detach(&handle);
+		}
 		return;
 	}
 
@@ -672,4 +684,173 @@ isc__nm_async_tcpdnsclose(isc__networker_t *worker, isc__netievent_t *ev0) {
 	REQUIRE(worker->id == ievent->sock->tid);
 
 	tcpdns_close_direct(ievent->sock);
+}
+
+typedef struct {
+	isc_mem_t *mctx;
+	isc_nm_cb_t cb;
+	void *cbarg;
+	size_t extrahandlesize;
+} tcpconnect_t;
+
+static void
+tcpdnsconnect_cb(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
+	tcpconnect_t *conn = (tcpconnect_t *)arg;
+	isc_nm_cb_t cb = conn->cb;
+	void *cbarg = conn->cbarg;
+	size_t extrahandlesize = conn->extrahandlesize;
+	isc_nmsocket_t *dnssock = NULL;
+
+	REQUIRE(result != ISC_R_SUCCESS || VALID_NMHANDLE(handle));
+
+	isc_mem_putanddetach(&conn->mctx, conn, sizeof(*conn));
+
+	if (result != ISC_R_SUCCESS) {
+		cb(NULL, result, cbarg);
+		return;
+	}
+
+	dnssock = isc_mem_get(handle->sock->mgr->mctx, sizeof(*dnssock));
+	isc__nmsocket_init(dnssock, handle->sock->mgr, isc_nm_tcpdnssocket,
+			   handle->sock->iface);
+
+	dnssock->extrahandlesize = extrahandlesize;
+	isc_nmhandle_attach(handle, &dnssock->outerhandle);
+
+	dnssock->peer = handle->sock->peer;
+	dnssock->read_timeout = handle->sock->mgr->init;
+	dnssock->tid = isc_nm_tid();
+
+	atomic_init(&dnssock->client, true);
+	dnssock->statichandle = isc__nmhandle_get(dnssock, NULL, NULL);
+
+	uv_timer_init(&dnssock->mgr->workers[isc_nm_tid()].loop,
+		      &dnssock->timer);
+	dnssock->timer.data = dnssock;
+	dnssock->timer_initialized = true;
+	uv_timer_start(&dnssock->timer, dnstcp_readtimeout,
+		       dnssock->read_timeout, 0);
+
+	/*
+	 * The connection is now established; we start reading immediately,
+	 * before we've been asked to. We'll read and buffer at most one
+	 * packet.
+	 */
+	result = isc_nm_read(handle, dnslisten_readcb, dnssock);
+	cb(dnssock->statichandle, result, cbarg);
+	isc__nmsocket_detach(&dnssock);
+}
+
+isc_result_t
+isc_nm_tcpdnsconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
+		     isc_nm_cb_t cb, void *cbarg, size_t extrahandlesize) {
+	tcpconnect_t *conn = isc_mem_get(mgr->mctx, sizeof(tcpconnect_t));
+
+	*conn = (tcpconnect_t){ .cb = cb,
+				.cbarg = cbarg,
+				.extrahandlesize = extrahandlesize };
+	isc_mem_attach(mgr->mctx, &conn->mctx);
+	return (isc_nm_tcpconnect(mgr, local, peer, tcpdnsconnect_cb, conn, 0));
+}
+
+isc_result_t
+isc__nm_tcpdns_read(isc_nmhandle_t *handle, isc_nm_recv_cb_t cb, void *cbarg) {
+	isc_nmsocket_t *sock = handle->sock;
+	isc__netievent_tcpdnsread_t *ievent = NULL;
+	isc_nmhandle_t *eventhandle = NULL;
+
+	REQUIRE(handle == sock->statichandle);
+	REQUIRE(sock->recv_cb == NULL);
+	REQUIRE(atomic_load(&sock->client));
+
+	/*
+	 * This MUST be done asynchronously, no matter which thread we're
+	 * in. The callback function for isc_nm_read() often calls
+	 * isc_nm_read() again; if we tried to do that synchronously
+	 * we'd clash in processbuffer() and grow the stack indefinitely.
+	 */
+	ievent = isc__nm_get_ievent(sock->mgr, netievent_tcpdnsread);
+	ievent->sock = sock;
+
+	LOCK(&sock->lock);
+	sock->recv_cb = cb;
+	sock->recv_cbarg = cbarg;
+	UNLOCK(&sock->lock);
+
+	/*
+	 * Add a reference to the handle to keep it from being freed by
+	 * the caller; it will be detached in in isc__nm_async_tcpdnsread().
+	 */
+	isc_nmhandle_attach(handle, &eventhandle);
+	isc__nm_enqueue_ievent(&sock->mgr->workers[sock->tid],
+			       (isc__netievent_t *)ievent);
+	return (ISC_R_SUCCESS);
+}
+
+void
+isc__nm_async_tcpdnsread(isc__networker_t *worker, isc__netievent_t *ev0) {
+	isc_result_t result;
+	isc__netievent_tcpdnsread_t *ievent =
+		(isc__netievent_tcpdnsclose_t *)ev0;
+	isc_nmsocket_t *sock = ievent->sock;
+	isc_nmhandle_t *handle = NULL, *newhandle = NULL;
+
+	REQUIRE(VALID_NMSOCK(sock));
+	REQUIRE(worker->id == sock->tid);
+
+	handle = sock->statichandle;
+
+	if (sock->type != isc_nm_tcpdnssocket || sock->outerhandle == NULL) {
+		if (sock->recv_cb != NULL) {
+			sock->recv_cb(handle, ISC_R_NOTCONNECTED, NULL,
+				      sock->recv_cbarg);
+		}
+		isc_nmhandle_detach(&handle);
+		return;
+	}
+
+	/*
+	 * Maybe we have a packet already?
+	 */
+	result = processbuffer(sock, &newhandle);
+	if (result == ISC_R_SUCCESS) {
+		atomic_store(&sock->outerhandle->sock->processing, true);
+		if (sock->timer_initialized) {
+			uv_timer_stop(&sock->timer);
+		}
+		isc_nmhandle_detach(&newhandle);
+	} else if (sock->outerhandle != NULL) {
+		/* Restart reading, wait for the callback */
+		atomic_store(&sock->outerhandle->sock->processing, false);
+		if (sock->timer_initialized) {
+			uv_timer_start(&sock->timer, dnstcp_readtimeout,
+				       sock->read_timeout, 0);
+		}
+		isc_nm_resumeread(sock->outerhandle);
+	} else {
+		isc_nm_recv_cb_t cb = sock->recv_cb;
+		void *cbarg = sock->recv_cbarg;
+
+		isc__nmsocket_clearcb(sock);
+		cb(handle, ISC_R_NOTCONNECTED, NULL, cbarg);
+	}
+
+	isc_nmhandle_detach(&handle);
+}
+
+void
+isc__nm_tcpdns_cancelread(isc_nmhandle_t *handle) {
+	isc_nmsocket_t *sock = NULL;
+
+	REQUIRE(VALID_NMHANDLE(handle));
+
+	sock = handle->sock;
+
+	REQUIRE(sock->type == isc_nm_tcpdnssocket);
+
+	if (atomic_load(&sock->client) && sock->recv_cb != NULL) {
+		sock->recv_cb(handle, ISC_R_EOF, NULL, sock->recv_cbarg);
+		isc__nmsocket_clearcb(sock);
+		isc__nm_tcp_cancelread(sock->outerhandle);
+	}
 }

@@ -160,6 +160,7 @@ tcp_connect_cb(uv_connect_t *uvreq, int status) {
 	if (status != 0) {
 		req->cb.connect(NULL, isc__nm_uverr2result(status), req->cbarg);
 		isc__nm_uvreq_put(&req, sock);
+		isc__nmsocket_detach(&sock);
 		return;
 	}
 
@@ -262,8 +263,11 @@ isc_nm_listentcp(isc_nm_t *mgr, isc_nmiface_t *iface,
 
 	nsock = isc_mem_get(mgr->mctx, sizeof(*nsock));
 	isc__nmsocket_init(nsock, mgr, isc_nm_tcplistener, iface);
+
+	LOCK(&nsock->lock);
 	nsock->accept_cb = accept_cb;
 	nsock->accept_cbarg = accept_cbarg;
+	UNLOCK(&nsock->lock);
 	nsock->extrahandlesize = extrahandlesize;
 	nsock->backlog = backlog;
 	nsock->result = ISC_R_SUCCESS;
