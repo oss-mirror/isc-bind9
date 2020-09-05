@@ -15,6 +15,7 @@
 #include <isc/atomic.h>
 #include <isc/buffer.h>
 #include <isc/condition.h>
+#include <isc/errno.h>
 #include <isc/magic.h>
 #include <isc/mem.h>
 #include <isc/netmgr.h>
@@ -626,6 +627,25 @@ isc__nm_async_udpconnect(isc__networker_t *worker, isc__netievent_t *ev0) {
 		goto done;
 	}
 
+#if UV_VERSION_MAJOR == 1 && UV_VERSION_MINOR < 27
+	do {
+		int addrlen = (ievent->peer.type.sa.sa_family == AF_INET)
+			? sizeof(struct sockaddr_in)
+			: sizeof(struct sockaddr_in6);
+
+		errno = 0;
+		r = connect(sock->fd, &ievent->peer.type.sa, addrlen);
+	} while (r == -1 && errno == EINTR);
+
+	if (r == -1) {
+		isc__nm_incstats(sock->mgr,
+				 sock->statsindex[STATID_CONNECTFAIL]);
+		atomic_store(&sock->connect_error, true);
+		sock->result = isc_errno_toresult(errno);
+		goto done;
+	}
+	isc__nm_incstats(sock->mgr, sock->statsindex[STATID_CONNECT]);
+#else
 	r = uv_udp_connect(&sock->uv_handle.udp, &ievent->peer.type.sa);
 	if (r != 0) {
 		isc__nm_incstats(sock->mgr,
@@ -635,6 +655,7 @@ isc__nm_async_udpconnect(isc__networker_t *worker, isc__netievent_t *ev0) {
 		goto done;
 	}
 	isc__nm_incstats(sock->mgr, sock->statsindex[STATID_CONNECT]);
+#endif
 
 #ifdef ISC_RECV_BUFFER_SIZE
 	uv_recv_buffer_size(&sock->uv_handle.handle,
