@@ -72,7 +72,7 @@ struct controlconnection {
 	isc_nmhandle_t *sendhandle;
 	isc_nmhandle_t *cmdhandle;
 	isccc_ccmsg_t ccmsg;
-	bool ccmsg_valid;
+	bool reading;
 	bool sending;
 	controllistener_t *listener;
 	isccc_sexpr_t *ctrl;
@@ -224,7 +224,7 @@ control_senddone(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 
 	conn->sending = false;
 
-	if (result == ISC_R_CANCELED) {
+	if (listener->controls->shuttingdown || result == ISC_R_CANCELED) {
 		goto cleanup;
 	} else if (result != ISC_R_SUCCESS) {
 		char socktext[ISC_SOCKADDR_FORMATSIZE];
@@ -240,6 +240,7 @@ control_senddone(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 	if (conn->readhandle == NULL) {
 		isc_nmhandle_attach(handle, &conn->readhandle);
 	}
+	conn->reading = true;
 	result = isccc_ccmsg_readmessage(&conn->ccmsg, control_recvmessage,
 					 conn);
 	if (result != ISC_R_SUCCESS) {
@@ -263,6 +264,25 @@ log_invalid(isccc_ccmsg_t *ccmsg, isc_result_t result) {
 		      NAMED_LOGMODULE_CONTROL, ISC_LOG_ERROR,
 		      "invalid command from %s: %s", socktext,
 		      isc_result_totext(result));
+}
+
+static void
+conn_cleanup(controlconnection_t *conn) {
+	controllistener_t *listener = conn->listener;
+
+	if (conn->response != NULL) {
+		isccc_sexpr_free(&conn->response);
+	}
+	if (conn->request != NULL) {
+		isccc_sexpr_free(&conn->request);
+	}
+	if (conn->secret.rstart != NULL) {
+		isc_mem_put(listener->mctx, conn->secret.rstart,
+			    REGION_SIZE(conn->secret));
+	}
+	if (conn->text != NULL) {
+		isc_buffer_free(&conn->text);
+	}
 }
 
 static void
@@ -341,20 +361,7 @@ control_respond(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 	}
 
 cleanup:
-	if (conn->response != NULL) {
-		isccc_sexpr_free(&conn->response);
-	}
-	if (conn->request != NULL) {
-		isccc_sexpr_free(&conn->request);
-	}
-
-	if (conn->secret.rstart != NULL) {
-		isc_mem_put(listener->mctx, conn->secret.rstart,
-			    REGION_SIZE(conn->secret));
-	}
-	if (conn->text != NULL) {
-		isc_buffer_free(&conn->text);
-	}
+	conn_cleanup(conn);
 }
 
 static void
@@ -365,6 +372,7 @@ control_command(isc_task_t *task, isc_event_t *event) {
 	UNUSED(task);
 
 	if (listener->controls->shuttingdown) {
+		conn_cleanup(conn);
 		goto done;
 	}
 
@@ -373,10 +381,10 @@ control_command(isc_task_t *task, isc_event_t *event) {
 	control_respond(conn->handle, conn->result, conn);
 
 done:
+	isc_event_free(&event);
 	if (conn->cmdhandle != NULL) {
 		isc_nmhandle_detach(&conn->cmdhandle);
 	}
-	isc_event_free(&event);
 }
 
 static void
@@ -389,30 +397,19 @@ control_recvmessage(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 	isccc_time_t exp;
 	uint32_t nonce;
 
-	conn->ccmsg_valid = false;
+	conn->reading = false;
 
 	/* Is the server shutting down? */
 	if (listener->controls->shuttingdown) {
 		if (conn->readhandle != NULL) {
 			isc_nmhandle_detach(&conn->readhandle);
 		}
-		if (conn->cmdhandle != NULL) {
-			isc_nmhandle_detach(&conn->cmdhandle);
-		}
 		return;
 	}
 
 	if (result != ISC_R_SUCCESS) {
 		if (result == ISC_R_CANCELED) {
-			/*
-			 * Don't bother with any more scheduled command events.
-			 */
 			listener->controls->shuttingdown = true;
-			isc_task_purge(named_g_server->task, NULL,
-				       NAMED_EVENT_COMMAND, NULL);
-			if (conn->cmdhandle != NULL) {
-				isc_nmhandle_detach(&conn->cmdhandle);
-			}
 		} else if (result != ISC_R_EOF) {
 			log_invalid(&conn->ccmsg, result);
 		}
@@ -445,10 +442,7 @@ control_recvmessage(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 			    REGION_SIZE(conn->secret));
 		if (result != ISCCC_R_BADAUTH) {
 			log_invalid(&conn->ccmsg, result);
-			if (conn->readhandle != NULL) {
-				isc_nmhandle_detach(&conn->readhandle);
-			}
-			return;
+			goto cleanup;
 		}
 	}
 
@@ -520,8 +514,6 @@ control_recvmessage(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 
 	isc_buffer_allocate(listener->mctx, &conn->text, 2 * 2048);
 
-	conn->ccmsg_valid = true;
-
 	if (conn->nonce == 0) {
 		/*
 		 * Establish nonce.
@@ -545,21 +537,7 @@ control_recvmessage(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 	return;
 
 cleanup:
-	if (conn->response != NULL) {
-		isccc_sexpr_free(&conn->response);
-	}
-	if (conn->request != NULL) {
-		isccc_sexpr_free(&conn->request);
-	}
-
-	if (conn->secret.rstart != NULL) {
-		isc_mem_put(listener->mctx, conn->secret.rstart,
-			    REGION_SIZE(conn->secret));
-	}
-	if (conn->text != NULL) {
-		isc_buffer_free(&conn->text);
-	}
-
+	conn_cleanup(conn);
 	if (conn->readhandle != NULL) {
 		isc_nmhandle_detach(&conn->readhandle);
 	}
@@ -574,7 +552,7 @@ conn_reset(void *arg) {
 		isc_buffer_free(&conn->buffer);
 	}
 
-	if (conn->ccmsg_valid) {
+	if (conn->reading) {
 		isccc_ccmsg_cancelread(&conn->ccmsg);
 		return;
 	}
@@ -623,7 +601,7 @@ newconnection(controllistener_t *listener, isc_nmhandle_t *handle) {
 
 	*conn = (controlconnection_t){ .handle = handle,
 				       .listener = listener,
-				       .ccmsg_valid = true,
+				       .reading = false,
 				       .alg = DST_ALG_UNKNOWN };
 
 	isccc_ccmsg_init(listener->mctx, handle, &conn->ccmsg);
@@ -636,6 +614,7 @@ newconnection(controllistener_t *listener, isc_nmhandle_t *handle) {
 	if (conn->readhandle == NULL) {
 		isc_nmhandle_attach(handle, &conn->readhandle);
 	}
+	conn->reading = true;
 	result = isccc_ccmsg_readmessage(&conn->ccmsg, control_recvmessage,
 					 conn);
 	if (result != ISC_R_SUCCESS) {
