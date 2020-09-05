@@ -1142,7 +1142,13 @@ isc__nmhandle_get(isc_nmsocket_t *sock, isc_sockaddr_t *peer,
 	    (sock->type == isc_nm_udpsocket && atomic_load(&sock->client)))
 	{
 		INSIST(sock->statichandle == NULL);
-		/* Note: statichandle is assigned, not attached. */
+
+		/*
+		 * statichandle must be assigned, not attached;
+		 * otherwise, if a handle was detached elsewhere
+		 * it could never reach 0 references, and the
+		 * handle and socket would never be freed.
+		 */
 		sock->statichandle = handle;
 	}
 

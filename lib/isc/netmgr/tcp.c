@@ -183,8 +183,8 @@ tcp_connect_cb(uv_connect_t *uvreq, int status) {
 	isc__nmsocket_detach(&sock);
 
 	/*
-	 * If the connect callback wants to hold on to the handle,
-	 * it needs to attach to it.
+	 * The connect callback should have attached to the handle.
+	 * If it didn't, the socket will be closed now.
 	 */
 	isc_nmhandle_detach(&handle);
 }
@@ -498,8 +498,8 @@ isc__nm_async_tcpchildaccept(isc__networker_t *worker, isc__netievent_t *ev0) {
 	isc__nmsocket_detach(&csock);
 
 	/*
-	 * If the accept callback wants to hold on to the handle,
-	 * it needs to attach to it.
+	 * The accept callback should have attached to the handle.
+	 * If it didn't, the socket will be closed now.
 	 */
 	isc_nmhandle_detach(&handle);
 	return;

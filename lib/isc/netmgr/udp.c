@@ -159,7 +159,7 @@ udp_alloc_cb(uv_handle_t *handle, size_t size, uv_buf_t *buf) {
 }
 
 /*
- * Asynchrnous 'udplisten' call handler: start listening on a UDP socket.
+ * Asynchronous 'udplisten' call handler: start listening on a UDP socket.
  */
 void
 isc__nm_async_udplisten(isc__networker_t *worker, isc__netievent_t *ev0) {
@@ -311,7 +311,7 @@ isc__nm_udp_stoplistening(isc_nmsocket_t *sock) {
 }
 
 /*
- * Asynchrnous 'udpstop' call handler: stop listening on a UDP socket.
+ * Asynchronous 'udpstop' call handler: stop listening on a UDP socket.
  */
 void
 isc__nm_async_udpstop(isc__networker_t *worker, isc__netievent_t *ev0) {
@@ -395,11 +395,7 @@ udp_recv_cb(uv_udp_t *handle, ssize_t nrecv, const uv_buf_t *buf,
 
 	result = isc_sockaddr_fromsockaddr(&sockaddr, addr);
 	RUNTIME_CHECK(result == ISC_R_SUCCESS);
-	if (!atomic_load(&sock->connected)) {
-		nmhandle = isc__nmhandle_get(sock, &sockaddr, NULL);
-	} else {
-		nmhandle = sock->statichandle;
-	}
+	nmhandle = isc__nmhandle_get(sock, &sockaddr, NULL);
 	region.base = (unsigned char *)buf->base;
 	region.length = nrecv;
 

@@ -401,10 +401,7 @@ control_recvmessage(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 
 	/* Is the server shutting down? */
 	if (listener->controls->shuttingdown) {
-		if (conn->readhandle != NULL) {
-			isc_nmhandle_detach(&conn->readhandle);
-		}
-		return;
+		goto cleanup_readhandle;
 	}
 
 	if (result != ISC_R_SUCCESS) {
@@ -414,10 +411,7 @@ control_recvmessage(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 			log_invalid(&conn->ccmsg, result);
 		}
 
-		if (conn->readhandle != NULL) {
-			isc_nmhandle_detach(&conn->readhandle);
-		}
-		return;
+		goto cleanup_readhandle;
 	}
 
 	for (key = ISC_LIST_HEAD(listener->keys); key != NULL;
@@ -538,6 +532,8 @@ control_recvmessage(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 
 cleanup:
 	conn_cleanup(conn);
+
+cleanup_readhandle:
 	if (conn->readhandle != NULL) {
 		isc_nmhandle_detach(&conn->readhandle);
 	}

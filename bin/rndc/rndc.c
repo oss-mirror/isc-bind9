@@ -90,7 +90,7 @@ static uint32_t serial;
 static bool quiet = false;
 static bool showresult = false;
 static bool shuttingdown = false;
-isc_nmhandle_t *readhandle = NULL, *sendhandle = NULL;
+static isc_nmhandle_t *readhandle = NULL, *sendhandle = NULL;
 
 static void
 rndc_startconnect(isc_sockaddr_t *addr);
