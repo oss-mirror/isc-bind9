@@ -1083,7 +1083,7 @@ isc__nmhandle_get(isc_nmsocket_t *sock, isc_sockaddr_t *peer,
 	if (handle == NULL) {
 		handle = alloc_handle(sock);
 	} else {
-		isc_refcount_increment0(&handle->references);
+		isc_refcount_init(&handle->references, 1);
 		INSIST(VALID_NMHANDLE(handle));
 	}
 
