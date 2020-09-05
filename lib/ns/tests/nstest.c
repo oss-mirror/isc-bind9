@@ -78,7 +78,28 @@ atomic_uint_fast32_t client_refs[32];
 atomic_uintptr_t client_addrs[32];
 
 void
+__wrap_isc_nmhandle_attach(isc_nmhandle_t *source, isc_nmhandle_t **targetp);
+void
 __wrap_isc_nmhandle_detach(isc_nmhandle_t **handlep);
+
+void
+__wrap_isc_nmhandle_attach(isc_nmhandle_t *source, isc_nmhandle_t **targetp) {
+	ns_client_t *client = (ns_client_t *)source;
+	int i;
+
+	for (i = 0; i < 32; i++) {
+		if (atomic_load(&client_addrs[i]) == (uintptr_t)client) {
+			break;
+		}
+	}
+	INSIST(i < 32);
+	INSIST(atomic_load(&client_refs[i]) > 0);
+
+	atomic_fetch_add(&client_refs[i], 1);
+
+	*targetp = source;
+	return;
+}
 
 void
 __wrap_isc_nmhandle_detach(isc_nmhandle_t **handlep) {
@@ -91,7 +112,7 @@ __wrap_isc_nmhandle_detach(isc_nmhandle_t **handlep) {
 			break;
 		}
 	}
-	REQUIRE(i < 32);
+	INSIST(i < 32);
 
 	if (atomic_fetch_sub(&client_refs[i], 1) == 1) {
 		dns_view_detach(&client->view);
@@ -763,6 +784,7 @@ ns_test_qctx_create(const ns_test_qctx_create_params_t *params,
 		    query_ctx_t **qctxp) {
 	ns_client_t *client = NULL;
 	isc_result_t result;
+	isc_nmhandle_t *handle = NULL;
 
 	REQUIRE(params != NULL);
 	REQUIRE(params->qname != NULL);
@@ -813,10 +835,12 @@ ns_test_qctx_create(const ns_test_qctx_create_params_t *params,
 	}
 
 	/*
-	 * Reference count for "client" is now at 2, so decrement it in order
-	 * for it to drop to zero when "qctx" gets destroyed.
+	 * The reference count for "client" is now at 2, so we need to
+	 * decrement it in order for it to drop to zero when "qctx" gets
+	 * destroyed.
 	 */
-	isc_nmhandle_detach(&client->handle);
+	handle = client->handle;
+	isc_nmhandle_detach(&handle);
 
 	return (ISC_R_SUCCESS);
 

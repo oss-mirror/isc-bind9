@@ -1320,16 +1320,16 @@ AM_CONDITIONAL([HAVE_CMOCKA], [test "$with_cmocka" = "yes"])
 LD_WRAP_TESTS=false
 AC_MSG_CHECKING([for linker support for --wrap option])
 AX_SAVE_FLAGS([wrap])
-LDFLAGS="-Wl,-wrap,exit"
+LDFLAGS="-Wl,--wrap,exit"
 AC_RUN_IFELSE(
     [AC_LANG_PROGRAM([[#include <stdlib.h>
 		       void __real_exit (int status);
 		       void __wrap_exit (int status) { __real_exit (status); }
 		      ]],
 		     [[exit (1);]])],
+    [AC_MSG_RESULT([no])],
     [LD_WRAP_TESTS=true
-     AC_MSG_RESULT([yes])],
-    [AC_MSG_RESULT([no])])
+     AC_MSG_RESULT([yes])])
 AX_RESTORE_FLAGS([wrap])
 
 AM_CONDITIONAL([HAVE_LD_WRAP], [test "$LD_WRAP_TESTS" = "true"])
