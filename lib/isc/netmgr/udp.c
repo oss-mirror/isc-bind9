@@ -15,6 +15,7 @@
 #include <isc/atomic.h>
 #include <isc/buffer.h>
 #include <isc/condition.h>
+#include <isc/errno.h>
 #include <isc/magic.h>
 #include <isc/mem.h>
 #include <isc/netmgr.h>
@@ -548,7 +549,7 @@ udp_send_cb(uv_udp_send_t *req, int status) {
 static isc_result_t
 udp_send_direct(isc_nmsocket_t *sock, isc__nm_uvreq_t *req,
 		isc_sockaddr_t *peer) {
-	const struct sockaddr *sa = NULL;
+	const struct sockaddr *sa = &peer->type.sa;
 	int rv;
 
 	REQUIRE(sock->tid == isc_nm_tid());
@@ -558,7 +559,9 @@ udp_send_direct(isc_nmsocket_t *sock, isc__nm_uvreq_t *req,
 		return (ISC_R_CANCELED);
 	}
 
+#if UV_VERSION_MAJOR > 1 || UV_VERSION_MINOR >= 27
 	sa = atomic_load(&sock->connected) ? NULL : &peer->type.sa;
+#endif
 	rv = uv_udp_send(&req->uv_req.udp_send, &sock->uv_handle.udp,
 			 &req->uvbuf, 1, sa, udp_send_cb);
 	if (rv < 0) {
@@ -618,6 +621,25 @@ isc__nm_async_udpconnect(isc__networker_t *worker, isc__netievent_t *ev0) {
 		goto done;
 	}
 
+#if UV_VERSION_MAJOR == 1 && UV_VERSION_MINOR < 27
+	do {
+		int addrlen = (ievent->peer.type.sa.sa_family == AF_INET)
+				      ? sizeof(struct sockaddr_in)
+				      : sizeof(struct sockaddr_in6);
+
+		errno = 0;
+		r = connect(sock->fd, &ievent->peer.type.sa, addrlen);
+	} while (r == -1 && errno == EINTR);
+
+	if (r == -1) {
+		isc__nm_incstats(sock->mgr,
+				 sock->statsindex[STATID_CONNECTFAIL]);
+		atomic_store(&sock->connect_error, true);
+		sock->result = isc_errno_toresult(errno);
+		goto done;
+	}
+	isc__nm_incstats(sock->mgr, sock->statsindex[STATID_CONNECT]);
+#else
 	r = uv_udp_connect(&sock->uv_handle.udp, &ievent->peer.type.sa);
 	if (r != 0) {
 		isc__nm_incstats(sock->mgr,
@@ -627,6 +649,7 @@ isc__nm_async_udpconnect(isc__networker_t *worker, isc__netievent_t *ev0) {
 		goto done;
 	}
 	isc__nm_incstats(sock->mgr, sock->statsindex[STATID_CONNECT]);
+#endif
 
 #ifdef ISC_RECV_BUFFER_SIZE
 	uv_recv_buffer_size(&sock->uv_handle.handle,
