@@ -180,6 +180,19 @@ isc_nm_listenudp(isc_nm_t *mgr, isc_nmiface_t *iface, isc_nm_recv_cb_t cb,
  * can then be freed automatically when the handle is destroyed.
  */
 
+isc_result_t
+isc_nm_udpconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
+		  isc_nm_cb_t cb, void *cbarg, size_t extrahandlesize);
+/*%<
+ * Open a UDP socket, bind to 'local' and connect to 'peer', and
+ * immediately call 'cb' with a handle so that the caller can begin
+ * sending packets over UDP.
+ *
+ * When handles are allocated for the socket, 'extrasize' additional bytes
+ * can be allocated along with the handle for an associated object, which
+ * can then be freed automatically when the handle is destroyed.
+ */
+
 void
 isc_nm_stoplistening(isc_nmsocket_t *sock);
 /*%<
@@ -389,4 +402,11 @@ isc_nm_setstats(isc_nm_t *mgr, isc_stats_t *stats);
  *
  *\li	stats is a valid set of statistics counters supporting the
  *	full range of socket-related stats counter numbers.
+ */
+
+isc_result_t
+isc_nm_tcpdnsconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
+		     isc_nm_cb_t cb, void *cbarg, size_t extrahandlesize);
+/*%
+ * Establish a DNS client connection over a TCP socket.
  */

@@ -131,8 +131,11 @@ struct isc_nmiface {
 };
 
 typedef enum isc__netievent_type {
+	netievent_udpconnect,
 	netievent_udpsend,
+	netievent_udpread,
 	netievent_udpstop,
+	netievent_udpclose,
 
 	netievent_tcpconnect,
 	netievent_tcpsend,
@@ -144,6 +147,7 @@ typedef enum isc__netievent_type {
 	netievent_tcpclose,
 
 	netievent_tcpdnssend,
+	netievent_tcpdnsread,
 	netievent_tcpdnsclose,
 
 	netievent_closecb,
@@ -211,13 +215,16 @@ typedef struct isc__netievent__socket {
 } isc__netievent__socket_t;
 
 typedef isc__netievent__socket_t isc__netievent_udplisten_t;
+typedef isc__netievent__socket_t isc__netievent_udpread_t;
 typedef isc__netievent__socket_t isc__netievent_udpstop_t;
+typedef isc__netievent__socket_t isc__netievent_udpclose_t;
 typedef isc__netievent__socket_t isc__netievent_tcpstop_t;
 typedef isc__netievent__socket_t isc__netievent_tcpclose_t;
 typedef isc__netievent__socket_t isc__netievent_startread_t;
 typedef isc__netievent__socket_t isc__netievent_pauseread_t;
 typedef isc__netievent__socket_t isc__netievent_closecb_t;
 typedef isc__netievent__socket_t isc__netievent_tcpdnsclose_t;
+typedef isc__netievent__socket_t isc__netievent_tcpdnsread_t;
 
 typedef struct isc__netievent__socket_req {
 	isc__netievent_type type;
@@ -260,6 +267,12 @@ typedef struct isc__netievent_udpsend {
 	isc_sockaddr_t peer;
 	isc__nm_uvreq_t *req;
 } isc__netievent_udpsend_t;
+
+typedef struct isc__netievent_udpconnect {
+	isc__netievent_type type;
+	isc_nmsocket_t *sock;
+	isc_sockaddr_t peer;
+} isc__netievent_udpconnect_t;
 
 typedef struct isc__netievent {
 	isc__netievent_type type;
@@ -683,16 +696,34 @@ isc__nm_udp_send(isc_nmhandle_t *handle, isc_region_t *region, isc_nm_cb_t cb,
  * Back-end implementation of isc_nm_send() for UDP handles.
  */
 
+isc_result_t
+isc__nm_udp_read(isc_nmhandle_t *handle, isc_nm_recv_cb_t cb, void *cbarg);
+/*
+ * Back-end implementation of isc_nm_read() for UDP handles.
+ */
+
+void
+isc__nm_udp_close(isc_nmsocket_t *sock);
+/*%<
+ * Close a UDP socket.
+ */
+
 void
 isc__nm_udp_stoplistening(isc_nmsocket_t *sock);
 
 void
 isc__nm_async_udplisten(isc__networker_t *worker, isc__netievent_t *ev0);
+void
+isc__nm_async_udpconnect(isc__networker_t *worker, isc__netievent_t *ev0);
 
 void
 isc__nm_async_udpstop(isc__networker_t *worker, isc__netievent_t *ev0);
 void
 isc__nm_async_udpsend(isc__networker_t *worker, isc__netievent_t *ev0);
+void
+isc__nm_async_udpread(isc__networker_t *worker, isc__netievent_t *ev0);
+void
+isc__nm_async_udpclose(isc__networker_t *worker, isc__netievent_t *ev0);
 /*%<
  * Callback handlers for asynchronous UDP events (listen, stoplisten, send).
  */
@@ -792,6 +823,18 @@ isc__nm_async_tcpdnsclose(isc__networker_t *worker, isc__netievent_t *ev0);
 
 void
 isc__nm_async_tcpdnssend(isc__networker_t *worker, isc__netievent_t *ev0);
+
+void
+isc__nm_async_tcpdnsread(isc__networker_t *worker, isc__netievent_t *ev0);
+
+isc_result_t
+isc__nm_tcpdns_read(isc_nmhandle_t *handle, isc_nm_recv_cb_t cb, void *cbarg);
+
+void
+isc__nm_tcpdns_cancelread(isc_nmhandle_t *handle);
+/*%<
+ * Stop reading on a connected TCPDNS handle.
+ */
 
 #define isc__nm_uverr2result(x) \
 	isc___nm_uverr2result(x, true, __FILE__, __LINE__)
