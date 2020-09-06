@@ -2642,7 +2642,11 @@ send_done(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 		next = ISC_LIST_NEXT(query, link);
 		if (next != NULL) {
 			start_udp(next);
+		} else {
+			isc_nmhandle_detach(&query->sendhandle);
 		}
+	} else {
+		isc_nmhandle_detach(&query->sendhandle);
 	}
 
 	if (query->pending_free) {
@@ -3069,6 +3073,8 @@ connect_timeout(isc_task_t *task, isc_event_t *event) {
 			check_next_lookup(l);
 		}
 	} else {
+		isc_nmhandle_t *handle = NULL;
+
 		if (l->ns_search_only) {
 			isc_netaddr_t netaddr;
 			char buf[ISC_NETADDR_FORMATSIZE];
@@ -3082,6 +3088,12 @@ connect_timeout(isc_task_t *task, isc_event_t *event) {
 			dighost_error("connection timed out; "
 				      "no servers could be reached\n");
 		}
+
+		recvcount--;
+		handle = query->handle;
+		isc_nmhandle_detach(&handle);
+		query->waiting_senddone = false;
+		clear_query(query);
 		cancel_lookup(l);
 		check_next_lookup(l);
 		if (exitcode < 9) {
