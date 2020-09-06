@@ -160,6 +160,7 @@ tcp_connect_cb(uv_connect_t *uvreq, int status) {
 	if (status != 0) {
 		req->cb.connect(NULL, isc__nm_uverr2result(status), req->cbarg);
 		isc__nm_uvreq_put(&req, sock);
+		isc__nmsocket_detach(&sock);
 		return;
 	}
 
