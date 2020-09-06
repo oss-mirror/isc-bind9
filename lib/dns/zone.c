@@ -545,6 +545,7 @@ struct dns_zonemgr {
 	isc_taskmgr_t *taskmgr;
 	isc_timermgr_t *timermgr;
 	isc_socketmgr_t *socketmgr;
+	isc_nm_t *netmgr;
 	isc_taskpool_t *zonetasks;
 	isc_taskpool_t *loadtasks;
 	isc_task_t *task;
@@ -17101,7 +17102,7 @@ got_transfer_quota(isc_task_t *task, isc_event_t *event) {
 	INSIST(isc_sockaddr_pf(&masteraddr) == isc_sockaddr_pf(&sourceaddr));
 	result = dns_xfrin_create(zone, xfrtype, &masteraddr, &sourceaddr, dscp,
 				  zone->tsigkey, zone->mctx,
-				  zone->zmgr->timermgr, zone->zmgr->socketmgr,
+				  zone->zmgr->timermgr, zone->zmgr->netmgr,
 				  zone->task, zone_xfrdone, &zone->xfr);
 	if (result == ISC_R_SUCCESS) {
 		LOCK_ZONE(zone);
@@ -17406,7 +17407,7 @@ dns_zone_first(dns_zonemgr_t *zmgr, dns_zone_t **first) {
 isc_result_t
 dns_zonemgr_create(isc_mem_t *mctx, isc_taskmgr_t *taskmgr,
 		   isc_timermgr_t *timermgr, isc_socketmgr_t *socketmgr,
-		   dns_zonemgr_t **zmgrp) {
+		   isc_nm_t *netmgr, dns_zonemgr_t **zmgrp) {
 	dns_zonemgr_t *zmgr;
 	isc_result_t result;
 
@@ -17417,6 +17418,7 @@ dns_zonemgr_create(isc_mem_t *mctx, isc_taskmgr_t *taskmgr,
 	zmgr->taskmgr = taskmgr;
 	zmgr->timermgr = timermgr;
 	zmgr->socketmgr = socketmgr;
+	zmgr->netmgr = netmgr;
 	zmgr->zonetasks = NULL;
 	zmgr->loadtasks = NULL;
 	zmgr->mctxpool = NULL;
