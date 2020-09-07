@@ -257,6 +257,11 @@ dnslisten_readcb(isc_nmhandle_t *handle, isc_result_t eresult,
 	if (region == NULL || eresult != ISC_R_SUCCESS) {
 		/* Connection closed */
 		dnssock->result = eresult;
+		if (atomic_load(&dnssock->client) &&
+		    dnssock->rcb.recv != NULL) {
+			dnssock->rcb.recv(dnssock->statichandle, eresult,
+					  NULL, dnssock->rcbarg);
+		}
 		if (dnssock->self != NULL) {
 			isc__nmsocket_detach(&dnssock->self);
 		}
@@ -763,7 +768,10 @@ isc__nm_async_tcpdnsread(isc__networker_t *worker, isc__netievent_t *ev0) {
 	handle = sock->statichandle;
 
 	if (sock->type != isc_nm_tcpdnssocket || sock->outerhandle == NULL) {
-		sock->rcb.recv(handle, ISC_R_NOTCONNECTED, NULL, sock->rcbarg);
+		if (sock->rcb.recv != NULL) {
+			sock->rcb.recv(handle, ISC_R_NOTCONNECTED, NULL,
+				       sock->rcbarg);
+		}
 		isc_nmhandle_detach(&handle);
 		return;
 	}
