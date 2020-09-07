@@ -2671,9 +2671,6 @@ cancel_lookup(dig_lookup_t *lookup) {
 		REQUIRE(DIG_VALID_QUERY(query));
 		next = ISC_LIST_NEXT(query, link);
 		if (query->readhandle != NULL) {
-			if (query->lookup->tcp_mode) {
-				isc_nm_cancelread(query->readhandle);
-			}
 			check_if_done();
 		} else {
 			clear_query(query);
@@ -3044,19 +3041,14 @@ connect_timeout(isc_task_t *task, isc_event_t *event) {
 
 	if (try_next_server(l)) {
 		if (l->tcp_mode) {
-			if (query->handle != NULL) {
-				isc_nm_cancelread(query->handle);
-			} else {
-				clear_query(query);
-			}
+			clear_query(query);
 		}
 		UNLOCK_LOOKUP;
 		return;
 	}
 
-	if (l->tcp_mode && query->handle != NULL) {
+	if (l->tcp_mode && query->readhandle != NULL) {
 		query->timedout = true;
-		isc_nm_cancelread(query->handle);
 	}
 
 	if (l->retries > 1) {
@@ -3064,17 +3056,15 @@ connect_timeout(isc_task_t *task, isc_event_t *event) {
 			l->retries--;
 			debug("resending UDP request to first server");
 			start_udp(ISC_LIST_HEAD(l->q));
+			UNLOCK_LOOKUP;
+			return;
 		} else {
 			debug("making new TCP request, %d tries left",
 			      l->retries);
 			l->retries--;
 			requeue_lookup(l, true);
-			cancel_lookup(l);
-			check_next_lookup(l);
 		}
 	} else {
-		isc_nmhandle_t *handle = NULL;
-
 		if (l->ns_search_only) {
 			isc_netaddr_t netaddr;
 			char buf[ISC_NETADDR_FORMATSIZE];
@@ -3089,17 +3079,21 @@ connect_timeout(isc_task_t *task, isc_event_t *event) {
 				      "no servers could be reached\n");
 		}
 
-		recvcount--;
-		handle = query->handle;
-		isc_nmhandle_detach(&handle);
-		query->waiting_senddone = false;
-		clear_query(query);
-		cancel_lookup(l);
-		check_next_lookup(l);
 		if (exitcode < 9) {
 			exitcode = 9;
 		}
 	}
+
+	if (!l->tcp_mode) {
+		isc_nmhandle_t *handle = query->handle;
+		isc_nmhandle_detach(&handle);
+	}
+
+	recvcount--;
+	query->waiting_senddone = false;
+	clear_query(query);
+	cancel_lookup(l);
+	check_next_lookup(l);
 	UNLOCK_LOOKUP;
 }
 
@@ -4198,11 +4192,6 @@ cancel_all(void) {
 			nq = ISC_LIST_NEXT(q, link);
 			debug("canceling pending query %p, belonging to %p", q,
 			      current_lookup);
-			if (q->readhandle != NULL) {
-				if (q->lookup->tcp_mode) {
-					isc_nm_cancelread(q->handle);
-				}
-			}
 			clear_query(q);
 		}
 		for (q = ISC_LIST_HEAD(current_lookup->connecting); q != NULL;
@@ -4210,11 +4199,6 @@ cancel_all(void) {
 			nq = ISC_LIST_NEXT(q, clink);
 			debug("canceling connecting query %p, belonging to %p",
 			      q, current_lookup);
-			if (q->readhandle != NULL) {
-				if (q->lookup->tcp_mode) {
-					isc_nm_cancelread(q->handle);
-				}
-			}
 			clear_query(q);
 		}
 	}
