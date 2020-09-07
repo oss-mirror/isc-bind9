@@ -2612,13 +2612,19 @@ send_done(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	dig_lookup_t *l = NULL;
 
 	REQUIRE(DIG_VALID_QUERY(query));
-	REQUIRE(handle == query->sendhandle);
-	INSIST(!free_now);
 
 	debug("send_done()");
 	sendcount--;
 	debug("sendcount=%d", sendcount);
 	INSIST(sendcount >= 0);
+
+	/* Could occur on timeout or interrupt */
+	if (query->sendhandle == NULL) {
+		return;
+	}
+
+	REQUIRE(handle == query->sendhandle);
+	INSIST(!free_now);
 
 	if (eresult == ISC_R_CANCELED) {
 		isc_nmhandle_detach(&query->sendhandle);
