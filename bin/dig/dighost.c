@@ -2623,7 +2623,7 @@ send_done(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 		return;
 	}
 
-	REQUIRE(handle == query->sendhandle);
+	INSIST(handle == query->sendhandle);
 	INSIST(!free_now);
 
 	if (eresult == ISC_R_CANCELED) {
@@ -3536,7 +3536,6 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	isc_sockaddr_t peer;
 
 	REQUIRE(DIG_VALID_QUERY(query));
-	REQUIRE(handle == query->readhandle);
 	INSIST(!free_now);
 
 	debug("recv_done()");
@@ -3552,12 +3551,16 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	debug("recvcount=%d", recvcount);
 	INSIST(recvcount >= 0);
 
+	/* Could occur on timeout or interrupt */
+	if (query->readhandle == NULL) {
+		return;
+	}
+
+	INSIST(handle == query->readhandle);
+
 	TIME_NOW(&query->time_recv);
 
 	l = query->lookup;
-
-	isc_buffer_init(&b, region->base, region->length);
-	isc_buffer_add(&b, region->length);
 
 	if ((l->tcp_mode) && (query->timer != NULL)) {
 		isc_timer_touch(query->timer);
@@ -3593,6 +3596,9 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 		UNLOCK_LOOKUP;
 		return;
 	}
+
+	isc_buffer_init(&b, region->base, region->length);
+	isc_buffer_add(&b, region->length);
 
 	peer = isc_nmhandle_peeraddr(handle);
 	if (!l->tcp_mode &&
