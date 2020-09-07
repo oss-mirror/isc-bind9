@@ -3515,6 +3515,20 @@ ednsvers(dns_rdataset_t *opt) {
 }
 
 /*%
+ * Resume waiting for a response after a UDP mismatch.
+ * Because the netmgr will detached the handle after calling
+ * recv_done(), we need to attach it here to keep the socket
+ * from closing too soon.
+ */
+static void
+resume_udp(isc_nmhandle_t *handle) {
+	isc_nmhandle_t *tmp = NULL;
+
+	recvcount++;
+	isc_nmhandle_attach(handle, &tmp);
+}
+
+/*%
  * Event handler for recv complete.  Perform whatever actions are necessary,
  * based on the specifics of the user's request.
  */
@@ -4082,7 +4096,7 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	return;
 
 udp_mismatch:
-	recvcount++;
+	resume_udp(handle);
 	UNLOCK_LOOKUP;
 	return;
 }
