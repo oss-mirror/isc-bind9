@@ -18,7 +18,12 @@ EXTRA_DIST = 			\
 	CHANGES			\
 	COPYRIGHT		\
 	LICENSE			\
-	*.md
+	CODE_OF_CONDUCT.md	\
+	CONTRIBUTING.md		\
+	HISTORY.md		\
+	OPTIONS.md		\
+	PLATFORMS.md		\
+	README.md
 
 dist-hook:
 	find $(distdir) -type f -name .gitignore -delete

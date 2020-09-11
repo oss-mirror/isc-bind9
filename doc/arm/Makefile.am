@@ -45,7 +45,21 @@ EXTRA_DIST =					\
 	../misc/statistics-channels.grammar.rst	\
 	../misc/stub.zoneopt.rst		\
 	../misc/trusted-keys.grammar.rst	\
-	../notes/*.rst
+	../notes/notes-9.17.0.rst		\
+	../notes/notes-9.17.1.rst		\
+	../notes/notes-9.17.2.rst		\
+	../notes/notes-9.17.3.rst		\
+	../notes/notes-9.17.4.rst		\
+	../notes/notes-9.17.5.rst		\
+	../notes/notes-9.17.6.rst		\
+	../notes/notes-9.17.7.rst		\
+	../notes/notes-9.17.8.rst		\
+	../notes/notes-9.17.9.rst		\
+	../notes/notes-9.17.10.rst		\
+	../notes/notes-9.17.11.rst		\
+	../notes/notes-9.17.12.rst		\
+	../notes/notes-9.17.13.rst		\
+	../notes/notes-current.rst
 
 html-local:
 	$(AM_V_SPHINX)$(SPHINX_BUILD) -b html -d $(SPHINXBUILDDIR)/.doctrees/html $(ALLSPHINXOPTS) $(SPHINXBUILDDIR)/html
