@@ -191,8 +191,9 @@ manpages.stamp: $(MANPAGES_RST)
 	@rm -f manpages.tmp
 	@touch manpages.tmp
 	$(AM_V_SPHINX)$(SPHINX_BUILD) -b man -d $(SPHINXBUILDDIR)/.doctrees/man $(man_SPHINXOPTS) $(SPHINXBUILDDIR)/man
+	chmod -c u+w $(srcdir)
 	for f in $(SPHINXBUILDDIR)/man/*; do \
-	  cp -a "$$f" "$(srcdir)/$$(basename $$f)in"; \
+	  cp -af "$$f" "$(srcdir)/$$(basename $$f)in"; \
 	done
 	@mv -f manpages.tmp $@
 
