@@ -1314,7 +1314,7 @@ AM_CONDITIONAL([HAVE_XELATEX], [test "$XELATEX" != ":" && test "$LATEXMK" != ":"
 # Pull release date from CHANGES file last modification date
 # for reproducible builds
 #
-release_date=`date -r CHANGES +%Y-%m-%d`
+release_date=`date -r "${srcdir}/CHANGES" +%Y-%m-%d`
 AC_SUBST([RELEASE_DATE], $release_date)
 
 #
