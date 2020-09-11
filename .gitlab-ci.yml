@@ -485,9 +485,12 @@ tarball-create:
     - make maintainer-clean
     - autoreconf -fi
     - ./configure --enable-maintainer-mode
+    - *setup_interfaces
+    - *setup_softhsm
     - make -j${BUILD_PARALLEL_JOBS:-1} all V=1
     - if test "$(git status --porcelain | grep -Ev '\?\?' | wc -l)" -gt "0"; then git status --short; exit 1; fi
     - make -j${BUILD_PARALLEL_JOBS:-1} dist V=1
+    - DISTCHECK_CONFIGURE_FLAGS="--enable-developer" make -j${BUILD_PARALLEL_JOBS:-1} distcheck V=1
   artifacts:
     paths:
       - bind-*.tar.${TARBALL_EXTENSION}
