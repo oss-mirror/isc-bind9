@@ -4156,6 +4156,12 @@ cancel_all(void) {
 			nq = ISC_LIST_NEXT(q, link);
 			debug("canceling pending query %p, belonging to %p", q,
 			      current_lookup);
+			if (q->readhandle != NULL) {
+				isc_nmhandle_t *handle = q->readhandle;
+				isc_nmhandle_detach(&handle);
+				recvcount--;
+				debug("recvcount=%d", recvcount);
+			}
 			clear_query(q);
 		}
 		for (q = ISC_LIST_HEAD(current_lookup->connecting); q != NULL;
@@ -4165,6 +4171,8 @@ cancel_all(void) {
 			      q, current_lookup);
 			clear_query(q);
 		}
+		try_clear_lookup(current_lookup);
+		current_lookup = NULL;
 	}
 	l = ISC_LIST_HEAD(lookup_list);
 	while (l != NULL) {
@@ -4173,6 +4181,7 @@ cancel_all(void) {
 		try_clear_lookup(l);
 		l = n;
 	}
+	current_lookup = NULL;
 	UNLOCK_LOOKUP;
 }
 

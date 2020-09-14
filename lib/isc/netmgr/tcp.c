@@ -1157,7 +1157,7 @@ isc__nm_tcp_shutdown(isc_nmsocket_t *sock) {
 
 	if (sock->type == isc_nm_tcpsocket && sock->statichandle != NULL) {
 		isc_nm_recv_cb_t cb;
-		void *cbarg;
+		void *cbarg = NULL;
 
 		LOCK(&sock->lock);
 		cb = sock->recv_cb;
@@ -1184,7 +1184,7 @@ isc__nm_tcp_cancelread(isc_nmhandle_t *handle) {
 
 	if (atomic_load(&sock->client)) {
 		isc_nm_recv_cb_t cb;
-		void *cbarg;
+		void *cbarg = NULL;
 
 		LOCK(&sock->lock);
 		cb = sock->recv_cb;
@@ -1192,6 +1192,8 @@ isc__nm_tcp_cancelread(isc_nmhandle_t *handle) {
 		isc__nmsocket_clearcb(sock);
 		UNLOCK(&sock->lock);
 
-		cb(handle, ISC_R_EOF, NULL, cbarg);
+		if (cb != NULL) {
+			cb(handle, ISC_R_EOF, NULL, cbarg);
+		}
 	}
 }
