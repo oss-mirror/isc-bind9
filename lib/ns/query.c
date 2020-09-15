@@ -1630,6 +1630,7 @@ query_additional_cb(void *arg, const dns_name_t *name, dns_rdatatype_t qtype) {
 	ns_dbversion_t *dbversion = NULL;
 	dns_dbversion_t *version = NULL;
 	bool added_something = false, need_addname = false;
+	bool in_bailiwick = false;
 	dns_rdatatype_t type;
 	dns_clientinfomethods_t cm;
 	dns_clientinfo_t ci;
@@ -1676,6 +1677,25 @@ query_additional_cb(void *arg, const dns_name_t *name, dns_rdatatype_t qtype) {
 		sigrdataset = ns_client_newrdataset(client);
 		if (sigrdataset == NULL) {
 			goto cleanup;
+		}
+	}
+
+	/*
+	 * If the NS name contained in the processed NS record is not
+	 * in-bailiwick, then no glue records are strictly required to appear
+	 * in the ADDITIONAL section of the delegation response.
+	 *
+	 * If the NS name contained in the processed NS record is in-bailiwick,
+	 * record that fact in a variable so that we can use it later without
+	 * having to call dns_name_issubdomain() again.
+	 */
+	if (client->query.isreferral) {
+		dns_name_t *dsname = dns_fixedname_name(&qctx->dsname);
+
+		if (!dns_name_issubdomain(name, dsname)) {
+			qctx->glue_required = false;
+		} else {
+			in_bailiwick = true;
 		}
 	}
 
@@ -1902,6 +1922,22 @@ found:
 				}
 				ISC_LIST_APPEND(fname->list, rdataset, link);
 				added_something = true;
+				/*
+				 * Store a pointer to the first in-bailiwick
+				 * glue rdataset (and its owner name) found for
+				 * a given NS RRset.  If it turns out the
+				 * latter only contains in-bailiwick NS
+				 * records, we will use these pointers later
+				 * (in query_additional()) to ensure this
+				 * rdataset gets included in the response (or
+				 * that the response will have the TC bit set).
+				 */
+				if (in_bailiwick &&
+				    qctx->required_rdataset == NULL) {
+					qctx->required_rdataset = rdataset;
+					qctx->required_name = fname;
+				}
+
 				if (sigrdataset != NULL &&
 				    dns_rdataset_isassociated(sigrdataset)) {
 					ISC_LIST_APPEND(fname->list,
@@ -1974,6 +2010,22 @@ found:
 				}
 				ISC_LIST_APPEND(fname->list, rdataset, link);
 				added_something = true;
+				/*
+				 * Store a pointer to the first in-bailiwick
+				 * glue rdataset (and its owner name) found for
+				 * a given NS RRset.  If it turns out the
+				 * latter only contains in-bailiwick NS
+				 * records, we will use these pointers later
+				 * (in query_additional()) to ensure this
+				 * rdataset gets included in the response (or
+				 * that the response will have the TC bit set).
+				 */
+				if (in_bailiwick &&
+				    qctx->required_rdataset == NULL) {
+					qctx->required_rdataset = rdataset;
+					qctx->required_name = fname;
+				}
+
 				if (sigrdataset != NULL &&
 				    dns_rdataset_isassociated(sigrdataset)) {
 					ISC_LIST_APPEND(fname->list,
@@ -2111,10 +2163,38 @@ query_additional(query_ctx_t *qctx, dns_rdataset_t *rdataset) {
 
 regular:
 	/*
+	 * When preparing a referral response, start with the assumption that
+	 * all NS records for the delegation point are in-bailiwick and thus
+	 * glue is required.  If there is at least one NS record that is not
+	 * in-bailiwick, query_additional_cb() will set 'qctx->glue_required'
+	 * to false.
+	 */
+	if (client->query.isreferral) {
+		qctx->glue_required = true;
+	}
+	/*
 	 * Add other additional data if needed.
 	 * We don't care if dns_rdataset_additionaldata() fails.
 	 */
 	(void)dns_rdataset_additionaldata(rdataset, query_additional_cb, qctx);
+	/*
+	 * If this NS RRset contains only in-bailiwick NS records, set
+	 * DNS_RDATASETATTR_REQUIRED for the first glue record found by
+	 * query_additional_cb() and move its owner name to the beginning of
+	 * the ADDITIONAL section in order to prevent returning a non-truncated
+	 * delegation without any glue records.
+	 */
+	if (qctx->glue_required && qctx->required_rdataset != NULL) {
+		dns_message_t *msg = client->message;
+		dns_section_t section = DNS_SECTION_ADDITIONAL;
+		dns_name_t *name = qctx->required_name;
+
+		qctx->required_rdataset->attributes |=
+			DNS_RDATASETATTR_REQUIRED;
+
+		ISC_LIST_UNLINK(msg->sections[section], name, link);
+		ISC_LIST_PREPEND(msg->sections[section], name, link);
+	}
 	CTRACE(ISC_LOG_DEBUG(3), "query_additional: done");
 }
 
@@ -5312,6 +5392,9 @@ ns__query_start(query_ctx_t *qctx) {
 	qctx->zversion = NULL;
 	qctx->need_wildcardproof = false;
 	qctx->rpz = false;
+	qctx->glue_required = false;
+	qctx->required_rdataset = NULL;
+	qctx->required_name = NULL;
 
 	CALL_HOOK(NS_QUERY_START_BEGIN, qctx);
 

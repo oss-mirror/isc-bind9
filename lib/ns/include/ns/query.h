@@ -172,6 +172,10 @@ struct query_ctx {
 
 	isc_result_t result; /* query result */
 	int	     line;   /* line to report error */
+
+	bool		glue_required;
+	dns_rdataset_t *required_rdataset;
+	dns_name_t *	required_name;
 };
 
 /*
