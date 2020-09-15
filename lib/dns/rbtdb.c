@@ -10271,6 +10271,8 @@ glue_nsdname_cb(void *arg, const dns_name_t *name, dns_rdatatype_t qtype) {
 	return (result);
 }
 
+#define REQUIRED(r) (((r)->attributes & DNS_RDATASETATTR_REQUIRED) != 0)
+
 static isc_result_t
 rdataset_addglue(dns_rdataset_t *rdataset, dns_dbversion_t *version,
 		 dns_message_t *msg) {
@@ -10357,6 +10359,8 @@ restart:
 		dns_rdataset_t *rdataset_aaaa = NULL;
 		dns_rdataset_t *sigrdataset_aaaa = NULL;
 		dns_name_t *gluename = dns_fixedname_name(&ge->fixedname);
+		dns_section_t section = DNS_SECTION_ADDITIONAL;
+		bool prepend_name = false;
 
 		isc_buffer_allocate(msg->mctx, &buffer, 512);
 
@@ -10431,6 +10435,9 @@ restart:
 		if (ISC_LIKELY(rdataset_a != NULL)) {
 			dns_rdataset_clone(&ge->rdataset_a, rdataset_a);
 			ISC_LIST_APPEND(name->list, rdataset_a, link);
+			if (ISC_UNLIKELY(REQUIRED(rdataset_a))) {
+				prepend_name = true;
+			}
 		}
 
 		if (sigrdataset_a != NULL) {
@@ -10441,6 +10448,9 @@ restart:
 		if (rdataset_aaaa != NULL) {
 			dns_rdataset_clone(&ge->rdataset_aaaa, rdataset_aaaa);
 			ISC_LIST_APPEND(name->list, rdataset_aaaa, link);
+			if (ISC_UNLIKELY(REQUIRED(rdataset_aaaa))) {
+				prepend_name = true;
+			}
 		}
 		if (sigrdataset_aaaa != NULL) {
 			dns_rdataset_clone(&ge->sigrdataset_aaaa,
@@ -10448,7 +10458,22 @@ restart:
 			ISC_LIST_APPEND(name->list, sigrdataset_aaaa, link);
 		}
 
-		dns_message_addname(msg, name, DNS_SECTION_ADDITIONAL);
+		dns_message_addname(msg, name, section);
+
+		/*
+		 * When looking for required glue, dns_message_rendersection()
+		 * only processes the first rdataset associated with the first
+		 * name added to the ADDITIONAL section.  dns_message_addname()
+		 * performs an append on the list of names in a given section,
+		 * so if any glue record was marked as required, we need to
+		 * move the name it is associated with to the beginning of the
+		 * list for the ADDITIONAL section or else required glue might
+		 * not be rendered.
+		 */
+		if (prepend_name) {
+			ISC_LIST_UNLINK(msg->sections[section], name, link);
+			ISC_LIST_PREPEND(msg->sections[section], name, link);
+		}
 	}
 
 no_glue:
