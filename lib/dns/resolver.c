@@ -62,7 +62,137 @@
 #include <dns/stats.h>
 #include <dns/tsig.h>
 #include <dns/validator.h>
-#ifdef WANT_QUERYTRACE
+
+
+
+#define WANT_SPECTRACE
+#define SPECTRACE_SIZE 32768
+
+
+#ifdef WANT_SPECTRACE
+#define RTRACE(m)          \
+	do {               \
+		UNUSED(m); \
+	} while (0)
+#define RRTRACE(r, m)      \
+	do {               \
+		UNUSED(r); \
+		UNUSED(m); \
+	} while (0)
+#define FCTXTRACE(m)                                            		\
+	do {									\
+		LOCK(&fctx->spectracelock);					\
+		size_t _ss = snprintf(fctx->spectrace + fctx->spectrace_pos,	\
+				      SPECTRACE_SIZE - fctx->spectrace_pos,	\
+				      "fctx %p(%s): %s\n", fctx, fctx->info,	\
+				      (m));					\
+		if (_ss >= SPECTRACE_SIZE - fctx->spectrace_pos) {		\
+			fctx->spectrace_pos = 0;				\
+		} else {							\
+			fctx->spectrace_pos += _ss;				\
+		}								\
+		INSIST(fctx->spectrace_pos < SPECTRACE_SIZE);			\
+		UNLOCK(&fctx->spectracelock);					\
+	} while (0)
+
+#define FCTXTRACE2(m1, m2)                                      \
+	do {									\
+		LOCK(&fctx->spectracelock);					\
+		size_t _ss = snprintf(fctx->spectrace + fctx->spectrace_pos,	\
+				      SPECTRACE_SIZE - fctx->spectrace_pos,	\
+				      "fctx %p(%s): %s %s\n", fctx,		\
+				      fctx->info, (m1), (m2));			\
+		if (_ss >= SPECTRACE_SIZE - fctx->spectrace_pos) {		\
+			fctx->spectrace_pos = 0;				\
+		} else {							\
+			fctx->spectrace_pos += _ss;				\
+		}								\
+		INSIST(fctx->spectrace_pos < SPECTRACE_SIZE);			\
+		UNLOCK(&fctx->spectracelock);					\
+	} while (0)
+
+#define FCTXTRACE3(m, _res)                                              \
+	do {									\
+		LOCK(&fctx->spectracelock);					\
+		size_t _ss = snprintf(fctx->spectrace + fctx->spectrace_pos,	\
+				      SPECTRACE_SIZE - fctx->spectrace_pos,	\
+				      "fctx %p(%s): [result: %s] %s\n", fctx,	\
+				      fctx->info, isc_result_totext(_res), (m));\
+		if (_ss >= SPECTRACE_SIZE - fctx->spectrace_pos) {		\
+			fctx->spectrace_pos = 0;				\
+		} else {							\
+			fctx->spectrace_pos += _ss;				\
+		}								\
+		INSIST(fctx->spectrace_pos < SPECTRACE_SIZE);			\
+		UNLOCK(&fctx->spectracelock);					\
+	} while (0)
+#define FCTXTRACE4(m1, m2, _res)       						\
+	do {									\
+		LOCK(&fctx->spectracelock);					\
+		size_t _ss = snprintf(fctx->spectrace + fctx->spectrace_pos,	\
+				      SPECTRACE_SIZE - fctx->spectrace_pos,	\
+				      "fctx %p(%s): [result: %s] %s %s\n",	\
+				      fctx, fctx->info, isc_result_totext(_res),\
+				      (m1), (m2));				\
+		if (_ss >= SPECTRACE_SIZE - fctx->spectrace_pos) {		\
+			fctx->spectrace_pos = 0;				\
+		} else {							\
+			fctx->spectrace_pos += _ss;				\
+		}								\
+		INSIST(fctx->spectrace_pos < SPECTRACE_SIZE);			\
+		UNLOCK(&fctx->spectracelock);					\
+	} while (0)
+#define FCTXTRACE5(m1, m2, v)                                               \
+	do {									\
+		LOCK(&fctx->spectracelock);					\
+		size_t _ss = snprintf(fctx->spectrace + fctx->spectrace_pos,	\
+				      SPECTRACE_SIZE - fctx->spectrace_pos,	\
+				      "fctx %p(%s): %s %s%u\n", fctx,		\
+				      fctx->info,				\
+				      (m1), (m2), (v));				\
+		if (_ss >= SPECTRACE_SIZE - fctx->spectrace_pos) {		\
+			fctx->spectrace_pos = 0;				\
+		} else {							\
+			fctx->spectrace_pos += _ss;				\
+		}								\
+		INSIST(fctx->spectrace_pos < SPECTRACE_SIZE);			\
+		UNLOCK(&fctx->spectracelock);					\
+	} while (0)
+#define FTRACE(m)                                                          \
+	do {									\
+		fetchctx_t *_fctx = fetch->private;				\
+		LOCK(&_fctx->spectracelock);					\
+		size_t _ss = snprintf(_fctx->spectrace + _fctx->spectrace_pos,	\
+				      SPECTRACE_SIZE - _fctx->spectrace_pos,	\
+				      "fetch %p (fctx %p(%s)): %s\n", fetch,	\
+				      _fctx, _fctx->info, (m));			\
+		if (_ss >= SPECTRACE_SIZE - _fctx->spectrace_pos) {		\
+			_fctx->spectrace_pos = 0;				\
+		} else {							\
+			_fctx->spectrace_pos += _ss;				\
+		}								\
+		INSIST(_fctx->spectrace_pos < SPECTRACE_SIZE);			\
+		UNLOCK(&_fctx->spectracelock);					\
+	} while (0)
+#define QTRACE(m)                                                          \
+	do {									\
+		fetchctx_t *_fctx = query->fctx;				\
+		LOCK(&_fctx->spectracelock);					\
+		size_t _ss = snprintf(_fctx->spectrace + _fctx->spectrace_pos,	\
+				      SPECTRACE_SIZE - _fctx->spectrace_pos,	\
+				      "resquery %p (fctx %p(%s)): %s\n",	\
+				      query, query->fctx, query->fctx->info,	\
+				      (m));					\
+		if (_ss >= SPECTRACE_SIZE - _fctx->spectrace_pos) {		\
+			_fctx->spectrace_pos = 0;				\
+		} else {							\
+			_fctx->spectrace_pos += _ss;				\
+		}								\
+		INSIST(_fctx->spectrace_pos < SPECTRACE_SIZE);			\
+		UNLOCK(&_fctx->spectracelock);					\
+	} while (0)
+#elif defined(WANT_QUERYTRACE)
+
 #define RTRACE(m)                                                             \
 	isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER,                     \
 		      DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3), "res %p: %s", \
@@ -398,6 +528,11 @@ struct fetchctx {
 	dns_messageid_t id;
 	unsigned int depth;
 	char clientstr[ISC_SOCKADDR_FORMATSIZE];
+#ifdef WANT_SPECTRACE
+	char spectrace[SPECTRACE_SIZE];
+	size_t spectrace_pos;
+	isc_mutex_t spectracelock;
+#endif
 };
 
 #define FCTX_MAGIC	 ISC_MAGIC('F', '!', '!', '!')
@@ -1178,7 +1313,6 @@ resquery_destroy(resquery_t **queryp) {
 	fctx = query->fctx;
 	res = fctx->res;
 	bucket = fctx->bucketnum;
-
 	LOCK(&res->buckets[bucket].lock);
 	fctx->nqueries--;
 	empty = fctx_decreference(query->fctx);
@@ -1753,6 +1887,7 @@ fctx_done(fetchctx_t *fctx, isc_result_t result, int line) {
 	FCTXTRACE("done");
 
 	res = fctx->res;
+/*	isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_ERROR, "%s", fctx->spectrace); */
 
 	if (result == ISC_R_SUCCESS) {
 		no_response = true;
@@ -4574,6 +4709,10 @@ fctx_destroy(fetchctx_t *fctx) {
 	dns_name_free(&fctx->qmindcname, fctx->mctx);
 	dns_db_detach(&fctx->cache);
 	dns_adb_detach(&fctx->adb);
+	fctx->magic = 0;
+#ifdef WANT_SPECTRACE
+	isc_mutex_destroy(&fctx->spectracelock);
+#endif
 	isc_mem_free(fctx->mctx, fctx->info);
 	isc_mem_putanddetach(&fctx->mctx, fctx, sizeof(*fctx));
 }
@@ -4941,6 +5080,11 @@ fctx_create(dns_resolver_t *res, const dns_name_t *name, dns_rdatatype_t type,
 	strlcat(buf, typebuf, sizeof(buf));
 	fctx->info = isc_mem_strdup(mctx, buf);
 
+#ifdef WANT_SPECTRACE
+	/* Has to be before first FCTXTRACE */
+	fctx->spectrace_pos = 0;
+	isc_mutex_init(&fctx->spectracelock);
+#endif
 	FCTXTRACE("create");
 	dns_name_init(&fctx->name, NULL);
 	dns_name_dup(name, mctx, &fctx->name);
@@ -5115,6 +5259,8 @@ fctx_create(dns_resolver_t *res, const dns_name_t *name, dns_rdatatype_t type,
 		UNEXPECTED_ERROR(__FILE__, __LINE__,
 				 "'%s' is not subdomain of '%s'", fctx->info,
 				 buf);
+		UNEXPECTED_ERROR(__FILE__, __LINE__,
+				 "query trace: %s", fctx->spectrace);
 		result = ISC_R_UNEXPECTED;
 		goto cleanup_fcount;
 	}
@@ -5211,6 +5357,9 @@ fctx_create(dns_resolver_t *res, const dns_name_t *name, dns_rdatatype_t type,
 
 cleanup_mctx:
 	fctx->magic = 0;
+#ifdef WANT_SPECTRACE
+	isc_mutex_destroy(&fctx->spectracelock);
+#endif
 	isc_mem_detach(&fctx->mctx);
 	dns_adb_detach(&fctx->adb);
 	dns_db_detach(&fctx->cache);
@@ -9621,7 +9770,7 @@ rctx_resend(respctx_t *rctx, dns_adbaddrinfo_t *addrinfo) {
  */
 static void
 rctx_next(respctx_t *rctx) {
-#ifdef WANT_QUERYTRACE
+#if defined (WANT_QUERYTRACE) || defined (WANT_SPECTRACE)
 	fetchctx_t *fctx = rctx->fctx;
 #endif /* ifdef WANT_QUERYTRACE */
 	isc_result_t result;
