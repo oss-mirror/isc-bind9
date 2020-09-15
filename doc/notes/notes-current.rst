@@ -53,3 +53,7 @@ Bug Fixes
 
 - `named` would exit with assertion failure REQUIRE(msg->state == (-1)) in
   message.c due to a possible data race. [GL #2124]
+
+- ``named`` could incorrectly return non-truncated, glueless referrals
+  for responses whose size was close to the UDP packet size limit.
+  [GL #1967]
