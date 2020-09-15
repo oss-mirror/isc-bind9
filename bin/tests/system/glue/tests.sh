@@ -36,5 +36,105 @@ digcomp noglue.good dig.out.$n || ret=1
 if [ "$ret" -ne 0 ]; then echo_i "failed"; fi
 status=$((status+ret))
 
+n=$((n+1))
+echo_i "testing truncation for unsigned referrals close to UDP packet size limit (A glue) ($n)"
+ret=0
+dig_with_opts @10.53.0.1 +ignore +noedns foo.subdomain-a.tc-test-unsigned. > dig.out.$n || ret=1
+grep -q "flags:[^;]* tc" dig.out.$n || ret=1
+if [ "$ret" -ne 0 ]; then echo_i "failed"; fi
+status=$((status+ret))
+
+n=$((n+1))
+echo_i "testing truncation for unsigned referrals close to UDP packet size limit (AAAA glue) ($n)"
+ret=0
+dig_with_opts @10.53.0.1 +ignore +noedns foo.subdomain-aaaa.tc-test-unsigned. > dig.out.$n || ret=1
+grep -q "flags:[^;]* tc" dig.out.$n || ret=1
+if [ "$ret" -ne 0 ]; then echo_i "failed"; fi
+status=$((status+ret))
+
+n=$((n+1))
+echo_i "testing truncation for unsigned referrals close to UDP packet size limit (A+AAAA glue) ($n)"
+ret=0
+dig_with_opts @10.53.0.1 +ignore +noedns foo.subdomain-both.tc-test-unsigned. > dig.out.$n || ret=1
+grep -q "flags:[^;]* tc" dig.out.$n || ret=1
+if [ "$ret" -ne 0 ]; then echo_i "failed"; fi
+status=$((status+ret))
+
+n=$((n+1))
+echo_i "testing truncation for signed referrals close to UDP packet size limit (A glue) ($n)"
+ret=0
+dig_with_opts @10.53.0.1 +ignore +dnssec +bufsize=512 foo.subdomain-a.tc-test-signed. > dig.out.$n || ret=1
+grep -q "flags:[^;]* tc" dig.out.$n || ret=1
+if [ "$ret" -ne 0 ]; then echo_i "failed"; fi
+status=$((status+ret))
+
+n=$((n+1))
+echo_i "testing truncation for signed referrals close to UDP packet size limit (AAAA glue) ($n)"
+ret=0
+dig_with_opts @10.53.0.1 +ignore +dnssec +bufsize=512 foo.subdomain-aaaa.tc-test-signed. > dig.out.$n || ret=1
+grep -q "flags:[^;]* tc" dig.out.$n || ret=1
+if [ "$ret" -ne 0 ]; then echo_i "failed"; fi
+status=$((status+ret))
+
+n=$((n+1))
+echo_i "testing truncation for signed referrals close to UDP packet size limit (A+AAAA glue) ($n)"
+ret=0
+dig_with_opts @10.53.0.1 +ignore +dnssec +bufsize=512 foo.subdomain-both.tc-test-signed. > dig.out.$n || ret=1
+grep -q "flags:[^;]* tc" dig.out.$n || ret=1
+if [ "$ret" -ne 0 ]; then echo_i "failed"; fi
+status=$((status+ret))
+
+# Reconfigure ns1 so that "glue-cache no;" is in effect.
+copy_setports ns1/named2.conf.in ns1/named.conf
+rndc_reconfig ns1 10.53.0.1
+
+n=$((n+1))
+echo_i "testing truncation for unsigned referrals close to UDP packet size limit (A glue, no glue cache) ($n)"
+ret=0
+dig_with_opts @10.53.0.1 +ignore +noedns foo.subdomain-a.tc-test-unsigned. > dig.out.$n || ret=1
+grep -q "flags:[^;]* tc" dig.out.$n || ret=1
+if [ "$ret" -ne 0 ]; then echo_i "failed"; fi
+status=$((status+ret))
+
+n=$((n+1))
+echo_i "testing truncation for unsigned referrals close to UDP packet size limit (AAAA glue, no glue cache) ($n)"
+ret=0
+dig_with_opts @10.53.0.1 +ignore +noedns foo.subdomain-aaaa.tc-test-unsigned. > dig.out.$n || ret=1
+grep -q "flags:[^;]* tc" dig.out.$n || ret=1
+if [ "$ret" -ne 0 ]; then echo_i "failed"; fi
+status=$((status+ret))
+
+n=$((n+1))
+echo_i "testing truncation for unsigned referrals close to UDP packet size limit (A+AAAA glue, no glue cache) ($n)"
+ret=0
+dig_with_opts @10.53.0.1 +ignore +noedns foo.subdomain-both.tc-test-unsigned. > dig.out.$n || ret=1
+grep -q "flags:[^;]* tc" dig.out.$n || ret=1
+if [ "$ret" -ne 0 ]; then echo_i "failed"; fi
+status=$((status+ret))
+
+n=$((n+1))
+echo_i "testing truncation for signed referrals close to UDP packet size limit (A glue, no glue cache) ($n)"
+ret=0
+dig_with_opts @10.53.0.1 +ignore +dnssec +bufsize=512 foo.subdomain-a.tc-test-signed. > dig.out.$n || ret=1
+grep -q "flags:[^;]* tc" dig.out.$n || ret=1
+if [ "$ret" -ne 0 ]; then echo_i "failed"; fi
+status=$((status+ret))
+
+n=$((n+1))
+echo_i "testing truncation for signed referrals close to UDP packet size limit (AAAA glue, no glue cache) ($n)"
+ret=0
+dig_with_opts @10.53.0.1 +ignore +dnssec +bufsize=512 foo.subdomain-aaaa.tc-test-signed. > dig.out.$n || ret=1
+grep -q "flags:[^;]* tc" dig.out.$n || ret=1
+if [ "$ret" -ne 0 ]; then echo_i "failed"; fi
+status=$((status+ret))
+
+n=$((n+1))
+echo_i "testing truncation for signed referrals close to UDP packet size limit (A+AAAA glue, no glue cache) ($n)"
+ret=0
+dig_with_opts @10.53.0.1 +ignore +dnssec +bufsize=512 foo.subdomain-both.tc-test-signed. > dig.out.$n || ret=1
+grep -q "flags:[^;]* tc" dig.out.$n || ret=1
+if [ "$ret" -ne 0 ]; then echo_i "failed"; fi
+status=$((status+ret))
+
 echo_i "exit status: $status"
 [ $status -eq 0 ] || exit 1
