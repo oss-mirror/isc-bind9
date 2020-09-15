@@ -9996,6 +9996,9 @@ typedef struct {
 	rbtdb_glue_t *glue_list;
 	dns_rbtdb_t *rbtdb;
 	rbtdb_version_t *rbtversion;
+	dns_name_t *nodename;
+	bool glue_required;
+	dns_rdataset_t *required_rdataset;
 } rbtdb_glue_additionaldata_ctx_t;
 
 static void
@@ -10215,6 +10218,28 @@ glue_nsdname_cb(void *arg, const dns_name_t *name, dns_rdatatype_t qtype) {
 		}
 	}
 
+	/*
+	 * If the NS name contained in the processed NS record is not
+	 * in-bailiwick, then no glue records are strictly required to appear
+	 * in the ADDITIONAL section of the delegation response.
+	 *
+	 * If the NS name contained in the processed NS record is in-bailiwick,
+	 * update 'ctx' so that rdataset_addglue() can later mark the processed
+	 * RR with DNS_RDATASETATTR_REQUIRED if all NS records turn out to be
+	 * in-bailiwick (it will not be determined until the entire NS RRset is
+	 * processed).  Glue will only be required for the first in-bailiwick
+	 * NS record, so the relevant pointers will only be set once.
+	 */
+	if (!dns_name_issubdomain(name, ctx->nodename)) {
+		ctx->glue_required = false;
+	} else if (glue != NULL && ctx->required_rdataset == NULL) {
+		if (dns_rdataset_isassociated(&glue->rdataset_a)) {
+			ctx->required_rdataset = &glue->rdataset_a;
+		} else if (dns_rdataset_isassociated(&glue->rdataset_aaaa)) {
+			ctx->required_rdataset = &glue->rdataset_aaaa;
+		}
+	}
+
 	if (glue != NULL) {
 		glue->next = ctx->glue_list;
 		ctx->glue_list = glue;
@@ -10252,6 +10277,7 @@ rdataset_addglue(dns_rdataset_t *rdataset, dns_dbversion_t *version,
 	dns_rbtdb_t *rbtdb = rdataset->private1;
 	dns_rbtnode_t *node = rdataset->private2;
 	rbtdb_version_t *rbtversion = version;
+	dns_fixedname_t nodename;
 	uint32_t idx;
 	rbtdb_glue_table_node_t *cur;
 	bool found = false;
@@ -10449,6 +10475,26 @@ no_glue:
 	ctx.rbtdb = rbtdb;
 	ctx.rbtversion = rbtversion;
 
+	/*
+	 * Get the owner name of the NS RRset - it will be necessary for
+	 * determining whether all NS records in the delegation are
+	 * in-bailiwick ones.
+	 */
+	ctx.nodename = dns_fixedname_initname(&nodename);
+	nodefullname((dns_db_t *)rbtdb, node, ctx.nodename);
+
+	/*
+	 * Start with the assumption that all NS records for this delegation
+	 * are in-bailiwick and thus glue is required.  If there is at least
+	 * one NS record that is not in-bailiwick, glue_nsdname_cb() will set
+	 * 'ctx.glue_required' to false.  Otherwise, we will use the
+	 * 'ctx.required_rdataset' pointer updated by glue_nsdname_cb() to set
+	 * DNS_RDATASETATTR_REQUIRED for the first glue record found for the
+	 * first in-bailiwick NS record found.
+	 */
+	ctx.glue_required = true;
+	ctx.required_rdataset = NULL;
+
 	RWLOCK(&rbtversion->glue_rwlock, isc_rwlocktype_write);
 
 	maybe_rehash_gluetable(rbtversion);
@@ -10477,6 +10523,17 @@ no_glue:
 				dns_gluecachestatscounter_inserts_absent);
 		}
 	} else {
+		/*
+		 * If this NS RRset contains only in-bailiwick NS records, set
+		 * DNS_RDATASETATTR_REQUIRED for the first glue record found by
+		 * glue_nsdname_cb() in order to prevent returning a
+		 * non-truncated delegation without any glue records in the
+		 * ADDITIONAL section.
+		 */
+		if (ctx.glue_required && ctx.required_rdataset != NULL) {
+			ctx.required_rdataset->attributes |=
+				DNS_RDATASETATTR_REQUIRED;
+		}
 		cur->glue_list = ctx.glue_list;
 		if (rbtdb->gluecachestats != NULL) {
 			isc_stats_increment(
