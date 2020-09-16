@@ -188,6 +188,11 @@ options {
         glue-cache <boolean>; // deprecated
         heartbeat-interval <integer>;
         hostname ( <quoted_string> | none );
+        https-endpoint <quoted_string> https-server <string>;
+        https-server <string> [ port <integer> ] tls <string> { (
+            <quoted_string> [ port <integer> ] [ dscp <integer> ] |
+            <ipv4_address> [ port <integer> ] [ dscp <integer> ] |
+            <ipv6_address> [ port <integer> ] [ dscp <integer> ] ); ... };
         inline-signing <boolean>;
         interface-interval <duration>;
         ixfr-from-differences ( primary | master | secondary | slave |
@@ -196,10 +201,10 @@ options {
         key-directory <quoted_string>;
         lame-ttl <duration>;
         listen-on [ port <integer> ] [ dscp
-            <integer> ] {
+            <integer> ] [ tls <string> ] {
             <address_match_element>; ... }; // may occur multiple times
         listen-on-v6 [ port <integer> ] [ dscp
-            <integer> ] {
+            <integer> ] [ tls <string> ] {
             <address_match_element>; ... }; // may occur multiple times
         lmdb-mapsize <sizeval>;
         lock-file ( <quoted_string> | none );
@@ -413,6 +418,14 @@ statistics-channels {
             } ]; // may occur multiple times
 }; // may occur multiple times
 
+tls <string> {
+        cert-file <quoted_string>;
+        ciphers <string>; // not implemented
+        dh-param <quoted_string>; // not implemented
+        key-file <quoted_string>;
+        protocols <sslprotos>; // not implemented
+}; // may occur multiple times
+
 trust-anchors { <string> ( static-key |
     initial-key | static-ds | initial-ds )
     <integer> <integer> <integer>
@@ -516,6 +529,7 @@ view <string> [ <class> ] {
         forwarders [ port <integer> ] [ dscp <integer> ] { ( <ipv4_address>
             | <ipv6_address> ) [ port <integer> ] [ dscp <integer> ]; ... };
         glue-cache <boolean>; // deprecated
+        https-endpoint <quoted_string> https-server <string>;
         inline-signing <boolean>;
         ixfr-from-differences ( primary | master | secondary | slave |
             <boolean> );

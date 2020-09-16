@@ -1072,6 +1072,14 @@ default is used.
    the default is the ``named`` working directory.  See :ref:`acl`
    for details about ``geoip`` ACLs.
 
+.. _https_endpoint:
+
+``https-endpoint``
+   This configures an DNS-over-HTTPS service endpoint. It takes a string
+   which specifies the endpoint URL path, and an ``https-server``
+   parameter specifying the server name of an HTTPS listener. (See
+   :ref:`Link title <https_server>`.)
+
 ``key-directory``
    This is the directory where the public and private DNSSEC key files should be
    found when performing a dynamic update of secure zones, if different
@@ -2415,15 +2423,23 @@ for details on how to specify IP address lists.
    equal to 300 are treated as seconds and converted to
    milliseconds before applying the above limits.
 
+.. _interfaces:
+
 Interfaces
 ^^^^^^^^^^
 
 The interfaces and ports that the server answers queries from may be
-specified using the ``listen-on`` option. ``listen-on`` takes an
-optional port and an ``address_match_list`` of IPv4 addresses. (IPv6
-addresses are ignored, with a logged warning.) The server listens on
-all interfaces allowed by the address match list. If a port is not
-specified, port 53 is used.
+specified using the ``listen-on`` and ``listen-on-v6`` options, as
+well as the ``https-server`` option for HTTPS queries.
+
+``listen-on`` takes an optional port, an optional TLS configuration
+identifier, and an ``address_match_list`` of IPv4 addresses. (IPv6
+addresses are ignored, with a logged warning.) The server listens on all
+interfaces allowed by the address match list. If a TLS configuration is
+specified, ``named`` will listen for DNS-over-TLS (DoT) connections, using
+the key and certificate specified in the referenced ``tls`` statement. If a
+port number is not specified, the default is 53 for standard DNS and 853
+for DNS-over-TLS.
 
 Multiple ``listen-on`` statements are allowed. For example:
 
@@ -2431,18 +2447,20 @@ Multiple ``listen-on`` statements are allowed. For example:
 
    listen-on { 5.6.7.8; };
    listen-on port 1234 { !1.2.3.4; 1.2/16; };
+   listen-on port 8853 tls example-tls { 4.3.2.1; };
 
-enables the name server on port 53 for the IP address 5.6.7.8, and
-on port 1234 of an address on the machine in net 1.2 that is not
-1.2.3.4.
+enables the name server to listen for standard DNS queries on port 53 of the
+IP address 5.6.7.8 and on port 1234 of an address on the machine in net 1.2
+that is not 1.2.3.4, and to listen for DNS-over-TLS connections on port
+8853 of the IP address 4.3.2.1.
 
-If no ``listen-on`` is specified, the server listens on port 53 on
-all IPv4 interfaces.
+If no ``listen-on`` is specified, the server listens for standard DNS
+on port 53 of all IPv4 interfaces.
 
-The ``listen-on-v6`` option is used to specify the interfaces and the
-ports on which the server listens for incoming queries sent using
-IPv6. If not specified, the server listens on port 53 on all IPv6
-interfaces.
+The ``listen-on-v6`` option is used to specify the interfaces and the ports
+on which the server listens for incoming queries sent using IPv6. If not
+specified, the server listens for standard DNS queries on port 53 of all
+IPv6 interfaces.
 
 Multiple ``listen-on-v6`` options can be used. For example:
 
@@ -2450,17 +2468,27 @@ Multiple ``listen-on-v6`` options can be used. For example:
 
    listen-on-v6 { any; };
    listen-on-v6 port 1234 { !2001:db8::/32; any; };
+   listen-on port 8853 tls example-tls { 2001:db8::100; };
 
-enables the name server on port 53 for any IPv6 addresses (with a
-single wildcard socket), and on port 1234 of IPv6 addresses that are not
-in the prefix 2001:db8::/32 (with separate sockets for each matched
-address).
+enables the name server to listen for standard DNS queries on port 53 of
+any IPv6 addresses and on port 1234 of IPv6 addresses that are not in the
+prefix 2001:db8::/32, and for DNS-over-TLS connections on port 8853 of
+the address 2001:db8::100.
 
 To instruct the server not to listen on any IPv6 address, use:
 
 ::
 
    listen-on-v6 { none; };
+
+.. _https_server:
+
+``https-server`` takes a server name, an optional port, a TLS
+configuration identifier, and an ``address_match_list`` of both IPv4 and
+IPv6 addresses.  This sets up an HTTPS responder using the key and
+certificate specified in the referenced ``tls`` statement.  The endpoint
+for incoming HTTPS queries must be specified using the ``https-endpoint``
+option (see :ref:`Link title <https_endpoint>`).
 
 .. _query_address:
 
