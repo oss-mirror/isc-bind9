@@ -26,6 +26,7 @@
 #include <isc/magic.h>
 #include <isc/mem.h>
 #include <isc/print.h>
+#include <isc/refcount.h>
 #include <isc/sockaddr.h>
 #include <isc/socket.h>
 
@@ -220,7 +221,7 @@ extern bool check_ra, have_ipv4, have_ipv6, specified_source, usesearch,
 extern in_port_t port;
 extern unsigned int timeout;
 extern isc_mem_t *mctx;
-extern int sendcount;
+extern isc_refcount_t sendcount;
 extern int ndots;
 extern int lookup_counter;
 extern int exitcode;

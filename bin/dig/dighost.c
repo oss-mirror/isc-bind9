@@ -108,8 +108,8 @@ isc_task_t *global_task = NULL;
 isc_timermgr_t *timermgr = NULL;
 isc_nm_t *netmgr = NULL;
 isc_sockaddr_t localaddr;
-int sendcount = 0;
-int recvcount = 0;
+isc_refcount_t sendcount = ATOMIC_VAR_INIT(0);
+isc_refcount_t recvcount = ATOMIC_VAR_INIT(0);
 int ndots = -1;
 int tries = 3;
 int lookup_counter = 0;
@@ -1556,8 +1556,9 @@ check_if_done(void) {
 	debug("check_if_done()");
 	debug("list %s", ISC_LIST_EMPTY(lookup_list) ? "empty" : "full");
 	if (ISC_LIST_EMPTY(lookup_list) && current_lookup == NULL &&
-	    sendcount == 0) {
-		INSIST(recvcount == 0);
+	    isc_refcount_current(&sendcount) == 0)
+	{
+		INSIST(isc_refcount_current(&recvcount) == 0);
 		debug("shutting down");
 		dighost_shutdown();
 	}
@@ -2593,9 +2594,8 @@ send_done(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	REQUIRE(DIG_VALID_QUERY(query));
 
 	debug("send_done()");
-	sendcount--;
-	debug("sendcount=%d", sendcount);
-	INSIST(sendcount >= 0);
+	isc_refcount_decrement0(&sendcount);
+	debug("sendcount=%" PRIuFAST32, isc_refcount_current(&sendcount));
 
 	/* Could occur on timeout or interrupt */
 	if (query->sendhandle == NULL) {
@@ -2856,7 +2856,7 @@ send_udp(dig_query_t *query) {
 	}
 
 	check_result(result, "isc_nm_send");
-	sendcount++;
+	isc_refcount_increment0(&sendcount);
 
 	/* XXX qrflag, print_query, etc... */
 	if (!ISC_LIST_EMPTY(query->lookup->q) && query->lookup->qr) {
@@ -2891,8 +2891,8 @@ udp_ready(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	isc_nmhandle_attach(handle, &query->readhandle);
 	result = isc_nm_read(handle, recv_done, query);
 	check_result(result, "isc_nm_read");
-	recvcount++;
-	debug("recvcount=%d", recvcount);
+	isc_refcount_increment0(&recvcount);
+	debug("recvcount=%" PRIuFAST32, isc_refcount_current(&recvcount));
 
 	send_udp(query);
 }
@@ -3073,7 +3073,7 @@ connect_timeout(isc_task_t *task, isc_event_t *event) {
 		isc_nmhandle_detach(&handle);
 	}
 
-	recvcount--;
+	isc_refcount_decrement0(&recvcount);
 	query->waiting_senddone = false;
 	clear_query(query);
 	cancel_lookup(l);
@@ -3131,8 +3131,8 @@ launch_next_query(dig_query_t *query) {
 	}
 	result = isc_nm_read(query->handle, recv_done, query);
 	check_result(result, "isc_nm_read");
-	recvcount++;
-	debug("recvcount=%d", recvcount);
+	isc_refcount_increment0(&recvcount);
+	debug("recvcount=%" PRIuFAST32, isc_refcount_current(&recvcount));
 
 	if (!query->first_soa_rcvd) {
 		debug("sending a request in launch_next_query");
@@ -3145,8 +3145,9 @@ launch_next_query(dig_query_t *query) {
 		isc_nmhandle_attach(query->handle, &query->sendhandle);
 		isc_nm_send(query->handle, &r, send_done, query);
 		check_result(result, "isc_nm_send");
-		sendcount++;
-		debug("sendcount=%d", sendcount);
+		isc_refcount_increment0(&sendcount);
+		debug("sendcount=%" PRIuFAST32,
+		      isc_refcount_current(&sendcount));
 
 		/* XXX qrflag, print_query, etc... */
 		if (!ISC_LIST_EMPTY(query->lookup->q) && query->lookup->qr) {
@@ -3502,7 +3503,7 @@ static void
 resume_udp(isc_nmhandle_t *handle) {
 	isc_nmhandle_t *tmp = NULL;
 
-	recvcount++;
+	isc_refcount_increment0(&recvcount);
 	isc_nmhandle_attach(handle, &tmp);
 }
 
@@ -3539,9 +3540,8 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	}
 
 	LOCK_LOOKUP;
-	recvcount--;
-	debug("recvcount=%d", recvcount);
-	INSIST(recvcount >= 0);
+	isc_refcount_decrement0(&recvcount);
+	debug("recvcount=%" PRIuFAST32, isc_refcount_current(&recvcount));
 
 	/* Could occur on timeout or interrupt */
 	if (query->readhandle == NULL) {
@@ -4159,8 +4159,9 @@ cancel_all(void) {
 			if (q->readhandle != NULL) {
 				isc_nmhandle_t *handle = q->readhandle;
 				isc_nmhandle_detach(&handle);
-				recvcount--;
-				debug("recvcount=%d", recvcount);
+				isc_refcount_decrement0(&recvcount);
+				debug("recvcount=%" PRIuFAST32,
+				      isc_refcount_current(&recvcount));
 			}
 			clear_query(q);
 		}
@@ -4215,8 +4216,8 @@ destroy_libs(void) {
 	isc_nm_destroy(&netmgr);
 
 	LOCK_LOOKUP;
-	REQUIRE(recvcount == 0);
-	REQUIRE(sendcount == 0);
+	isc_refcount_destroy(&recvcount);
+	isc_refcount_destroy(&sendcount);
 
 	INSIST(ISC_LIST_HEAD(lookup_list) == NULL);
 	INSIST(current_lookup == NULL);
