@@ -264,6 +264,12 @@ OPTIONS
   	glue-cache boolean;// deprecated
   	heartbeat-interval integer;
   	hostname ( quoted_string | none );
+  	https-endpoint quoted_string https-server string;
+  	https-port integer;
+  	https-server string [ port integer ] tls string { (
+  	    quoted_string [ port integer ] [ dscp integer ] |
+  	    ipv4_address [ port integer ] [ dscp integer ] |
+  	    ipv6_address [ port integer ] [ dscp integer ] ); ... };
   	inline-signing boolean;
   	interface-interval duration;
   	ipv4only-contact string;
@@ -652,6 +658,7 @@ VIEW
   	forwarders [ port integer ] [ dscp integer ] { ( ipv4_address
   	    | ipv6_address ) [ port integer ] [ dscp integer ]; ... };
   	glue-cache boolean;// deprecated
+  	https-endpoint quoted_string https-server string;
   	inline-signing boolean;
   	ipv4only-contact string;
   	ipv4only-enable boolean;

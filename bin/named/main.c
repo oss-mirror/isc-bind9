@@ -705,7 +705,7 @@ parse_T_opt(char *option) {
 
 static void
 parse_port(char *arg) {
-	enum { DNSPORT, TLSPORT } ptype = DNSPORT;
+	enum { DNSPORT, TLSPORT, HTTP_SECURE_PORT } ptype = DNSPORT;
 	char *value = arg;
 	int port;
 
@@ -714,6 +714,9 @@ parse_port(char *arg) {
 	} else if (strncmp(arg, "tls=", 4) == 0) {
 		value = arg + 4;
 		ptype = TLSPORT;
+	} else if (strncmp(arg, "https=", 6) == 0) {
+		value = arg + 6;
+		ptype = HTTP_SECURE_PORT;
 	}
 
 	port = parse_int(value, "port");
@@ -727,6 +730,9 @@ parse_port(char *arg) {
 		break;
 	case TLSPORT:
 		named_g_tlsport = port;
+		break;
+	case HTTP_SECURE_PORT:
+		named_g_http_secure_port = port;
 		break;
 	default:
 		INSIST(0);

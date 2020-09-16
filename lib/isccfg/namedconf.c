@@ -91,6 +91,8 @@ static cfg_type_t cfg_type_dnstap;
 static cfg_type_t cfg_type_dnstapoutput;
 static cfg_type_t cfg_type_dyndb;
 static cfg_type_t cfg_type_plugin;
+static cfg_type_t cfg_type_http_secure_endpoint;
+static cfg_type_t cfg_type_http_secure_server;
 static cfg_type_t cfg_type_ixfrdifftype;
 static cfg_type_t cfg_type_ixfrratio;
 static cfg_type_t cfg_type_key;
@@ -1205,6 +1207,7 @@ static cfg_clausedef_t options_clauses[] = {
 	{ "host-statistics", NULL, CFG_CLAUSEFLAG_ANCIENT },
 	{ "host-statistics-max", NULL, CFG_CLAUSEFLAG_ANCIENT },
 	{ "hostname", &cfg_type_qstringornone, 0 },
+	{ "https-server", &cfg_type_http_secure_server, 0 },
 	{ "interface-interval", &cfg_type_duration, 0 },
 	{ "keep-response-order", &cfg_type_bracketed_aml, 0 },
 	{ "listen-on", &cfg_type_listenon, CFG_CLAUSEFLAG_MULTI },
@@ -1221,6 +1224,7 @@ static cfg_clausedef_t options_clauses[] = {
 	{ "pid-file", &cfg_type_qstringornone, 0 },
 	{ "port", &cfg_type_uint32, 0 },
 	{ "tls-port", &cfg_type_uint32, 0 },
+	{ "https-port", &cfg_type_uint32, 0 },
 	{ "querylog", &cfg_type_boolean, 0 },
 	{ "random-device", &cfg_type_qstringornone, 0 },
 	{ "recursing-file", &cfg_type_qstring, 0 },
@@ -1988,6 +1992,7 @@ static cfg_clausedef_t view_clauses[] = {
 	{ "filter-aaaa-on-v4", &cfg_type_boolean, CFG_CLAUSEFLAG_ANCIENT },
 	{ "filter-aaaa-on-v6", &cfg_type_boolean, CFG_CLAUSEFLAG_ANCIENT },
 	{ "glue-cache", &cfg_type_boolean, CFG_CLAUSEFLAG_DEPRECATED },
+	{ "https-endpoint", &cfg_type_http_secure_endpoint, 0 },
 	{ "ipv4only-enable", &cfg_type_boolean, 0 },
 	{ "ipv4only-contact", &cfg_type_astring, 0 },
 	{ "ipv4only-server", &cfg_type_astring, 0 },
@@ -3852,4 +3857,36 @@ static keyword_type_t tls_kw = { "tls", &cfg_type_astring };
 static cfg_type_t cfg_type_optional_tls = {
 	"tlsoptional",	       parse_optional_keyvalue, print_keyvalue,
 	doc_optional_keyvalue, &cfg_rep_string,		&tls_kw
+};
+static cfg_type_t cfg_type_tls = { "tls",	    parse_keyvalue,
+				   print_keyvalue,  doc_keyvalue,
+				   &cfg_rep_string, &tls_kw };
+
+static keyword_type_t servername_kw = { "https-server", &cfg_type_astring };
+static cfg_type_t cfg_type_servername = { "servername",	   parse_keyvalue,
+					  print_keyvalue,  doc_keyvalue,
+					  &cfg_rep_string, &servername_kw };
+
+/* http-endpoint */
+static cfg_tuplefielddef_t endpoint_fields[] = {
+	{ "path", &cfg_type_qstring, 0 },
+	{ "servername", &cfg_type_servername, 0 },
+	{ NULL, NULL, 0 }
+};
+static cfg_type_t cfg_type_http_secure_endpoint = {
+	"endpoint",    cfg_parse_tuple, cfg_print_tuple,
+	cfg_doc_tuple, &cfg_rep_tuple,	endpoint_fields
+};
+
+/* http-server */
+static cfg_tuplefielddef_t server_fields[] = {
+	{ "name", &cfg_type_astring, 0 },
+	{ "port", &cfg_type_optional_port, 0 },
+	{ "tls", &cfg_type_tls, 0 },
+	{ "addresses", &cfg_type_bracketed_sockaddrnameportlist, 0 },
+	{ NULL, NULL, 0 }
+};
+static cfg_type_t cfg_type_http_secure_server = {
+	"server",      cfg_parse_tuple, cfg_print_tuple,
+	cfg_doc_tuple, &cfg_rep_tuple,	server_fields
 };
