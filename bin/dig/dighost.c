@@ -3167,7 +3167,7 @@ tcp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	dig_query_t *query = (dig_query_t *)arg;
 	dig_query_t *next = NULL;
 	char sockstr[ISC_SOCKADDR_FORMATSIZE];
-	dig_lookup_t *l;
+	dig_lookup_t *l = NULL;
 
 	REQUIRE(DIG_VALID_QUERY(query));
 	REQUIRE(query->handle == NULL);
@@ -4156,6 +4156,9 @@ cancel_all(void) {
 	if (current_lookup != NULL) {
 		for (q = ISC_LIST_HEAD(current_lookup->q); q != NULL; q = nq) {
 			nq = ISC_LIST_NEXT(q, link);
+			if (q->waiting_connect) {
+				continue;
+			}
 			debug("canceling pending query %p, belonging to %p", q,
 			      current_lookup);
 			if (q->readhandle != NULL) {

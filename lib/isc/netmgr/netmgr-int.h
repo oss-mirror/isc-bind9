@@ -463,6 +463,7 @@ struct isc_nmsocket {
 	atomic_bool closed;
 	atomic_bool listening;
 	atomic_bool listen_error;
+	atomic_bool connecting;
 	atomic_bool connected;
 	atomic_bool connect_error;
 	isc_refcount_t references;

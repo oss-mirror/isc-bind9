@@ -101,6 +101,8 @@ tcp_connect_direct(isc_nmsocket_t *sock, isc__nm_uvreq_t *req) {
 
 	worker = &sock->mgr->workers[isc_nm_tid()];
 
+	atomic_store(&sock->connecting, true);
+
 	if (!sock->timer_initialized) {
 		uv_timer_init(&worker->loop, &sock->timer);
 		uv_handle_set_data((uv_handle_t *)&sock->timer, req);
@@ -181,6 +183,8 @@ tcp_connect_cb(uv_connect_t *uvreq, int status) {
 
 	sock = uv_handle_get_data((uv_handle_t *)uvreq->handle);
 
+	atomic_store(&sock->connecting, false);
+
 	if (sock->timed_out) {
 		return;
 	}
@@ -190,8 +194,14 @@ tcp_connect_cb(uv_connect_t *uvreq, int status) {
 
 	if (status != 0) {
 		req->cb.connect(NULL, isc__nm_uverr2result(status), req->cbarg);
-		isc__nm_uvreq_put(&req, sock);
-		isc__nmsocket_detach(&sock);
+		if (status != UV_ECANCELED) {
+			/*
+			 * In this case the resources would already
+			 * have been freed in isc__nm_tcp_shutdown().
+			 */
+			isc__nm_uvreq_put(&req, sock);
+			isc__nmsocket_detach(&sock);
+		}
 		return;
 	}
 
@@ -208,8 +218,6 @@ tcp_connect_cb(uv_connect_t *uvreq, int status) {
 	req->cb.connect(handle, ISC_R_SUCCESS, req->cbarg);
 
 	isc__nm_uvreq_put(&req, sock);
-
-	atomic_init(&sock->client, true);
 
 	/*
 	 * The sock is now attached to the handle.
@@ -241,6 +249,7 @@ isc_nm_tcpconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 	nsock->extrahandlesize = extrahandlesize;
 	nsock->connect_timeout = timeout;
 	nsock->result = ISC_R_SUCCESS;
+	atomic_init(&nsock->client, true);
 
 	req = isc__nm_uvreq_get(mgr, nsock);
 	req->cb.connect = cb;
@@ -1188,17 +1197,29 @@ isc__nm_tcp_shutdown(isc_nmsocket_t *sock) {
 	REQUIRE(VALID_NMSOCK(sock));
 	REQUIRE(sock->tid == isc_nm_tid());
 
-	if (sock->type == isc_nm_tcpsocket && sock->statichandle != NULL) {
-		isc_nm_recv_cb_t cb;
-		void *cbarg = NULL;
+	if (atomic_load(&sock->connecting)) {
+		isc__nm_uvreq_t *req = NULL;
 
-		cb = sock->recv_cb;
-		cbarg = sock->recv_cbarg;
+		sock->timer_running = false;
+		atomic_store(&sock->connecting, false);
+		req = uv_handle_get_data((uv_handle_t *)&sock->timer);
+		uv_timer_stop(&sock->timer);
+
 		isc__nmsocket_clearcb(sock);
-
-		if (cb != NULL) {
-			cb(sock->statichandle, ISC_R_CANCELED, NULL, cbarg);
+		if (sock->connect_cb != NULL) {
+			sock->connect_cb(NULL, ISC_R_CANCELED,
+					 sock->connect_cbarg);
 		}
+
+		isc__nm_uvreq_put(&req, sock);
+		isc__nmsocket_detach(&sock);
+	} else if (sock->type == isc_nm_tcpsocket && sock->statichandle != NULL)
+	{
+		if (sock->recv_cb != NULL) {
+			sock->recv_cb(sock->statichandle, ISC_R_CANCELED, NULL,
+				      sock->recv_cbarg);
+		}
+		isc__nmsocket_detach(&sock);
 	}
 }
 
