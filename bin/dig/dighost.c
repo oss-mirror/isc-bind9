@@ -2675,6 +2675,7 @@ bringup_timer(dig_query_t *query, unsigned int default_timeout) {
 	REQUIRE(DIG_VALID_QUERY(query));
 
 	debug("bringup_timer()");
+
 	/*
 	 * If the timer already exists, that means we're calling this
 	 * a second time (for a retry).  Don't need to recreate it,
@@ -2787,6 +2788,11 @@ start_tcp(dig_query_t *query) {
 		query->waiting_connect = false;
 		launch_next_query(query);
 	} else {
+		int local_timeout = timeout * 1000;
+		if (local_timeout == 0) {
+			local_timeout = TCP_TIMEOUT * 1000;
+		}
+
 		if (keep != NULL) {
 			isc_nmhandle_detach(&keep);
 		}
@@ -2800,13 +2806,12 @@ start_tcp(dig_query_t *query) {
 			}
 		}
 
-		result = isc_nm_tcpdnsconnect(netmgr,
-					      (isc_nmiface_t *)&localaddr,
-					      (isc_nmiface_t *)&query->sockaddr,
-					      tcp_connected, query, 0);
+		result = isc_nm_tcpdnsconnect(
+			netmgr, (isc_nmiface_t *)&localaddr,
+			(isc_nmiface_t *)&query->sockaddr, tcp_connected, query,
+			local_timeout, 0);
 		check_result(result, "isc_nm_tcpdnsconnect");
 		/* XXX: set DSCP */
-		bringup_timer(query, TCP_TIMEOUT);
 	}
 
 	/*
@@ -3005,6 +3010,7 @@ static void
 connect_timeout(isc_task_t *task, isc_event_t *event) {
 	dig_lookup_t *l = NULL;
 	dig_query_t *query = NULL;
+	isc_nmhandle_t *handle = NULL;
 
 	UNUSED(task);
 	REQUIRE(event->ev_type == ISC_TIMEREVENT_IDLE);
@@ -3025,59 +3031,42 @@ connect_timeout(isc_task_t *task, isc_event_t *event) {
 	}
 
 	if (try_next_server(l)) {
-		if (l->tcp_mode) {
-			clear_query(query);
-		}
+		UNLOCK_LOOKUP;
+		return;
+	}
+
+	if (l->retries > 1) {
+		l->retries--;
+		debug("resending UDP request to first server");
+		start_udp(ISC_LIST_HEAD(l->q));
 		UNLOCK_LOOKUP;
 		return;
 	}
 
 	if (query->readhandle != NULL) {
 		isc_refcount_decrement0(&recvcount);
-		if (l->tcp_mode) {
-			query->timedout = true;
-		}
 	}
 
-	if (l->retries > 1) {
-		if (!l->tcp_mode) {
-			l->retries--;
-			debug("resending UDP request to first server");
-			isc_refcount_increment0(&recvcount);
-			start_udp(ISC_LIST_HEAD(l->q));
-			UNLOCK_LOOKUP;
-			return;
-		} else {
-			debug("making new TCP request, %d tries left",
-			      l->retries);
-			l->retries--;
-			requeue_lookup(l, true);
-		}
+	if (l->ns_search_only) {
+		isc_netaddr_t netaddr;
+		char buf[ISC_NETADDR_FORMATSIZE];
+
+		isc_netaddr_fromsockaddr(&netaddr, &query->sockaddr);
+		isc_netaddr_format(&netaddr, buf, sizeof(buf));
+
+		dighost_error("no response from %s\n", buf);
 	} else {
-		if (l->ns_search_only) {
-			isc_netaddr_t netaddr;
-			char buf[ISC_NETADDR_FORMATSIZE];
-
-			isc_netaddr_fromsockaddr(&netaddr, &query->sockaddr);
-			isc_netaddr_format(&netaddr, buf, sizeof(buf));
-
-			dighost_error("no response from %s\n", buf);
-		} else {
-			printf("%s", l->cmdline);
-			dighost_error("connection timed out; "
-				      "no servers could be reached\n");
-		}
-
-		if (exitcode < 9) {
-			exitcode = 9;
-		}
+		printf("%s", l->cmdline);
+		dighost_error("connection timed out; "
+			      "no servers could be reached\n");
 	}
 
-	if (!l->tcp_mode) {
-		isc_nmhandle_t *handle = query->handle;
-		isc_nmhandle_detach(&handle);
+	if (exitcode < 9) {
+		exitcode = 9;
 	}
 
+	handle = query->handle;
+	isc_nmhandle_detach(&handle);
 	query->waiting_senddone = false;
 	clear_query(query);
 	cancel_lookup(l);
@@ -3222,19 +3211,28 @@ tcp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 			exitcode = 9;
 		}
 		l = query->lookup;
-		if ((l->current_query != NULL) &&
-		    (ISC_LINK_LINKED(l->current_query, link))) {
+
+		if (l->retries > 1) {
+			debug("making new TCP request, %d tries left",
+			      l->retries);
+			l->retries--;
+			requeue_lookup(l, true);
+		} else if ((l->current_query != NULL) &&
+			   (ISC_LINK_LINKED(l->current_query, link)))
+		{
 			next = ISC_LIST_NEXT(l->current_query, link);
 		} else {
 			next = NULL;
 		}
+
 		clear_query(query);
+
 		if (next != NULL) {
-			bringup_timer(next, TCP_TIMEOUT);
 			start_tcp(next);
 		} else {
 			check_next_lookup(l);
 		}
+
 		UNLOCK_LOOKUP;
 		return;
 	}

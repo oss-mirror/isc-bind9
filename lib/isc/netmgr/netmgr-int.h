@@ -407,11 +407,13 @@ struct isc_nmsocket {
 	const isc_statscounter_t *statsindex;
 
 	/*%
-	 * TCP read timeout timer.
+	 * TCP read/connect timeout timers.
 	 */
 	uv_timer_t timer;
 	bool timer_initialized;
 	uint64_t read_timeout;
+	uint64_t connect_timeout;
+	bool timed_out;
 
 	/*% outer socket is for 'wrapped' sockets - e.g. tcpdns in tcp */
 	isc_nmsocket_t *outer;

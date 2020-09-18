@@ -743,14 +743,16 @@ tcpdnsconnect_cb(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 
 isc_result_t
 isc_nm_tcpdnsconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
-		     isc_nm_cb_t cb, void *cbarg, size_t extrahandlesize) {
+		     isc_nm_cb_t cb, void *cbarg, unsigned int timeout,
+		     size_t extrahandlesize) {
 	tcpconnect_t *conn = isc_mem_get(mgr->mctx, sizeof(tcpconnect_t));
 
 	*conn = (tcpconnect_t){ .cb = cb,
 				.cbarg = cbarg,
 				.extrahandlesize = extrahandlesize };
 	isc_mem_attach(mgr->mctx, &conn->mctx);
-	return (isc_nm_tcpconnect(mgr, local, peer, tcpdnsconnect_cb, conn, 0));
+	return (isc_nm_tcpconnect(mgr, local, peer, tcpdnsconnect_cb, conn,
+				  timeout, 0));
 }
 
 isc_result_t

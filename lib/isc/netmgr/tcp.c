@@ -76,6 +76,22 @@ accept_connection(isc_nmsocket_t *ssock, isc_quota_t *quota);
 static void
 quota_accept_cb(isc_quota_t *quota, void *sock0);
 
+static void
+connecttimeout_cb(uv_timer_t *handle) {
+	isc__nm_uvreq_t *req = uv_handle_get_data((uv_handle_t *)handle);
+	isc_nmsocket_t *sock = req->sock;
+
+	if (req->cb.connect != NULL) {
+		req->cb.connect(NULL, ISC_R_TIMEDOUT, req->cbarg);
+	}
+
+	uv_timer_stop(&sock->timer);
+	sock->timer_initialized = false;
+	sock->timed_out = true;
+	isc__nm_uvreq_put(&req, sock);
+	isc__nmsocket_detach(&sock);
+}
+
 static int
 tcp_connect_direct(isc_nmsocket_t *sock, isc__nm_uvreq_t *req) {
 	isc__networker_t *worker = NULL;
@@ -84,6 +100,15 @@ tcp_connect_direct(isc_nmsocket_t *sock, isc__nm_uvreq_t *req) {
 	REQUIRE(isc__nm_in_netthread());
 
 	worker = &sock->mgr->workers[isc_nm_tid()];
+
+	if (!sock->timer_initialized) {
+		uv_timer_init(&worker->loop, &sock->timer);
+		uv_handle_set_data((uv_handle_t *)&sock->timer, req);
+		sock->timer_initialized = true;
+	}
+
+	uv_timer_start(&sock->timer, connecttimeout_cb, sock->connect_timeout,
+		       0);
 
 	r = uv_tcp_init(&worker->loop, &sock->uv_handle.tcp);
 	if (r != 0) {
@@ -155,7 +180,12 @@ tcp_connect_cb(uv_connect_t *uvreq, int status) {
 
 	sock = uv_handle_get_data((uv_handle_t *)uvreq->handle);
 
-	REQUIRE(VALID_UVREQ(req));
+	if (sock->timed_out) {
+		return;
+	}
+
+	uv_timer_stop(&sock->timer);
+	sock->timer_initialized = false;
 
 	if (status != 0) {
 		req->cb.connect(NULL, isc__nm_uverr2result(status), req->cbarg);
@@ -163,6 +193,8 @@ tcp_connect_cb(uv_connect_t *uvreq, int status) {
 		isc__nmsocket_detach(&sock);
 		return;
 	}
+
+	REQUIRE(VALID_UVREQ(req));
 
 	sock = uv_handle_get_data((uv_handle_t *)uvreq->handle);
 	isc__nm_incstats(sock->mgr, sock->statsindex[STATID_CONNECT]);
@@ -192,7 +224,8 @@ tcp_connect_cb(uv_connect_t *uvreq, int status) {
 
 isc_result_t
 isc_nm_tcpconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
-		  isc_nm_cb_t cb, void *cbarg, size_t extrahandlesize) {
+		  isc_nm_cb_t cb, void *cbarg, unsigned int timeout,
+		  size_t extrahandlesize) {
 	isc_nmsocket_t *nsock = NULL, *tmp = NULL;
 	isc__netievent_tcpconnect_t *ievent = NULL;
 	isc__nm_uvreq_t *req = NULL;
@@ -205,6 +238,7 @@ isc_nm_tcpconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 	nsock = isc_mem_get(mgr->mctx, sizeof(*nsock));
 	isc__nmsocket_init(nsock, mgr, isc_nm_tcpsocket, local);
 	nsock->extrahandlesize = extrahandlesize;
+	nsock->connect_timeout = timeout;
 	nsock->result = ISC_R_SUCCESS;
 
 	req = isc__nm_uvreq_get(mgr, nsock);
@@ -599,7 +633,7 @@ static void
 readtimeout_cb(uv_timer_t *handle) {
 	isc_nmsocket_t *sock = uv_handle_get_data((uv_handle_t *)handle);
 	isc_nm_recv_cb_t cb;
-	void *cbarg;
+	void *cbarg = NULL;
 
 	REQUIRE(VALID_NMSOCK(sock));
 	REQUIRE(sock->tid == isc_nm_tid());
@@ -786,7 +820,7 @@ static void
 read_cb(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
 	isc_nmsocket_t *sock = uv_handle_get_data((uv_handle_t *)stream);
 	isc_nm_recv_cb_t cb;
-	void *cbarg;
+	void *cbarg = NULL;
 
 	REQUIRE(VALID_NMSOCK(sock));
 	REQUIRE(buf != NULL);

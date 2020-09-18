@@ -290,14 +290,17 @@ isc_nm_listentcp(isc_nm_t *mgr, isc_nmiface_t *iface,
 
 isc_result_t
 isc_nm_tcpconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
-		  isc_nm_cb_t cb, void *cbarg, size_t extrahandlesize);
+		  isc_nm_cb_t cb, void *cbarg, unsigned int timeout,
+		  size_t extrahandlesize);
 /*%<
  * Create a socket using netmgr 'mgr', bind it to the address 'local',
  * and connect it to the address 'peer'.
  *
- * When the connection is complete, call 'cb' with argument 'cbarg'.
- * Allocate 'extrahandlesize' additional bytes along with the handle to use
- * for an associated object.
+ * When the connection is complete or has timed out, call 'cb' with
+ * argument 'cbarg'. Allocate 'extrahandlesize' additional bytes along
+ * with the handle to use for an associated object.
+ *
+ * 'timeout' specifies the timeout interval in milliseconds.
  *
  * The connected socket can only be accessed via the handle passed to
  * 'cb'.
@@ -406,7 +409,18 @@ isc_nm_setstats(isc_nm_t *mgr, isc_stats_t *stats);
 
 isc_result_t
 isc_nm_tcpdnsconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
-		     isc_nm_cb_t cb, void *cbarg, size_t extrahandlesize);
+		     isc_nm_cb_t cb, void *cbarg, unsigned int timeout,
+		     size_t extrahandlesize);
 /*%
- * Establish a DNS client connection over a TCP socket.
+ * Establish a DNS client connection over a TCP socket, bound to the
+ * address 'local', and connected to the address 'peer'.
+ *
+ * When the connection is complete or has timed out, call 'cb' with
+ * argument 'cbarg'. Allocate 'extrahandlesize' additional bytes along
+ * with the handle to use for an associated object.
+ *
+ * 'timeout' specifies the timeout interval in milliseconds.
+ *
+ * The connected socket can only be accessed via the handle passed to
+ * 'cb'.
  */
