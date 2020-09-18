@@ -477,7 +477,6 @@ isc__nm_async_tcpchildaccept(isc__networker_t *worker, isc__netievent_t *ev0) {
 	void *accept_cbarg;
 
 	REQUIRE(isc__nm_in_netthread());
-	REQUIRE(csock->type == isc_nm_tcplistener);
 	REQUIRE(csock->tid == isc_nm_tid());
 
 	csock->quota = ievent->quota;
@@ -663,6 +662,7 @@ isc__nm_tcp_read(isc_nmhandle_t *handle, isc_nm_recv_cb_t cb, void *cbarg) {
 
 	sock = handle->sock;
 
+	REQUIRE(sock->tid == isc_nm_tid());
 	sock->recv_cb = cb;
 	sock->recv_cbarg = cbarg;
 
@@ -773,12 +773,11 @@ isc__nm_tcp_resumeread(isc_nmsocket_t *sock) {
 	isc__netievent_startread_t *ievent = NULL;
 
 	REQUIRE(VALID_NMSOCK(sock));
-	LOCK(&sock->lock);
+	REQUIRE(sock->tid == isc_nm_tid());
+
 	if (sock->recv_cb == NULL) {
-		UNLOCK(&sock->lock);
 		return (ISC_R_CANCELED);
 	}
-	UNLOCK(&sock->lock);
 
 	if (!atomic_load(&sock->readpaused)) {
 		return (ISC_R_SUCCESS);
@@ -982,7 +981,6 @@ accept_connection(isc_nmsocket_t *ssock, isc_quota_t *quota) {
 	isc_nmsocket_t *csock = NULL;
 	csock = isc_mem_get(ssock->mgr->mctx, sizeof(isc_nmsocket_t));
 	isc__nmsocket_init(csock, ssock->mgr, isc_nm_tcpsocket, ssock->iface);
-	csock->type = isc_nm_tcplistener;
 	csock->tid = w;
 	csock->extrahandlesize = ssock->extrahandlesize;
 	isc__nmsocket_attach(ssock, &csock->server);

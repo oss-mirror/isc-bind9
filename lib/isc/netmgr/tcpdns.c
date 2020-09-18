@@ -322,10 +322,8 @@ dnslisten_readcb(isc_nmhandle_t *handle, isc_result_t eresult,
 			uv_timer_stop(&dnssock->timer);
 		}
 
-		LOCK(&dnssock->lock);
 		if (atomic_load(&dnssock->sequential) ||
 		    dnssock->recv_cb == NULL) {
-			UNLOCK(&dnssock->lock);
 			/*
 			 * There are two reasons we might want to pause here:
 			 * - We're in sequential mode and we've received
@@ -336,7 +334,6 @@ dnslisten_readcb(isc_nmhandle_t *handle, isc_result_t eresult,
 			isc_nm_pauseread(dnssock->outerhandle);
 			done = true;
 		} else {
-			UNLOCK(&dnssock->lock);
 			/*
 			 * We're pipelining, so we now resume processing
 			 * packets until the clients-per-connection limit
@@ -542,6 +539,7 @@ isc__nm_async_tcpdnssend(isc__networker_t *worker, isc__netievent_t *ev0) {
 	isc_nmsocket_t *sock = ievent->sock;
 
 	REQUIRE(worker->id == sock->tid);
+	REQUIRE(sock->tid == isc_nm_tid());
 
 	result = ISC_R_NOTCONNECTED;
 	if (atomic_load(&sock->active) && sock->outerhandle != NULL) {
@@ -792,6 +790,7 @@ isc__nm_async_tcpdnsread(isc__networker_t *worker, isc__netievent_t *ev0) {
 
 	REQUIRE(VALID_NMSOCK(sock));
 	REQUIRE(worker->id == sock->tid);
+	REQUIRE(sock->tid == isc_nm_tid());
 
 	handle = sock->statichandle;
 
@@ -842,6 +841,7 @@ isc__nm_tcpdns_cancelread(isc_nmhandle_t *handle) {
 	sock = handle->sock;
 
 	REQUIRE(sock->type == isc_nm_tcpdnssocket);
+	REQUIRE(sock->tid == isc_nm_tid());
 
 	if (atomic_load(&sock->client) && sock->recv_cb != NULL) {
 		sock->recv_cb(handle, ISC_R_EOF, NULL, sock->recv_cbarg);

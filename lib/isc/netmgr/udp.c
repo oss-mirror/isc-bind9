@@ -771,6 +771,7 @@ isc__nm_udp_read(isc_nmhandle_t *handle, isc_nm_recv_cb_t cb, void *cbarg) {
 
 	sock = handle->sock;
 
+	REQUIRE(sock->tid == isc_nm_tid());
 	sock->recv_cb = cb;
 	sock->recv_cbarg = cbarg;
 
