@@ -411,6 +411,7 @@ struct isc_nmsocket {
 	 */
 	uv_timer_t timer;
 	bool timer_initialized;
+	bool timer_running;
 	uint64_t read_timeout;
 	uint64_t connect_timeout;
 	bool timed_out;
