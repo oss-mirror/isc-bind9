@@ -2891,9 +2891,9 @@ udp_ready(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	query->handle = handle;
 	isc_nmhandle_attach(handle, &query->readhandle);
 	isc_refcount_increment0(&recvcount);
+	debug("recvcount=%" PRIuFAST32, isc_refcount_current(&recvcount));
 	result = isc_nm_read(handle, recv_done, query);
 	check_result(result, "isc_nm_read");
-	debug("recvcount=%" PRIuFAST32, isc_refcount_current(&recvcount));
 
 	send_udp(query);
 }
@@ -3133,9 +3133,9 @@ launch_next_query(dig_query_t *query) {
 		isc_nmhandle_attach(query->handle, &query->readhandle);
 	}
 	isc_refcount_increment0(&recvcount);
+	debug("recvcount=%" PRIuFAST32, isc_refcount_current(&recvcount));
 	result = isc_nm_read(query->handle, recv_done, query);
 	check_result(result, "isc_nm_read");
-	debug("recvcount=%" PRIuFAST32, isc_refcount_current(&recvcount));
 
 	if (!query->first_soa_rcvd) {
 		debug("sending a request in launch_next_query");
