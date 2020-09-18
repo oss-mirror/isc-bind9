@@ -63,11 +63,9 @@ isc_nm_listenudp(isc_nm_t *mgr, isc_nmiface_t *iface, isc_nm_recv_cb_t cb,
 				      mgr->nworkers * sizeof(*nsock));
 	memset(nsock->children, 0, mgr->nworkers * sizeof(*nsock));
 
-	LOCK(&nsock->lock);
 	INSIST(nsock->recv_cb == NULL && nsock->recv_cbarg == NULL);
 	nsock->recv_cb = cb;
 	nsock->recv_cbarg = cbarg;
-	UNLOCK(&nsock->lock);
 	nsock->extrahandlesize = extrahandlesize;
 
 	for (size_t i = 0; i < mgr->nworkers; i++) {
@@ -82,11 +80,9 @@ isc_nm_listenudp(isc_nm_t *mgr, isc_nmiface_t *iface, isc_nm_recv_cb_t cb,
 		csock->tid = i;
 		csock->extrahandlesize = extrahandlesize;
 
-		LOCK(&csock->lock);
 		INSIST(csock->recv_cb == NULL && csock->recv_cbarg == NULL);
 		csock->recv_cb = cb;
 		csock->recv_cbarg = cbarg;
-		UNLOCK(&csock->lock);
 		csock->fd = socket(sa_family, SOCK_DGRAM, 0);
 		RUNTIME_CHECK(csock->fd >= 0);
 
@@ -391,11 +387,10 @@ udp_recv_cb(uv_udp_t *handle, ssize_t nrecv, const uv_buf_t *buf,
 	region.base = (unsigned char *)buf->base;
 	region.length = nrecv;
 
-	LOCK(&sock->lock);
+	INSIST(sock->tid == isc_nm_tid());
 	INSIST(sock->recv_cb != NULL);
 	cb = sock->recv_cb;
 	cbarg = sock->recv_cbarg;
-	UNLOCK(&sock->lock);
 
 	cb(nmhandle, ISC_R_SUCCESS, &region, cbarg);
 
@@ -644,10 +639,8 @@ isc__nm_async_udpconnect(isc__networker_t *worker, isc__netievent_t *ev0) {
 	sock->result = ISC_R_SUCCESS;
 
 done:
-	LOCK(&sock->lock);
 	cb = sock->connect_cb;
 	cbarg = sock->connect_cbarg;
-	UNLOCK(&sock->lock);
 
 	cb(handle, sock->result, cbarg);
 
@@ -673,11 +666,9 @@ isc_nm_udpconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 	sock = isc_mem_get(mgr->mctx, sizeof(isc_nmsocket_t));
 	isc__nmsocket_init(sock, mgr, isc_nm_udpsocket, local);
 
-	LOCK(&sock->lock);
 	INSIST(sock->connect_cb == NULL && sock->connect_cbarg == NULL);
 	sock->connect_cb = cb;
 	sock->connect_cbarg = cbarg;
-	UNLOCK(&sock->lock);
 	sock->extrahandlesize = extrahandlesize;
 	sock->peer = peer->addr;
 	atomic_init(&sock->client, true);
@@ -780,10 +771,8 @@ isc__nm_udp_read(isc_nmhandle_t *handle, isc_nm_recv_cb_t cb, void *cbarg) {
 
 	sock = handle->sock;
 
-	LOCK(&sock->lock);
 	sock->recv_cb = cb;
 	sock->recv_cbarg = cbarg;
-	UNLOCK(&sock->lock);
 
 	ievent = isc__nm_get_ievent(sock->mgr, netievent_udpread);
 	ievent->sock = sock;
