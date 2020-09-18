@@ -2887,11 +2887,12 @@ udp_ready(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 
 	debug("recving with lookup=%p, query=%p, handle=%p", query->lookup,
 	      query, query->handle);
+
 	query->handle = handle;
 	isc_nmhandle_attach(handle, &query->readhandle);
+	isc_refcount_increment0(&recvcount);
 	result = isc_nm_read(handle, recv_done, query);
 	check_result(result, "isc_nm_read");
-	isc_refcount_increment0(&recvcount);
 	debug("recvcount=%" PRIuFAST32, isc_refcount_current(&recvcount));
 
 	send_udp(query);
@@ -3031,8 +3032,11 @@ connect_timeout(isc_task_t *task, isc_event_t *event) {
 		return;
 	}
 
-	if (l->tcp_mode && query->readhandle != NULL) {
-		query->timedout = true;
+	if (query->readhandle != NULL) {
+		isc_refcount_decrement0(&recvcount);
+		if (l->tcp_mode) {
+			query->timedout = true;
+		}
 	}
 
 	if (l->retries > 1) {
@@ -3073,7 +3077,6 @@ connect_timeout(isc_task_t *task, isc_event_t *event) {
 		isc_nmhandle_detach(&handle);
 	}
 
-	isc_refcount_decrement0(&recvcount);
 	query->waiting_senddone = false;
 	clear_query(query);
 	cancel_lookup(l);
@@ -3129,9 +3132,9 @@ launch_next_query(dig_query_t *query) {
 	if (query->readhandle == NULL) {
 		isc_nmhandle_attach(query->handle, &query->readhandle);
 	}
+	isc_refcount_increment0(&recvcount);
 	result = isc_nm_read(query->handle, recv_done, query);
 	check_result(result, "isc_nm_read");
-	isc_refcount_increment0(&recvcount);
 	debug("recvcount=%" PRIuFAST32, isc_refcount_current(&recvcount));
 
 	if (!query->first_soa_rcvd) {
