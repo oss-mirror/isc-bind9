@@ -3182,13 +3182,6 @@ tcp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	if (eresult == ISC_R_CANCELED) {
 		debug("in cancel handler");
 		isc_sockaddr_format(&query->sockaddr, sockstr, sizeof(sockstr));
-		if (query->timedout) {
-			dighost_warning("Connection to %s(%s) for %s failed: "
-					"%s.",
-					sockstr, query->servname,
-					query->lookup->textname,
-					isc_result_totext(ISC_R_TIMEDOUT));
-		}
 		l = query->lookup;
 		clear_query(query);
 		check_next_lookup(l);

@@ -1218,8 +1218,9 @@ isc__nm_tcp_shutdown(isc_nmsocket_t *sock) {
 		if (sock->recv_cb != NULL) {
 			sock->recv_cb(sock->statichandle, ISC_R_CANCELED, NULL,
 				      sock->recv_cbarg);
+		} else {
+			isc__nmsocket_detach(&sock);
 		}
-		isc__nmsocket_detach(&sock);
 	}
 }
 
