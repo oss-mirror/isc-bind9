@@ -915,9 +915,8 @@ flush_lookup_list(void) {
 	while (l != NULL) {
 		q = ISC_LIST_HEAD(l->q);
 		while (q != NULL) {
-			if (q->handle != NULL) {
-				isc_nm_cancelread(q->handle);
-				isc_nmhandle_detach(&q->handle);
+			if (q->readhandle != NULL) {
+				isc_nmhandle_detach(&q->readhandle);
 			}
 			qp = q;
 			q = ISC_LIST_NEXT(q, link);
