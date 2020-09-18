@@ -3043,6 +3043,7 @@ connect_timeout(isc_task_t *task, isc_event_t *event) {
 		if (!l->tcp_mode) {
 			l->retries--;
 			debug("resending UDP request to first server");
+			isc_refcount_increment0(&recvcount);
 			start_udp(ISC_LIST_HEAD(l->q));
 			UNLOCK_LOOKUP;
 			return;
