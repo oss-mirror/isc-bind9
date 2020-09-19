@@ -3010,7 +3010,6 @@ static void
 connect_timeout(isc_task_t *task, isc_event_t *event) {
 	dig_lookup_t *l = NULL;
 	dig_query_t *query = NULL;
-	isc_nmhandle_t *handle = NULL;
 
 	UNUSED(task);
 	REQUIRE(event->ev_type == ISC_TIMEREVENT_IDLE);
@@ -3037,8 +3036,17 @@ connect_timeout(isc_task_t *task, isc_event_t *event) {
 
 	if (l->retries > 1) {
 		l->retries--;
-		debug("resending UDP request to first server");
-		start_udp(ISC_LIST_HEAD(l->q));
+		if (l->tcp_mode) {
+			debug("making new TCP request, %d tries left",
+			      l->retries);
+			isc_refcount_decrement0(&recvcount);
+			requeue_lookup(l, true);
+			clear_query(query);
+			check_next_lookup(l);
+		} else {
+			debug("resending UDP request to first server");
+			start_udp(ISC_LIST_HEAD(l->q));
+		}
 		UNLOCK_LOOKUP;
 		return;
 	}
@@ -3065,8 +3073,10 @@ connect_timeout(isc_task_t *task, isc_event_t *event) {
 		exitcode = 9;
 	}
 
-	handle = query->handle;
-	isc_nmhandle_detach(&handle);
+	if (!l->tcp_mode) {
+		isc_nmhandle_t *handle = query->handle;
+		isc_nmhandle_detach(&handle);
+	}
 	query->waiting_senddone = false;
 	clear_query(query);
 	cancel_lookup(l);
@@ -3124,6 +3134,11 @@ launch_next_query(dig_query_t *query) {
 	}
 	isc_refcount_increment0(&recvcount);
 	debug("recvcount=%" PRIuFAST32, isc_refcount_current(&recvcount));
+
+	if (query->lookup->tcp_mode) {
+		bringup_timer(query, TCP_TIMEOUT);
+	}
+
 	result = isc_nm_read(query->handle, recv_done, query);
 	check_result(result, "isc_nm_read");
 
@@ -3210,6 +3225,7 @@ tcp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 			      l->retries);
 			l->retries--;
 			requeue_lookup(l, true);
+			next = NULL;
 		} else if ((l->current_query != NULL) &&
 			   (ISC_LINK_LINKED(l->current_query, link)))
 		{
@@ -3221,6 +3237,7 @@ tcp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 		clear_query(query);
 
 		if (next != NULL) {
+			bringup_timer(next, TCP_TIMEOUT);
 			start_tcp(next);
 		} else {
 			check_next_lookup(l);
