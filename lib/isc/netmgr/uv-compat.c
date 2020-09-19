@@ -188,20 +188,16 @@ isc_uv_import(uv_stream_t *stream, isc_uv_stream_info_t *info) {
 
 #endif /* ifndef HAVE_UV_IMPORT */
 
-#ifndef HAVE_UV_UDP_SEND
-
-#else
-
+#ifndef HAVE_UV_UDP_CONNECT
 int
 isc_uv_udp_connect(uv_udp_t *handle, const struct sockaddr *addr) {
 	int err = 0;
 
 	do {
-		int addrlen = (ievent->peer.type.sa.sa_family == AF_INET)
+		int addrlen = (addr->sa_family == AF_INET)
 				      ? sizeof(struct sockaddr_in)
 				      : sizeof(struct sockaddr_in6);
-
-		err = connect(sock->fd, &ievent->peer.type.sa, addrlen);
+		err = connect(handle->io_watcher.fd, addr, addrlen);
 	} while (err == -1 && errno == EINTR);
 
 	if (err) {
@@ -214,5 +210,4 @@ isc_uv_udp_connect(uv_udp_t *handle, const struct sockaddr *addr) {
 
 	return (0);
 }
-
-#endif /* ifndef HAVE_UV_UDP_SEND */
+#endif /* ifndef HAVE_UV_UDP_CONNECT */
