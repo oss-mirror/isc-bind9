@@ -115,7 +115,7 @@ struct dig_lookup {
 		tcp_keepalive, header_only, ednsneg, mapped,
 		print_unknown_format, multiline, nottl, noclass, onesoa,
 		use_usec, nocrypto, ttlunits, idnin, idnout, expandaaaa, qr,
-		setqid;	       /*% use a speciied query ID */
+		setqid;	       /*% use a specified query ID */
 	char textname[MXNAME]; /*% Name we're going to be
 				* looking up */
 	char cmdline[MXNAME];
