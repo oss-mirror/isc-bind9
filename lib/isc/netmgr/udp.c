@@ -554,8 +554,16 @@ udp_send_direct(isc_nmsocket_t *sock, isc__nm_uvreq_t *req,
 		return (ISC_R_CANCELED);
 	}
 
-#if UV_VERSION_MAJOR > 1 || UV_VERSION_MINOR >= 27
-	sa = atomic_load(&sock->connected) ? NULL : &peer->type.sa;
+#ifdef HAVE_UV_UDP_CONNECT
+	/*
+	 * If we used uv_udp_connect() (and not the shim version for
+	 * older versions of libuv), then the peer address has to be
+	 * set to NULL or else uv_udp_send() could fail or assert,
+	 * depending on the libuv version.
+	 */
+	if (atomic_load(&sock->connected)) {
+		sa = NULL;
+	}
 #endif
 	rv = uv_udp_send(&req->uv_req.udp_send, &sock->uv_handle.udp,
 			 &req->uvbuf, 1, sa, udp_send_cb);
