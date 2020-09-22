@@ -511,7 +511,15 @@ isc__nm_async_udpsend(isc__networker_t *worker, isc__netievent_t *ev0) {
 	REQUIRE(worker->id == ievent->sock->tid);
 
 	if (isc__nmsocket_active(ievent->sock)) {
-		udp_send_direct(ievent->sock, ievent->req, &ievent->peer);
+		isc_result_t result;
+
+		result = udp_send_direct(ievent->sock, ievent->req,
+					 &ievent->peer);
+		if (result != ISC_R_SUCCESS) {
+			ievent->req->cb.send(ievent->req->handle, result,
+					     ievent->req->cbarg);
+			isc__nm_uvreq_put(&ievent->req, ievent->req->sock);
+		}
 	} else {
 		ievent->req->cb.send(ievent->req->handle, ISC_R_CANCELED,
 				     ievent->req->cbarg);
