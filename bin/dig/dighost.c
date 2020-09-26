@@ -2062,6 +2062,37 @@ compute_cookie(unsigned char *clientcookie, size_t len) {
 	memmove(clientcookie, cookie_secret, 8);
 }
 
+static dig_query_t *
+new_query(dig_lookup_t *lookup, char *servname, char *userarg) {
+	dig_query_t *query = NULL;
+
+	query = isc_mem_allocate(mctx, sizeof(dig_query_t));
+	debug("create query %p linked to lookup %p", query, lookup);
+	*query = (dig_query_t){ .lookup = lookup,
+				.sendbuf = lookup->renderbuf,
+				.servname = servname,
+				.userarg = userarg,
+				.first_pass = true,
+				.warn_id = true,
+				.recvspace = isc_mempool_get(commctx),
+				.tmpsendspace = isc_mempool_get(commctx) };
+	if (query->recvspace == NULL) {
+		fatal("memory allocation failure");
+	}
+	if (query->tmpsendspace == NULL) {
+		fatal("memory allocation failure");
+	}
+
+	isc_time_settoepoch(&query->time_sent);
+	isc_time_settoepoch(&query->time_recv);
+
+	ISC_LINK_INIT(query, clink);
+	ISC_LINK_INIT(query, link);
+
+	query->magic = DIG_QUERY_MAGIC;
+	return (query);
+}
+
 /*%
  * Setup the supplied lookup structure, making it ready to start sending
  * queries to servers.  Create and initialize the message to be sent as
@@ -2549,32 +2580,7 @@ setup_lookup(dig_lookup_t *lookup) {
 	for (serv = ISC_LIST_HEAD(lookup->my_server_list); serv != NULL;
 	     serv = ISC_LIST_NEXT(serv, link))
 	{
-		query = isc_mem_allocate(mctx, sizeof(dig_query_t));
-		debug("create query %p linked to lookup %p", query, lookup);
-		*query = (dig_query_t){ .lookup = lookup,
-					.sendbuf = lookup->renderbuf,
-					.servname = serv->servername,
-					.userarg = serv->userarg,
-					.first_pass = true,
-					.warn_id = true,
-					.recvspace = isc_mempool_get(commctx),
-					.tmpsendspace =
-						isc_mempool_get(commctx) };
-		if (query->recvspace == NULL) {
-			fatal("memory allocation failure");
-		}
-		if (query->tmpsendspace == NULL) {
-			fatal("memory allocation failure");
-		}
-
-		isc_time_settoepoch(&query->time_sent);
-		isc_time_settoepoch(&query->time_recv);
-
-		ISC_LINK_INIT(query, clink);
-		ISC_LINK_INIT(query, link);
-
-		query->magic = DIG_QUERY_MAGIC;
-
+		query = new_query(lookup, serv->servername, serv->userarg);
 		ISC_LIST_ENQUEUE(lookup->q, query, link);
 	}
 
@@ -3035,19 +3041,36 @@ connect_timeout(isc_task_t *task, isc_event_t *event) {
 	}
 
 	if (l->retries > 1) {
+		dig_query_t *newq = NULL;
+
 		l->retries--;
 		if (l->tcp_mode) {
 			debug("making new TCP request, %d tries left",
 			      l->retries);
-			isc_refcount_decrement0(&recvcount);
 			requeue_lookup(l, true);
+			isc_refcount_decrement0(&recvcount);
 			clear_query(query);
 			check_next_lookup(l);
-		} else {
-			debug("resending UDP request to first server");
-			start_udp(ISC_LIST_HEAD(l->q));
+			UNLOCK_LOOKUP;
+			return;
 		}
+
+		debug("resending UDP request to first server, %d tries left",
+		      l->retries);
+		newq = new_query(query->lookup, query->servname,
+				 query->userarg);
+
+		ISC_LIST_DEQUEUE(l->q, query, link);
+		ISC_LIST_PREPEND(l->q, newq, link);
+
+		query->waiting_senddone = false;
+		isc_nmhandle_detach(&query->handle);
+		isc_refcount_decrement0(&recvcount);
+		clear_query(query);
 		UNLOCK_LOOKUP;
+
+		start_udp(ISC_LIST_HEAD(l->q));
+
 		return;
 	}
 
@@ -3077,6 +3100,7 @@ connect_timeout(isc_task_t *task, isc_event_t *event) {
 		isc_nmhandle_t *handle = query->handle;
 		isc_nmhandle_detach(&handle);
 	}
+
 	query->waiting_senddone = false;
 	clear_query(query);
 	cancel_lookup(l);
@@ -3856,6 +3880,7 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 				start_udp(next);
 			}
 		}
+
 		/*
 		 * If our query is at the head of the list and there
 		 * is no next, we're the only one left, so fall
