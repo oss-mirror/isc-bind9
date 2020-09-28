@@ -607,7 +607,6 @@ isc__nm_async_udpconnect(isc__networker_t *worker, isc__netievent_t *ev0) {
 	uv_udp_init(&worker->loop, &sock->uv_handle.udp);
 	uv_handle_set_data(&sock->uv_handle.handle, NULL);
 	uv_handle_set_data(&sock->uv_handle.handle, sock);
-	handle = isc__nmhandle_get(sock, &ievent->peer, &sock->iface->addr);
 
 	r = uv_udp_open(&sock->uv_handle.udp, sock->fd);
 	if (r != 0) {
@@ -654,16 +653,17 @@ isc__nm_async_udpconnect(isc__networker_t *worker, isc__netievent_t *ev0) {
 	atomic_store(&sock->connected, true);
 	sock->result = ISC_R_SUCCESS;
 
-done:
 	cb = sock->connect_cb;
 	cbarg = sock->connect_cbarg;
 
+	handle = isc__nmhandle_get(sock, &ievent->peer, &sock->iface->addr);
 	cb(handle, sock->result, cbarg);
 
 	LOCK(&sock->lock);
 	SIGNAL(&sock->cond);
 	UNLOCK(&sock->lock);
 
+done:
 	isc__nmsocket_detach(&sock);
 }
 
@@ -743,10 +743,7 @@ isc_nm_udpconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 		UNLOCK(&sock->lock);
 	}
 
-	if (sock->result != ISC_R_SUCCESS) {
-		result = sock->result;
-		isc__nmsocket_detach(&sock);
-	}
+	sock->result = result;
 
 	isc__nmsocket_detach(&tmp);
 
