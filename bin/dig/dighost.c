@@ -3072,8 +3072,13 @@ connect_timeout(isc_task_t *task, isc_event_t *event) {
 		ISC_LIST_PREPEND(l->q, newq, link);
 
 		query->waiting_senddone = false;
-		isc_nmhandle_detach(&query->handle);
-		isc_refcount_decrement0(&recvcount);
+
+		if (query->readhandle != NULL) {
+			isc_nmhandle_t *handle = query->readhandle;
+			isc_nmhandle_detach(&handle);
+			isc_refcount_decrement0(&recvcount);
+		}
+
 		clear_query(query);
 		UNLOCK_LOOKUP;
 
