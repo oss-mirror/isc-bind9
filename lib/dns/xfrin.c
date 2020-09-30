@@ -890,9 +890,14 @@ failure:
 static isc_result_t
 xfrin_start(dns_xfrin_ctx_t *xfr) {
 	isc_result_t result;
+	/*
+	 * XXX: timeout hard-coded to 30 seconds; this needs to be
+	 * configurable.
+	 */
 	CHECK(isc_nm_tcpdnsconnect(
 		xfr->netmgr, (isc_nmiface_t *)&xfr->sourceaddr,
-		(isc_nmiface_t *)&xfr->masteraddr, xfrin_connect_done, xfr, 0));
+		(isc_nmiface_t *)&xfr->masteraddr, xfrin_connect_done, xfr,
+		30000, 0));
 	/* TODO	isc_socket_dscp(xfr->socket, xfr->dscp); */
 	xfr->connects++;
 	return (ISC_R_SUCCESS);
