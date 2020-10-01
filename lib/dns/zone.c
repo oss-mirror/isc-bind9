@@ -14010,6 +14010,13 @@ zone_shutdown(isc_task_t *task, isc_event_t *event) {
 		dns_xfrin_shutdown(zone->xfr);
 	}
 
+	/*
+	 * In case the shutdown didn't detach the xfr object...
+	 */
+	if (zone->xfr != NULL) {
+		dns_xfrin_detach(&zone->xfr);
+	}
+
 	/* Safe to release the zone now */
 	if (zone->zmgr != NULL) {
 		dns_zonemgr_releasezone(zone->zmgr, zone);
@@ -17100,6 +17107,9 @@ got_transfer_quota(isc_task_t *task, isc_event_t *event) {
 	}
 	UNLOCK_ZONE(zone);
 	INSIST(isc_sockaddr_pf(&masteraddr) == isc_sockaddr_pf(&sourceaddr));
+	if (zone->xfr != NULL) {
+		dns_xfrin_detach(&zone->xfr);
+	}
 	result = dns_xfrin_create(zone, xfrtype, &masteraddr, &sourceaddr, dscp,
 				  zone->tsigkey, zone->mctx,
 				  zone->zmgr->timermgr, zone->zmgr->netmgr,

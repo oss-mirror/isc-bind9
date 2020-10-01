@@ -1178,7 +1178,6 @@ static void
 xfrin_recv_done(isc_nmhandle_t *handle, isc_result_t result,
 		isc_region_t *region, void *cbarg) {
 	dns_xfrin_ctx_t *xfr = (dns_xfrin_ctx_t *)cbarg;
-
 	dns_message_t *msg = NULL;
 	dns_name_t *name;
 	const dns_name_t *tsigowner = NULL;
@@ -1469,9 +1468,6 @@ failure:
 	}
 	if (result != ISC_R_SUCCESS) {
 		xfrin_fail(xfr, result, "failed while receiving responses");
-		if (xfr->readhandle != NULL) {
-			isc_nmhandle_detach(&xfr->readhandle);
-		}
 	}
 }
 
