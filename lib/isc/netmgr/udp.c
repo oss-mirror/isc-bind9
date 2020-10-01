@@ -613,7 +613,7 @@ isc__nm_async_udpconnect(isc__networker_t *worker, isc__netievent_t *ev0) {
 		isc__nm_incstats(sock->mgr, sock->statsindex[STATID_OPENFAIL]);
 		atomic_store(&sock->closed, true);
 		atomic_store(&sock->connect_error, true);
-		sock->result = isc__nm_uverr2result(r);
+		atomic_store(&sock->result, isc__nm_uverr2result(r));
 		goto done;
 	}
 	isc__nm_incstats(sock->mgr, sock->statsindex[STATID_OPEN]);
@@ -627,7 +627,7 @@ isc__nm_async_udpconnect(isc__networker_t *worker, isc__netievent_t *ev0) {
 	if (r != 0) {
 		isc__nm_incstats(sock->mgr, sock->statsindex[STATID_BINDFAIL]);
 		atomic_store(&sock->connect_error, true);
-		sock->result = isc__nm_uverr2result(r);
+		atomic_store(&sock->result, isc__nm_uverr2result(r));
 		goto done;
 	}
 
@@ -636,7 +636,7 @@ isc__nm_async_udpconnect(isc__networker_t *worker, isc__netievent_t *ev0) {
 		isc__nm_incstats(sock->mgr,
 				 sock->statsindex[STATID_CONNECTFAIL]);
 		atomic_store(&sock->connect_error, true);
-		sock->result = isc__nm_uverr2result(r);
+		atomic_store(&sock->result, isc__nm_uverr2result(r));
 		goto done;
 	}
 	isc__nm_incstats(sock->mgr, sock->statsindex[STATID_CONNECT]);
@@ -651,13 +651,13 @@ isc__nm_async_udpconnect(isc__networker_t *worker, isc__netievent_t *ev0) {
 #endif
 
 	atomic_store(&sock->connected, true);
-	sock->result = ISC_R_SUCCESS;
+	atomic_store(&sock->result, ISC_R_SUCCESS);
 
 	cb = sock->connect_cb;
 	cbarg = sock->connect_cbarg;
 
 	handle = isc__nmhandle_get(sock, &ievent->peer, &sock->iface->addr);
-	cb(handle, sock->result, cbarg);
+	cb(handle, atomic_load(&sock->result), cbarg);
 
 	LOCK(&sock->lock);
 	SIGNAL(&sock->cond);
@@ -743,8 +743,7 @@ isc_nm_udpconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 		UNLOCK(&sock->lock);
 	}
 
-	sock->result = result;
-
+	atomic_store(&sock->result, result);
 	isc__nmsocket_detach(&tmp);
 
 	return (result);

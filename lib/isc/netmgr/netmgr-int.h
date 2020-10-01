@@ -518,9 +518,9 @@ struct isc_nmsocket {
 	isc_condition_t cond;
 
 	/*%
-	 * Used to pass a result back from TCP listening events.
+	 * Used to pass a result back from listen or connect events.
 	 */
-	isc_result_t result;
+	atomic_int_fast32_t result;
 
 	/*%
 	 * List of active handles.

@@ -265,7 +265,7 @@ dnslisten_readcb(isc_nmhandle_t *handle, isc_result_t eresult,
 
 	if (region == NULL || eresult != ISC_R_SUCCESS) {
 		/* Connection closed */
-		dnssock->result = eresult;
+		atomic_store(&dnssock->result, eresult);
 		if (atomic_load(&dnssock->client) && dnssock->recv_cb != NULL) {
 			dnssock->recv_cb(dnssock->statichandle, eresult, NULL,
 					 dnssock->recv_cbarg);
