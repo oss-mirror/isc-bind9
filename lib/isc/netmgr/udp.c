@@ -604,6 +604,9 @@ isc__nm_async_udpconnect(isc__networker_t *worker, isc__netievent_t *ev0) {
 	REQUIRE(sock->parent == NULL);
 	REQUIRE(sock->tid == isc_nm_tid());
 
+	/* FIXME: this needs it's own timeout */
+	sock->read_timeout = sock->mgr->init;
+
 	uv_udp_init(&worker->loop, &sock->uv_handle.udp);
 	uv_handle_set_data(&sock->uv_handle.handle, NULL);
 	uv_handle_set_data(&sock->uv_handle.handle, sock);
@@ -758,6 +761,29 @@ udp_read_cb(uv_udp_t *handle, ssize_t nrecv, const uv_buf_t *buf,
 	uv_udp_recv_stop(&sock->uv_handle.udp);
 }
 
+static void
+readtimeout_cb(uv_timer_t *handle) {
+	isc_nmsocket_t *sock = uv_handle_get_data((uv_handle_t *)handle);
+	isc_nm_recv_cb_t cb;
+	void *cbarg = NULL;
+
+	REQUIRE(VALID_NMSOCK(sock));
+	REQUIRE(sock->tid == isc_nm_tid());
+
+	/*
+	 * Timeout; stop reading and process whatever we have.
+	 */
+	uv_udp_recv_stop(&sock->uv_handle.udp);
+
+	cb = sock->recv_cb;
+	cbarg = sock->recv_cbarg;
+	isc__nmsocket_clearcb(sock);
+
+	if (cb != NULL) {
+		cb(sock->statichandle, ISC_R_TIMEDOUT, NULL, cbarg);
+	}
+}
+
 /*
  * Asynchronous 'udpread' call handler: start or resume reading on a socket;
  * pause reading and call the 'recv' callback after each datagram.
@@ -767,7 +793,17 @@ isc__nm_async_udpread(isc__networker_t *worker, isc__netievent_t *ev0) {
 	isc__netievent_udpread_t *ievent = (isc__netievent_udpread_t *)ev0;
 	isc_nmsocket_t *sock = ievent->sock;
 
-	UNUSED(worker);
+	REQUIRE(worker->id == isc_nm_tid());
+	if (sock->read_timeout != 0) {
+		if (!sock->timer_initialized) {
+			uv_timer_init(&worker->loop, &sock->timer);
+			uv_handle_set_data((uv_handle_t *)&sock->timer, sock);
+			sock->timer_initialized = true;
+		}
+		uv_timer_start(&sock->timer, readtimeout_cb, sock->read_timeout,
+			       0);
+		sock->timer_running = true;
+	}
 
 	uv_udp_recv_start(&sock->uv_handle.udp, udp_alloc_cb, udp_read_cb);
 }
@@ -836,6 +872,45 @@ isc__nm_udp_close(isc_nmsocket_t *sock) {
 	if (sock->tid == isc_nm_tid()) {
 		isc__nm_async_udpclose(&sock->mgr->workers[sock->tid],
 				       (isc__netievent_t *)ievent);
+		isc__nm_put_ievent(sock->mgr, ievent);
+	} else {
+		isc__nm_enqueue_ievent(&sock->mgr->workers[sock->tid],
+				       (isc__netievent_t *)ievent);
+	}
+}
+
+void
+isc__nm_async_udpcancelread(isc__networker_t *worker, isc__netievent_t *ev0) {
+	isc__netievent_udpcancelread_t *ievent =
+		(isc__netievent_udpcancelread_t *)ev0;
+	isc_nmsocket_t *sock = ievent->sock;
+
+	REQUIRE(worker->id == ievent->sock->tid);
+
+	uv_udp_recv_stop(&sock->uv_handle.udp);
+
+	if (sock->recv_cb) {
+		sock->recv_cb(NULL, ISC_R_EOF, NULL, sock->recv_cbarg);
+	}
+}
+
+void
+isc__nm_udp_cancelread(isc_nmhandle_t *handle) {
+	isc_nmsocket_t *sock = NULL;
+	REQUIRE(VALID_NMHANDLE(handle));
+
+	sock = handle->sock;
+
+	REQUIRE(VALID_NMSOCK(sock));
+	REQUIRE(sock->type == isc_nm_udpsocket);
+
+	isc__netievent_udpcancelread_t *ievent =
+		isc__nm_get_ievent(sock->mgr, netievent_udpcancelread);
+	ievent->sock = sock;
+
+	if (sock->tid == isc_nm_tid()) {
+		isc__nm_async_udpcancelread(&sock->mgr->workers[sock->tid],
+					    (isc__netievent_t *)ievent);
 		isc__nm_put_ievent(sock->mgr, ievent);
 	} else {
 		isc__nm_enqueue_ievent(&sock->mgr->workers[sock->tid],

@@ -622,6 +622,9 @@ process_queue(isc__networker_t *worker, isc_queue_t *queue) {
 		case netievent_udpclose:
 			isc__nm_async_udpclose(worker, ievent);
 			break;
+		case netievent_udpcancelread:
+			isc__nm_async_udpcancelread(worker, ievent);
+			break;
 
 		case netievent_tcpconnect:
 			isc__nm_async_tcpconnect(worker, ievent);
@@ -1455,6 +1458,9 @@ isc_nm_cancelread(isc_nmhandle_t *handle) {
 	REQUIRE(VALID_NMHANDLE(handle));
 
 	switch (handle->sock->type) {
+	case isc_nm_udpsocket:
+		isc__nm_udp_cancelread(handle);
+		break;
 	case isc_nm_tcpsocket:
 		isc__nm_tcp_cancelread(handle);
 		break;

@@ -1252,6 +1252,8 @@ isc__nm_async_tcpcancel(isc__networker_t *worker, isc__netievent_t *ev0) {
 	REQUIRE(worker->id == sock->tid);
 	REQUIRE(sock->tid == isc_nm_tid());
 
+	uv_read_stop(&sock->uv_handle.stream);
+
 	if (atomic_load(&sock->client)) {
 		isc_nm_recv_cb_t cb;
 		void *cbarg = NULL;

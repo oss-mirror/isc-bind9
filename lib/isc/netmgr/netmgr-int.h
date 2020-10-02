@@ -49,6 +49,8 @@
 #define ISC_NETMGR_RECVBUF_SIZE (65536)
 #endif
 
+#define NETMGR_TRACE 1
+
 /*
  * Define NETMGR_TRACE to activate tracing of handles and sockets.
  * This will impair performance but enables us to quickly determine,
@@ -140,6 +142,7 @@ typedef enum isc__netievent_type {
 	netievent_udpread,
 	netievent_udpstop,
 	netievent_udpclose,
+	netievent_udpcancelread,
 
 	netievent_tcpconnect,
 	netievent_tcpsend,
@@ -219,6 +222,7 @@ typedef isc__netievent__socket_t isc__netievent_udplisten_t;
 typedef isc__netievent__socket_t isc__netievent_udpread_t;
 typedef isc__netievent__socket_t isc__netievent_udpstop_t;
 typedef isc__netievent__socket_t isc__netievent_udpclose_t;
+typedef isc__netievent__socket_t isc__netievent_udpcancelread_t;
 typedef isc__netievent__socket_t isc__netievent_tcpstop_t;
 typedef isc__netievent__socket_t isc__netievent_tcpclose_t;
 typedef isc__netievent__socket_t isc__netievent_startread_t;
@@ -719,6 +723,12 @@ isc__nm_udp_close(isc_nmsocket_t *sock);
  */
 
 void
+isc__nm_udp_cancelread(isc_nmhandle_t *handle);
+/*%<
+ * Stop reading on a connected UDP handle.
+ */
+
+void
 isc__nm_udp_stoplistening(isc_nmsocket_t *sock);
 
 void
@@ -734,6 +744,8 @@ void
 isc__nm_async_udpread(isc__networker_t *worker, isc__netievent_t *ev0);
 void
 isc__nm_async_udpclose(isc__networker_t *worker, isc__netievent_t *ev0);
+void
+isc__nm_async_udpcancelread(isc__networker_t *worker, isc__netievent_t *ev0);
 /*%<
  * Callback handlers for asynchronous UDP events (listen, stoplisten, send).
  */
