@@ -1227,13 +1227,29 @@ isc__nm_tcp_shutdown(isc_nmsocket_t *sock) {
 void
 isc__nm_tcp_cancelread(isc_nmhandle_t *handle) {
 	isc_nmsocket_t *sock = NULL;
+	isc__netievent_tcpcancel_t *ievent = NULL;
 
 	REQUIRE(VALID_NMHANDLE(handle));
 
 	sock = handle->sock;
 
-	REQUIRE(VALID_NMSOCK(sock));
 	REQUIRE(sock->type == isc_nm_tcpsocket);
+
+	ievent = isc__nm_get_ievent(sock->mgr, netievent_tcpcancel);
+	ievent->sock = sock;
+	isc_nmhandle_attach(handle, &ievent->handle);
+	isc__nm_enqueue_ievent(&sock->mgr->workers[sock->tid],
+			       (isc__netievent_t *)ievent);
+}
+
+void
+isc__nm_async_tcpcancel(isc__networker_t *worker, isc__netievent_t *ev0) {
+	isc__netievent_tcpcancel_t *ievent = (isc__netievent_tcpcancel_t *)ev0;
+	isc_nmsocket_t *sock = ievent->sock;
+	isc_nmhandle_t *handle = ievent->handle;
+
+	REQUIRE(VALID_NMSOCK(sock));
+	REQUIRE(worker->id == sock->tid);
 	REQUIRE(sock->tid == isc_nm_tid());
 
 	if (atomic_load(&sock->client)) {
@@ -1248,4 +1264,6 @@ isc__nm_tcp_cancelread(isc_nmhandle_t *handle) {
 			cb(handle, ISC_R_EOF, NULL, cbarg);
 		}
 	}
+
+	isc_nmhandle_detach(&handle);
 }

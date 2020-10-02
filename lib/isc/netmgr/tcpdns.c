@@ -835,17 +835,46 @@ isc__nm_async_tcpdnsread(isc__networker_t *worker, isc__netievent_t *ev0) {
 void
 isc__nm_tcpdns_cancelread(isc_nmhandle_t *handle) {
 	isc_nmsocket_t *sock = NULL;
+	isc__netievent_tcpdnscancel_t *ievent = NULL;
 
 	REQUIRE(VALID_NMHANDLE(handle));
 
 	sock = handle->sock;
 
 	REQUIRE(sock->type == isc_nm_tcpdnssocket);
+
+	ievent = isc__nm_get_ievent(sock->mgr, netievent_tcpdnscancel);
+	ievent->sock = sock;
+	isc_nmhandle_attach(handle, &ievent->handle);
+	isc__nm_enqueue_ievent(&sock->mgr->workers[sock->tid],
+			       (isc__netievent_t *)ievent);
+}
+
+void
+isc__nm_async_tcpdnscancel(isc__networker_t *worker, isc__netievent_t *ev0) {
+	isc__netievent_tcpdnscancel_t *ievent =
+		(isc__netievent_tcpdnscancel_t *)ev0;
+	isc_nmsocket_t *sock = ievent->sock;
+	isc_nmhandle_t *handle = ievent->handle;
+
+	REQUIRE(VALID_NMSOCK(sock));
+	REQUIRE(worker->id == sock->tid);
 	REQUIRE(sock->tid == isc_nm_tid());
 
-	if (atomic_load(&sock->client) && sock->recv_cb != NULL) {
-		sock->recv_cb(handle, ISC_R_EOF, NULL, sock->recv_cbarg);
+	if (atomic_load(&sock->client)) {
+		isc_nm_recv_cb_t cb;
+		void *cbarg = NULL;
+
+		cb = sock->recv_cb;
+		cbarg = sock->recv_cbarg;
 		isc__nmsocket_clearcb(sock);
+
+		if (cb != NULL) {
+			cb(handle, ISC_R_EOF, NULL, cbarg);
+		}
+
 		isc__nm_tcp_cancelread(sock->outerhandle);
 	}
+
+	isc_nmhandle_detach(&handle);
 }

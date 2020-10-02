@@ -148,10 +148,12 @@ typedef enum isc__netievent_type {
 	netievent_tcpchildaccept,
 	netievent_tcpaccept,
 	netievent_tcpstop,
+	netievent_tcpcancel,
 	netievent_tcpclose,
 
 	netievent_tcpdnssend,
 	netievent_tcpdnsread,
+	netievent_tcpdnscancel,
 	netievent_tcpdnsclose,
 
 	netievent_closecb,
@@ -251,6 +253,9 @@ typedef struct isc__netievent__socket_handle {
 	isc_nmsocket_t *sock;
 	isc_nmhandle_t *handle;
 } isc__netievent__socket_handle_t;
+
+typedef isc__netievent__socket_handle_t isc__netievent_tcpcancel_t;
+typedef isc__netievent__socket_handle_t isc__netievent_tcpdnscancel_t;
 
 typedef struct isc__netievent__socket_quota {
 	isc__netievent_type type;
@@ -801,6 +806,8 @@ isc__nm_async_tcp_startread(isc__networker_t *worker, isc__netievent_t *ev0);
 void
 isc__nm_async_tcp_pauseread(isc__networker_t *worker, isc__netievent_t *ev0);
 void
+isc__nm_async_tcpcancel(isc__networker_t *worker, isc__netievent_t *ev0);
+void
 isc__nm_async_tcpclose(isc__networker_t *worker, isc__netievent_t *ev0);
 /*%<
  * Callback handlers for asynchronous TCP events (connect, listen,
@@ -823,6 +830,8 @@ isc__nm_tcpdns_close(isc_nmsocket_t *sock);
 void
 isc__nm_tcpdns_stoplistening(isc_nmsocket_t *sock);
 
+void
+isc__nm_async_tcpdnscancel(isc__networker_t *worker, isc__netievent_t *ev0);
 void
 isc__nm_async_tcpdnsclose(isc__networker_t *worker, isc__netievent_t *ev0);
 
