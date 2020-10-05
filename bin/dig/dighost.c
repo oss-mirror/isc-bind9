@@ -2973,6 +2973,11 @@ start_udp(dig_query_t *query) {
 	}
 
 	do {
+		int local_timeout = timeout * 1000;
+		if (local_timeout == 0) {
+			local_timeout = UDP_TIMEOUT * 1000;
+		}
+
 		/*
 		 * On FreeBSD the UDP connect() call sometimes results
 		 * in a spurious transient EADDRINUSE. Try a few more times
@@ -2980,7 +2985,7 @@ start_udp(dig_query_t *query) {
 		 */
 		result = isc_nm_udpconnect(netmgr, (isc_nmiface_t *)&localaddr,
 					   (isc_nmiface_t *)&query->sockaddr,
-					   udp_ready, query, 0);
+					   udp_ready, query, local_timeout, 0);
 	} while (result != ISC_R_SUCCESS && i++ < 2);
 	check_result(result, "isc_nm_udpconnect");
 }

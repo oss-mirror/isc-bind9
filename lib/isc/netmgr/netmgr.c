@@ -619,11 +619,11 @@ process_queue(isc__networker_t *worker, isc_queue_t *queue) {
 		case netievent_udpread:
 			isc__nm_async_udpread(worker, ievent);
 			break;
+		case netievent_udpcancel:
+			isc__nm_async_udpcancel(worker, ievent);
+			break;
 		case netievent_udpclose:
 			isc__nm_async_udpclose(worker, ievent);
-			break;
-		case netievent_udpcancelread:
-			isc__nm_async_udpcancelread(worker, ievent);
 			break;
 
 		case netievent_tcpconnect:

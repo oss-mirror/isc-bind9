@@ -604,9 +604,6 @@ isc__nm_async_udpconnect(isc__networker_t *worker, isc__netievent_t *ev0) {
 	REQUIRE(sock->parent == NULL);
 	REQUIRE(sock->tid == isc_nm_tid());
 
-	/* FIXME: this needs it's own timeout */
-	sock->read_timeout = sock->mgr->init;
-
 	uv_udp_init(&worker->loop, &sock->uv_handle.udp);
 	uv_handle_set_data(&sock->uv_handle.handle, NULL);
 	uv_handle_set_data(&sock->uv_handle.handle, sock);
@@ -672,7 +669,8 @@ done:
 
 isc_result_t
 isc_nm_udpconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
-		  isc_nm_cb_t cb, void *cbarg, size_t extrahandlesize) {
+		  isc_nm_cb_t cb, void *cbarg, unsigned int timeout,
+		  size_t extrahandlesize) {
 	isc_result_t result = ISC_R_SUCCESS;
 	isc_nmsocket_t *sock = NULL, *tmp = NULL;
 	isc__netievent_udpconnect_t *event = NULL;
@@ -688,6 +686,7 @@ isc_nm_udpconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 	INSIST(sock->connect_cb == NULL && sock->connect_cbarg == NULL);
 	sock->connect_cb = cb;
 	sock->connect_cbarg = cbarg;
+	sock->read_timeout = timeout;
 	sock->extrahandlesize = extrahandlesize;
 	sock->peer = peer->addr;
 	atomic_init(&sock->client, true);
@@ -849,6 +848,15 @@ udp_close_cb(uv_handle_t *uvhandle) {
 	isc__nmsocket_prep_destroy(sock);
 }
 
+static void
+timer_close_cb(uv_handle_t *uvhandle) {
+	isc_nmsocket_t *sock = uv_handle_get_data(uvhandle);
+
+	REQUIRE(VALID_NMSOCK(sock));
+
+	uv_close(&sock->uv_handle.handle, udp_close_cb);
+}
+
 void
 isc__nm_async_udpclose(isc__networker_t *worker, isc__netievent_t *ev0) {
 	isc__netievent_udpclose_t *ievent = (isc__netievent_udpclose_t *)ev0;
@@ -856,7 +864,15 @@ isc__nm_async_udpclose(isc__networker_t *worker, isc__netievent_t *ev0) {
 
 	REQUIRE(worker->id == ievent->sock->tid);
 
-	uv_close(&sock->uv_handle.handle, udp_close_cb);
+	if (sock->timer_initialized) {
+		sock->timer_initialized = false;
+		sock->timer_running = false;
+		uv_timer_stop(&sock->timer);
+		uv_handle_set_data((uv_handle_t *)&sock->timer, sock);
+		uv_close((uv_handle_t *)&sock->timer, timer_close_cb);
+	} else {
+		uv_close(&sock->uv_handle.handle, udp_close_cb);
+	}
 }
 
 void
@@ -880,23 +896,10 @@ isc__nm_udp_close(isc_nmsocket_t *sock) {
 }
 
 void
-isc__nm_async_udpcancelread(isc__networker_t *worker, isc__netievent_t *ev0) {
-	isc__netievent_udpcancelread_t *ievent =
-		(isc__netievent_udpcancelread_t *)ev0;
-	isc_nmsocket_t *sock = ievent->sock;
-
-	REQUIRE(worker->id == ievent->sock->tid);
-
-	uv_udp_recv_stop(&sock->uv_handle.udp);
-
-	if (sock->recv_cb) {
-		sock->recv_cb(NULL, ISC_R_EOF, NULL, sock->recv_cbarg);
-	}
-}
-
-void
 isc__nm_udp_cancelread(isc_nmhandle_t *handle) {
 	isc_nmsocket_t *sock = NULL;
+	isc__netievent_udpcancel_t *ievent = NULL;
+
 	REQUIRE(VALID_NMHANDLE(handle));
 
 	sock = handle->sock;
@@ -904,16 +907,36 @@ isc__nm_udp_cancelread(isc_nmhandle_t *handle) {
 	REQUIRE(VALID_NMSOCK(sock));
 	REQUIRE(sock->type == isc_nm_udpsocket);
 
-	isc__netievent_udpcancelread_t *ievent =
-		isc__nm_get_ievent(sock->mgr, netievent_udpcancelread);
+	ievent = isc__nm_get_ievent(sock->mgr, netievent_udpcancel);
 	ievent->sock = sock;
+	isc_nmhandle_attach(handle, &ievent->handle);
 
-	if (sock->tid == isc_nm_tid()) {
-		isc__nm_async_udpcancelread(&sock->mgr->workers[sock->tid],
-					    (isc__netievent_t *)ievent);
-		isc__nm_put_ievent(sock->mgr, ievent);
-	} else {
-		isc__nm_enqueue_ievent(&sock->mgr->workers[sock->tid],
-				       (isc__netievent_t *)ievent);
+	isc__nm_enqueue_ievent(&sock->mgr->workers[sock->tid],
+			       (isc__netievent_t *)ievent);
+}
+
+void
+isc__nm_async_udpcancel(isc__networker_t *worker, isc__netievent_t *ev0) {
+	isc__netievent_udpcancel_t *ievent = (isc__netievent_udpcancel_t *)ev0;
+	isc_nmsocket_t *sock = ievent->sock;
+	isc_nmhandle_t *handle = ievent->handle;
+
+	REQUIRE(worker->id == ievent->sock->tid);
+
+	uv_udp_recv_stop(&sock->uv_handle.udp);
+
+	if (atomic_load(&sock->client)) {
+		isc_nm_recv_cb_t cb;
+		void *cbarg = NULL;
+
+		cb = sock->recv_cb;
+		cbarg = sock->recv_cbarg;
+		isc__nmsocket_clearcb(sock);
+
+		if (cb != NULL) {
+			cb(handle, ISC_R_EOF, NULL, cbarg);
+		}
 	}
+
+	isc_nmhandle_detach(&handle);
 }

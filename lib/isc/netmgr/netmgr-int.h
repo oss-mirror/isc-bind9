@@ -49,8 +49,6 @@
 #define ISC_NETMGR_RECVBUF_SIZE (65536)
 #endif
 
-#define NETMGR_TRACE 1
-
 /*
  * Define NETMGR_TRACE to activate tracing of handles and sockets.
  * This will impair performance but enables us to quickly determine,
@@ -141,8 +139,8 @@ typedef enum isc__netievent_type {
 	netievent_udpsend,
 	netievent_udpread,
 	netievent_udpstop,
+	netievent_udpcancel,
 	netievent_udpclose,
-	netievent_udpcancelread,
 
 	netievent_tcpconnect,
 	netievent_tcpsend,
@@ -222,7 +220,6 @@ typedef isc__netievent__socket_t isc__netievent_udplisten_t;
 typedef isc__netievent__socket_t isc__netievent_udpread_t;
 typedef isc__netievent__socket_t isc__netievent_udpstop_t;
 typedef isc__netievent__socket_t isc__netievent_udpclose_t;
-typedef isc__netievent__socket_t isc__netievent_udpcancelread_t;
 typedef isc__netievent__socket_t isc__netievent_tcpstop_t;
 typedef isc__netievent__socket_t isc__netievent_tcpclose_t;
 typedef isc__netievent__socket_t isc__netievent_startread_t;
@@ -258,6 +255,7 @@ typedef struct isc__netievent__socket_handle {
 	isc_nmhandle_t *handle;
 } isc__netievent__socket_handle_t;
 
+typedef isc__netievent__socket_handle_t isc__netievent_udpcancel_t;
 typedef isc__netievent__socket_handle_t isc__netievent_tcpcancel_t;
 typedef isc__netievent__socket_handle_t isc__netievent_tcpdnscancel_t;
 
@@ -735,7 +733,6 @@ void
 isc__nm_async_udplisten(isc__networker_t *worker, isc__netievent_t *ev0);
 void
 isc__nm_async_udpconnect(isc__networker_t *worker, isc__netievent_t *ev0);
-
 void
 isc__nm_async_udpstop(isc__networker_t *worker, isc__netievent_t *ev0);
 void
@@ -743,9 +740,9 @@ isc__nm_async_udpsend(isc__networker_t *worker, isc__netievent_t *ev0);
 void
 isc__nm_async_udpread(isc__networker_t *worker, isc__netievent_t *ev0);
 void
-isc__nm_async_udpclose(isc__networker_t *worker, isc__netievent_t *ev0);
+isc__nm_async_udpcancel(isc__networker_t *worker, isc__netievent_t *ev0);
 void
-isc__nm_async_udpcancelread(isc__networker_t *worker, isc__netievent_t *ev0);
+isc__nm_async_udpclose(isc__networker_t *worker, isc__netievent_t *ev0);
 /*%<
  * Callback handlers for asynchronous UDP events (listen, stoplisten, send).
  */
