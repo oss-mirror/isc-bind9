@@ -2926,7 +2926,6 @@ start_udp(dig_query_t *query) {
 	debug("start_udp(%p)", query);
 
 	l = query->lookup;
-	bringup_timer(query, UDP_TIMEOUT);
 	l->current_query = query;
 	debug("working on lookup %p, query %p", query->lookup, query);
 	if (query->handle != NULL) {
@@ -3054,41 +3053,13 @@ connect_timeout(isc_task_t *task, isc_event_t *event) {
 	}
 
 	if (l->retries > 1) {
-		dig_query_t *newq = NULL;
-
 		l->retries--;
-		if (l->tcp_mode) {
-			debug("making new TCP request, %d tries left",
-			      l->retries);
-			requeue_lookup(l, true);
-			isc_refcount_decrement0(&recvcount);
-			clear_query(query);
-			check_next_lookup(l);
-			UNLOCK_LOOKUP;
-			return;
-		}
-
-		debug("resending UDP request to first server, %d tries left",
-		      l->retries);
-		newq = new_query(query->lookup, query->servname,
-				 query->userarg);
-
-		ISC_LIST_DEQUEUE(l->q, query, link);
-		ISC_LIST_PREPEND(l->q, newq, link);
-
-		query->waiting_senddone = false;
-
-		if (query->readhandle != NULL) {
-			isc_nmhandle_t *handle = query->readhandle;
-			isc_nmhandle_detach(&handle);
-			isc_refcount_decrement0(&recvcount);
-		}
-
+		debug("making new TCP request, %d tries left", l->retries);
+		requeue_lookup(l, true);
+		isc_refcount_decrement0(&recvcount);
 		clear_query(query);
+		check_next_lookup(l);
 		UNLOCK_LOOKUP;
-
-		start_udp(ISC_LIST_HEAD(l->q));
-
 		return;
 	}
 
@@ -3112,11 +3083,6 @@ connect_timeout(isc_task_t *task, isc_event_t *event) {
 
 	if (exitcode < 9) {
 		exitcode = 9;
-	}
-
-	if (!l->tcp_mode) {
-		isc_nmhandle_t *handle = query->handle;
-		isc_nmhandle_detach(&handle);
 	}
 
 	query->waiting_senddone = false;
@@ -3599,6 +3565,7 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 
 	/* Could occur on timeout or interrupt */
 	if (query->readhandle == NULL) {
+		UNLOCK_LOOKUP;
 		return;
 	}
 
@@ -3608,9 +3575,32 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 
 	l = query->lookup;
 
-	if ((l->tcp_mode) && (query->timer != NULL)) {
+	if (eresult == ISC_R_TIMEDOUT && !l->tcp_mode && l->retries > 1) {
+		dig_query_t *newq = NULL;
+
+		l->retries--;
+		debug("resending UDP request to first server, %d tries left",
+		      l->retries);
+		newq = new_query(query->lookup, query->servname,
+				 query->userarg);
+
+		ISC_LIST_DEQUEUE(l->q, query, link);
+		ISC_LIST_PREPEND(l->q, newq, link);
+
+		query->waiting_senddone = false;
+
+		clear_query(query);
+		UNLOCK_LOOKUP;
+
+		start_udp(ISC_LIST_HEAD(l->q));
+		isc_nmhandle_detach(&handle);
+		return;
+	}
+
+	if (l->tcp_mode && query->timer != NULL) {
 		isc_timer_touch(query->timer);
 	}
+
 	if ((!l->pending && !l->ns_search_only) || cancel_now) {
 		debug("no longer pending.  Got %s", isc_result_totext(eresult));
 		query->waiting_connect = false;
@@ -3624,14 +3614,29 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	if (eresult != ISC_R_SUCCESS) {
 		char sockstr[ISC_SOCKADDR_FORMATSIZE];
 		isc_sockaddr_format(&query->sockaddr, sockstr, sizeof(sockstr));
-		dighost_error("communications error to %s: %s\n", sockstr,
-			      isc_result_totext(eresult));
+
+		if (eresult == ISC_R_TIMEDOUT) {
+			printf("%s", l->cmdline);
+			dighost_error("connection timed out; "
+				      "no servers could be reached\n");
+			if (exitcode < 9) {
+				exitcode = 9;
+			}
+		} else {
+			dighost_error("communications error to %s: %s\n",
+				      sockstr, isc_result_totext(eresult));
+		}
+
 		if (keep != NULL) {
 			isc_nmhandle_detach(&keep);
 		}
 
 		if (eresult == ISC_R_EOF) {
 			requeue_or_update_exitcode(l);
+		}
+
+		if (!l->tcp_mode) {
+			isc_nmhandle_detach(&handle);
 		}
 
 		clear_query(query);
