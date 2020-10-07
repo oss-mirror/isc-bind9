@@ -2982,6 +2982,7 @@ start_udp(dig_query_t *query) {
 		 * in a spurious transient EADDRINUSE. Try a few more times
 		 * before giving up.
 		 */
+		debug("isc_nm_udpconnect(): try %d", i + 1);
 		result = isc_nm_udpconnect(netmgr, (isc_nmiface_t *)&localaddr,
 					   (isc_nmiface_t *)&query->sockaddr,
 					   udp_ready, query, local_timeout, 0);
