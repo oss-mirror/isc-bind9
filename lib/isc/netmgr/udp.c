@@ -745,7 +745,7 @@ isc_nm_udpconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 		UNLOCK(&sock->lock);
 	}
 
-	atomic_store(&sock->result, result);
+	result = atomic_load(&sock->result);
 	isc__nmsocket_detach(&tmp);
 
 	return (result);
