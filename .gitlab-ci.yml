@@ -942,7 +942,7 @@ gcc:tsan:
     CC: gcc
     CFLAGS: "${CFLAGS_COMMON} -fsanitize=thread -DISC_MEM_USE_INTERNAL_MALLOC=0"
     LDFLAGS: "-fsanitize=thread"
-    EXTRA_CONFIGURE: "--with-libidn2 --enable-pthread-rwlock"
+    EXTRA_CONFIGURE: "--with-libidn2 --enable-pthread-rwlock --enable-dnstap"
 
 system:gcc:tsan:
   variables:
@@ -969,7 +969,7 @@ clang:tsan:
     CC: "${CLANG}"
     CFLAGS: "${CFLAGS_COMMON} -fsanitize=thread -DISC_MEM_USE_INTERNAL_MALLOC=0"
     LDFLAGS: "-fsanitize=thread"
-    EXTRA_CONFIGURE: "--with-libidn2 --enable-pthread-rwlock"
+    EXTRA_CONFIGURE: "--with-libidn2 --enable-pthread-rwlock --enable-dnstap"
 
 system:clang:tsan:
   variables:
