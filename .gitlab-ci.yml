@@ -70,11 +70,6 @@ stages:
     - linux
     - amd64
 
-.linux-i386: &linux_i386
-  tags:
-    - linux
-    - i386
-
 .linux-stress-amd64: &linux_stress_amd64
   tags:
     - amd64
@@ -106,67 +101,63 @@ stages:
 # Alpine Linux
 
 .alpine-3.12-amd64: &alpine_3_12_amd64_image
-  image: "$CI_REGISTRY_IMAGE:alpine-3.12-amd64"
+  image: "$CI_REGISTRY_IMAGE-staging:alpine-3.12-amd64"
   <<: *linux_amd64
 
 # CentOS
 
 .centos-centos7-amd64: &centos_centos7_amd64_image
-  image: "$CI_REGISTRY_IMAGE:centos-centos7-amd64"
+  image: "$CI_REGISTRY_IMAGE-staging:centos-centos7-amd64"
   <<: *linux_amd64
 
 .centos-centos8-amd64: &centos_centos8_amd64_image
-  image: "$CI_REGISTRY_IMAGE:centos-centos8-amd64"
+  image: "$CI_REGISTRY_IMAGE-staging:centos-centos8-amd64"
   <<: *linux_amd64
 
 # Debian
 
 .debian-stretch-amd64: &debian_stretch_amd64_image
-  image: "$CI_REGISTRY_IMAGE:debian-stretch-amd64"
+  image: "$CI_REGISTRY_IMAGE-staging:debian-stretch-amd64"
   <<: *linux_amd64
 
 .debian-buster-amd64: &debian_buster_amd64_image
-  image: "$CI_REGISTRY_IMAGE:debian-buster-amd64"
+  image: "$CI_REGISTRY_IMAGE-staging:debian-buster-amd64"
   <<: *linux_amd64
 
 .debian-sid-amd64: &debian_sid_amd64_image
-  image: "$CI_REGISTRY_IMAGE:debian-sid-amd64"
+  image: "$CI_REGISTRY_IMAGE-staging:debian-sid-amd64"
   <<: *linux_amd64
-
-.debian-sid-i386: &debian_sid_i386_image
-  image: "$CI_REGISTRY_IMAGE:debian-sid-i386"
-  <<: *linux_i386
 
 # openSUSE Tumbleweed
 
 .tumbleweed-latest-amd64: &tumbleweed_latest_amd64_image
-  image: "$CI_REGISTRY_IMAGE:tumbleweed-latest-amd64"
+  image: "$CI_REGISTRY_IMAGE-staging:tumbleweed-latest-amd64"
   <<: *linux_amd64
 
 # Fedora
 
 .fedora-33-amd64: &fedora_33_amd64_image
-  image: "$CI_REGISTRY_IMAGE:fedora-33-amd64"
+  image: "$CI_REGISTRY_IMAGE-staging:fedora-33-amd64"
   <<: *linux_amd64
 
 .fedora-33-arm64: &fedora_33_arm64_image
-  image: "$CI_REGISTRY_IMAGE:fedora-33-arm64"
+  image: "$CI_REGISTRY_IMAGE-staging:fedora-33-arm64"
   <<: *linux_stress_arm64
 
 # Ubuntu
 
 .ubuntu-xenial-amd64: &ubuntu_xenial_amd64_image
-  image: "$CI_REGISTRY_IMAGE:ubuntu-xenial-amd64"
+  image: "$CI_REGISTRY_IMAGE-staging:ubuntu-xenial-amd64"
   <<: *linux_amd64
 
 .ubuntu-focal-amd64: &ubuntu_focal_amd64_image
-  image: "$CI_REGISTRY_IMAGE:ubuntu-focal-amd64"
+  image: "$CI_REGISTRY_IMAGE-staging:ubuntu-focal-amd64"
   <<: *linux_amd64
 
 # Windows
 
 .windows-server-2016-amd64: &windows_server_2016_amd64_image
-  image: "$CI_REGISTRY_IMAGE:windows-server-2016-amd64"
+  image: "$CI_REGISTRY_IMAGE-staging:windows-server-2016-amd64"
   <<: *windows_amd64
 
 # Base image
@@ -178,15 +169,15 @@ stages:
 ### QCOW2 Image Templates
 
 .freebsd-11-amd64: &freebsd_11_amd64_image
-  image: "freebsd-11.4-x86_64"
+  image: "freebsd-11.4-x86_64-nghttp2"
   <<: *libvirt_amd64
 
 .freebsd-12-amd64: &freebsd_12_amd64_image
-  image: "freebsd-12.2-x86_64"
+  image: "freebsd-12.2-x86_64-nghttp2"
   <<: *libvirt_amd64
 
 .openbsd-amd64: &openbsd_amd64_image
-  image: "openbsd-6.8-x86_64"
+  image: "openbsd-6.8-x86_64-nghttp2"
   <<: *libvirt_amd64
 
 ### Job Templates
@@ -836,30 +827,6 @@ unit:gcc:tarball:
   only:
     - schedules
     - tags
-
-# Jobs for regular GCC builds on Debian "sid" (i386)
-
-gcc:sid:i386:
-  variables:
-    CC: gcc
-    CFLAGS: "${CFLAGS_COMMON}"
-    EXTRA_CONFIGURE: "--with-libidn2"
-  <<: *debian_sid_i386_image
-  <<: *build_job
-
-system:gcc:sid:i386:
-  <<: *debian_sid_i386_image
-  <<: *system_test_job
-  needs:
-    - job: gcc:sid:i386
-      artifacts: true
-
-unit:gcc:sid:i386:
-  <<: *debian_sid_i386_image
-  <<: *unit_test_job
-  needs:
-    - job: gcc:sid:i386
-      artifacts: true
 
 # Jobs for debug GCC builds on openSUSE Tumbleweed (amd64)
 
