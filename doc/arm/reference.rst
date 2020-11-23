@@ -4578,6 +4578,10 @@ The ``request-nsid`` clause determines whether the local server adds
 an NSID EDNS option to requests sent to the server. This overrides
 ``request-nsid`` set at the view or option level.
 
+The ``require-cookie`` clause determines if the server accepts a UDP
+response without a DNS COOKIE.  If an DNS COOKIE is missing from the
+response the server will retry the request over TCP.
+
 The ``send-cookie`` clause determines whether the local server adds
 a COOKIE EDNS option to requests sent to the server. This overrides
 ``send-cookie`` set at the view or option level. The ``named`` server
