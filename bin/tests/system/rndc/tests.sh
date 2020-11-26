@@ -346,7 +346,7 @@ done
 if [ $ret != 0 ]; then echo_i "failed"; fi
 status=`expr $status + $ret`
 
-if ! $FEATURETEST --have-fips; then
+if ! $FEATURETEST --have-fips-mode; then
 	n=`expr $n + 1`
 	echo_i "testing rndc with hmac-md5 ($n)"
 	ret=0
