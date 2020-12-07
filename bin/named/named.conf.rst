@@ -86,6 +86,15 @@ DYNDB
   dyndb string quoted_string {
       unspecified-text };
 
+HTTP
+^^^^
+
+::
+
+  http string {
+  	endpoints { quoted_string; ... }; // experimental
+  };
+
 KEY
 ^^^
 
@@ -264,12 +273,8 @@ OPTIONS
   	glue-cache boolean;// deprecated
   	heartbeat-interval integer;
   	hostname ( quoted_string | none );
-  	https-endpoint quoted_string https-server string;
+  	http-port integer;
   	https-port integer;
-  	https-server string [ port integer ] tls string { (
-  	    quoted_string [ port integer ] [ dscp integer ] |
-  	    ipv4_address [ port integer ] [ dscp integer ] |
-  	    ipv6_address [ port integer ] [ dscp integer ] ); ... };
   	inline-signing boolean;
   	interface-interval duration;
   	ipv4only-contact string;
@@ -281,10 +286,12 @@ OPTIONS
   	key-directory quoted_string;
   	lame-ttl duration;
   	listen-on [ port integer ] [ dscp
-  	    integer ] [ tls string ] {
+  	    integer ] [ tls string ] [ http
+  	    string ] {
   	    address_match_element; ... };
   	listen-on-v6 [ port integer ] [ dscp
-  	    integer ] [ tls string ] {
+  	    integer ] [ tls string ] [ http
+  	    string ] {
   	    address_match_element; ... };
   	lmdb-mapsize sizeval;
   	lock-file ( quoted_string | none );
@@ -658,7 +665,6 @@ VIEW
   	forwarders [ port integer ] [ dscp integer ] { ( ipv4_address
   	    | ipv6_address ) [ port integer ] [ dscp integer ]; ... };
   	glue-cache boolean;// deprecated
-  	https-endpoint quoted_string https-server string;
   	inline-signing boolean;
   	ipv4only-contact string;
   	ipv4only-enable boolean;

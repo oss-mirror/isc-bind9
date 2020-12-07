@@ -48,6 +48,7 @@ TESTS =			\
 	tcp_quota_test	\
 	tcpdns_test	\
 	tlsdns_test	\
+	doh_test	\
 	time_test	\
 	timer_test	\
 	udp_test

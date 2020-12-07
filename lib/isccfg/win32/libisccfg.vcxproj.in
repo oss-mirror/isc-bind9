@@ -120,9 +120,11 @@
   <ItemGroup>
     <ClCompile Include="..\aclconf.c" />
     <ClCompile Include="..\dnsconf.c" />
+    <ClCompile Include="..\httpconf.c" />
     <ClCompile Include="..\kaspconf.c" />
     <ClCompile Include="..\log.c" />
     <ClCompile Include="..\namedconf.c" />
+    <ClCompile Include="..\tlsconf.c" />
     <ClCompile Include="..\parser.c" />
     <ClCompile Include="DLLMain.c" />
   </ItemGroup>
@@ -130,9 +132,11 @@
     <ClInclude Include="..\include\isccfg\aclconf.h" />
     <ClInclude Include="..\include\isccfg\cfg.h" />
     <ClInclude Include="..\include\isccfg\grammar.h" />
+    <ClInclude Include="..\include\isccfg\httpconf.h" />
     <ClInclude Include="..\include\isccfg\kaspconf.h" />
     <ClInclude Include="..\include\isccfg\log.h" />
     <ClInclude Include="..\include\isccfg\namedconf.h" />
+    <ClInclude Include="..\include\isccfg\tlsconf.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\lib\isc\win32\libisc.vcxproj">

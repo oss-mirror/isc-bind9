@@ -328,6 +328,7 @@ options {
       heartbeat\-interval integer;
       hostname ( quoted_string | none );
       https\-endpoint quoted_string https\-server string;
+      http\-port integer;
       https\-port integer;
       https\-server string [ port integer ] tls string { (
           quoted_string [ port integer ] [ dscp integer ] |
