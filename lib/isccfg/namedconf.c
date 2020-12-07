@@ -81,6 +81,7 @@ static cfg_type_t cfg_type_bracketed_dscpsockaddrlist;
 static cfg_type_t cfg_type_bracketed_namesockaddrkeylist;
 static cfg_type_t cfg_type_bracketed_netaddrlist;
 static cfg_type_t cfg_type_bracketed_sockaddrnameportlist;
+static cfg_type_t cfg_type_bracketed_qstring_list;
 static cfg_type_t cfg_type_controls;
 static cfg_type_t cfg_type_controls_sockaddr;
 static cfg_type_t cfg_type_destinationlist;
@@ -91,8 +92,7 @@ static cfg_type_t cfg_type_dnstap;
 static cfg_type_t cfg_type_dnstapoutput;
 static cfg_type_t cfg_type_dyndb;
 static cfg_type_t cfg_type_plugin;
-static cfg_type_t cfg_type_http_secure_endpoint;
-static cfg_type_t cfg_type_http_secure_server;
+static cfg_type_t cfg_type_http_description;
 static cfg_type_t cfg_type_ixfrdifftype;
 static cfg_type_t cfg_type_ixfrratio;
 static cfg_type_t cfg_type_key;
@@ -110,6 +110,7 @@ static cfg_type_t cfg_type_optional_allow;
 static cfg_type_t cfg_type_optional_class;
 static cfg_type_t cfg_type_optional_dscp;
 static cfg_type_t cfg_type_optional_facility;
+static cfg_type_t cfg_type_optional_http;
 static cfg_type_t cfg_type_optional_keyref;
 static cfg_type_t cfg_type_optional_port;
 static cfg_type_t cfg_type_optional_uint32;
@@ -153,6 +154,7 @@ static cfg_tuplefielddef_t listenon_fields[] = {
 	{ "port", &cfg_type_optional_port, 0 },
 	{ "dscp", &cfg_type_optional_dscp, 0 },
 	{ "tls", &cfg_type_optional_tls, 0 },
+	{ "http", &cfg_type_optional_http, 0 },
 	{ "acl", &cfg_type_bracketed_aml, 0 },
 	{ NULL, NULL, 0 }
 };
@@ -1090,6 +1092,7 @@ static cfg_clausedef_t namedconf_clauses[] = {
 	{ "acl", &cfg_type_acl, CFG_CLAUSEFLAG_MULTI },
 	{ "controls", &cfg_type_controls, CFG_CLAUSEFLAG_MULTI },
 	{ "dnssec-policy", &cfg_type_dnssecpolicy, CFG_CLAUSEFLAG_MULTI },
+	{ "http", &cfg_type_http_description, CFG_CLAUSEFLAG_MULTI },
 	{ "logging", &cfg_type_logging, 0 },
 	{ "lwres", NULL, CFG_CLAUSEFLAG_MULTI | CFG_CLAUSEFLAG_ANCIENT },
 	{ "masters", &cfg_type_primaries, CFG_CLAUSEFLAG_MULTI },
@@ -1207,7 +1210,6 @@ static cfg_clausedef_t options_clauses[] = {
 	{ "host-statistics", NULL, CFG_CLAUSEFLAG_ANCIENT },
 	{ "host-statistics-max", NULL, CFG_CLAUSEFLAG_ANCIENT },
 	{ "hostname", &cfg_type_qstringornone, 0 },
-	{ "https-server", &cfg_type_http_secure_server, 0 },
 	{ "interface-interval", &cfg_type_duration, 0 },
 	{ "keep-response-order", &cfg_type_bracketed_aml, 0 },
 	{ "listen-on", &cfg_type_listenon, CFG_CLAUSEFLAG_MULTI },
@@ -1224,6 +1226,7 @@ static cfg_clausedef_t options_clauses[] = {
 	{ "pid-file", &cfg_type_qstringornone, 0 },
 	{ "port", &cfg_type_uint32, 0 },
 	{ "tls-port", &cfg_type_uint32, 0 },
+	{ "http-port", &cfg_type_uint32, 0 },
 	{ "https-port", &cfg_type_uint32, 0 },
 	{ "querylog", &cfg_type_boolean, 0 },
 	{ "random-device", &cfg_type_qstringornone, 0 },
@@ -1992,7 +1995,6 @@ static cfg_clausedef_t view_clauses[] = {
 	{ "filter-aaaa-on-v4", &cfg_type_boolean, CFG_CLAUSEFLAG_ANCIENT },
 	{ "filter-aaaa-on-v6", &cfg_type_boolean, CFG_CLAUSEFLAG_ANCIENT },
 	{ "glue-cache", &cfg_type_boolean, CFG_CLAUSEFLAG_DEPRECATED },
-	{ "https-endpoint", &cfg_type_http_secure_endpoint, 0 },
 	{ "ipv4only-enable", &cfg_type_boolean, 0 },
 	{ "ipv4only-contact", &cfg_type_astring, 0 },
 	{ "ipv4only-server", &cfg_type_astring, 0 },
@@ -3858,35 +3860,33 @@ static cfg_type_t cfg_type_optional_tls = {
 	"tlsoptional",	       parse_optional_keyvalue, print_keyvalue,
 	doc_optional_keyvalue, &cfg_rep_string,		&tls_kw
 };
-static cfg_type_t cfg_type_tls = { "tls",	    parse_keyvalue,
-				   print_keyvalue,  doc_keyvalue,
-				   &cfg_rep_string, &tls_kw };
 
-static keyword_type_t servername_kw = { "https-server", &cfg_type_astring };
-static cfg_type_t cfg_type_servername = { "servername",	   parse_keyvalue,
-					  print_keyvalue,  doc_keyvalue,
-					  &cfg_rep_string, &servername_kw };
+/* http and https */
 
-/* http-endpoint */
-static cfg_tuplefielddef_t endpoint_fields[] = {
-	{ "path", &cfg_type_qstring, 0 },
-	{ "servername", &cfg_type_servername, 0 },
+static cfg_type_t cfg_type_bracketed_qstring_list = { "bracketed_qstring_list",
+						      cfg_parse_bracketed_list,
+						      cfg_print_bracketed_list,
+						      cfg_doc_bracketed_list,
+						      &cfg_rep_list,
+						      &cfg_type_qstring };
+
+static cfg_clausedef_t cfg_http_description_clauses[] = {
+	{ "endpoints", &cfg_type_bracketed_qstring_list,
+	  CFG_CLAUSEFLAG_EXPERIMENTAL },
 	{ NULL, NULL, 0 }
 };
-static cfg_type_t cfg_type_http_secure_endpoint = {
-	"endpoint",    cfg_parse_tuple, cfg_print_tuple,
-	cfg_doc_tuple, &cfg_rep_tuple,	endpoint_fields
+
+static cfg_clausedef_t *http_description_clausesets[] = {
+	cfg_http_description_clauses, NULL
 };
 
-/* http-server */
-static cfg_tuplefielddef_t server_fields[] = {
-	{ "name", &cfg_type_astring, 0 },
-	{ "port", &cfg_type_optional_port, 0 },
-	{ "tls", &cfg_type_tls, 0 },
-	{ "addresses", &cfg_type_bracketed_sockaddrnameportlist, 0 },
-	{ NULL, NULL, 0 }
+static cfg_type_t cfg_type_http_description = {
+	"http_desc", cfg_parse_named_map, cfg_print_map,
+	cfg_doc_map, &cfg_rep_map,	  http_description_clausesets
 };
-static cfg_type_t cfg_type_http_secure_server = {
-	"server",      cfg_parse_tuple, cfg_print_tuple,
-	cfg_doc_tuple, &cfg_rep_tuple,	server_fields
+
+static keyword_type_t http_kw = { "http", &cfg_type_astring };
+static cfg_type_t cfg_type_optional_http = {
+	"http_optional",       parse_optional_keyvalue, print_keyvalue,
+	doc_optional_keyvalue, &cfg_rep_string,		&http_kw
 };

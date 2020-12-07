@@ -27,10 +27,16 @@
     <ClCompile Include="..\dnsconf.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\httpconf.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\kaspconf.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\log.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\tlsconf.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\namedconf.c">
@@ -50,10 +56,16 @@
     <ClInclude Include="..\include\isccfg\grammar.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\isccfg\httpconf.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\include\isccfg\kaspconf.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\include\isccfg\log.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\isccfg\tlsconf.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\include\isccfg\namedconf.h">
