@@ -76,11 +76,10 @@ KRB5_CONFIG=/dev/null
 #
 # Construct the lists of tests to run
 #
-SEQUENTIAL_UNIX="@PKCS11_TEST@"
+SEQUENTIAL_UNIX=""
 SEQUENTIALDIRS="$SEQUENTIAL_COMMON $SEQUENTIAL_UNIX"
 
-PARALLEL_UNIX="@DNSTAP@
-chain
+PARALLEL_UNIX="chain
 cookie
 dlzexternal
 dnssec
