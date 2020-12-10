@@ -26,7 +26,6 @@ my $configfile = "../config.h";
 my $platformfile = "../lib/isc/win32/include/isc/platform.h";
 my @confshlist = ("../bin/tests/system/conf.sh",
 		  "../bin/tests/system/run.sh",
-		  "../bin/tests/system/start.sh",
 		  "../bin/tests/system/stop.sh");
 
 my @filelist = ("../lib/dns/win32/libdns.def",
