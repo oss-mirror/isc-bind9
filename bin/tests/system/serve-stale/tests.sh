@@ -762,6 +762,17 @@ ret=0
 grep "status: NOERROR" dig.out.test$n > /dev/null || ret=1
 grep "ANSWER: 1," dig.out.test$n > /dev/null || ret=1
 grep "data\.example\..*3.*IN.*TXT.*A text record with a 2 second ttl" dig.out.test$n > /dev/null || ret=1
+
+# After the addition of stale-answer-client-timeout, we'll end up
+# receiving a stale answer from cache before the query fully timeout.
+# That will happen after stale-answer-client-timeout timer expires (default 1.8 sec).
+
+# Since the original query will still be running, we can't re-enable the
+# authoritative server, not until the query completely fail.
+# This is required to activate the stale-refresh-time window, which happens after
+# a failed attempt in refreshing the RRset.
+nextpart ns1/named.run > /dev/null
+wait_for_log 20 "query_gotanswer: unexpected error: timed out" ns1/named.run || ret=1
 if [ $ret != 0 ]; then echo_i "failed"; fi
 status=$((status+ret))
 
