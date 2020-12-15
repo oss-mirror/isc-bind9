@@ -67,6 +67,9 @@ Feature Changes
 Bug Fixes
 ~~~~~~~~~
 
+- Fix a crash in ``dnssec-keyfromlabel`` when operating on a Elliptic Curve
+  algorithm key. [GL #2178]
+
 - The synthesised CNAME from a DNAME was incorrectly followed when the QTYPE
   was CNAME or ANY. [GL #2280]
 
