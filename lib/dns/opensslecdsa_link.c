@@ -561,17 +561,21 @@ static isc_result_t
 ecdsa_check(EC_KEY *eckey, EC_KEY *pubeckey) {
 	const EC_POINT *pubkey;
 
-	pubkey = EC_KEY_get0_public_key(pubeckey);
-	if (pubkey == NULL) {
+	pubkey = EC_KEY_get0_public_key(eckey);
+	if (pubkey != NULL) {
 		return (ISC_R_SUCCESS);
-	}
-	if (EC_KEY_set_public_key(eckey, pubkey) != 1) {
-		return (ISC_R_SUCCESS);
+	} else {
+		pubkey = EC_KEY_get0_public_key(pubeckey);
+		if (pubkey == NULL) {
+			return (ISC_R_SUCCESS);
+		}
+		if (EC_KEY_set_public_key(eckey, pubkey) != 1) {
+			return (ISC_R_SUCCESS);
+		}
 	}
 	if (EC_KEY_check_key(eckey) == 1) {
 		return (ISC_R_SUCCESS);
 	}
-
 	return (ISC_R_FAILURE);
 }
 
@@ -678,6 +682,7 @@ load_privkey_from_engine(EC_KEY *eckey, const char *engine, const char *label) {
 	}
 
 	EC_KEY_set_private_key(eckey, EC_KEY_get0_private_key(key));
+	EC_KEY_set_public_key(eckey, EC_KEY_get0_public_key(key));
 
 	return (ISC_R_SUCCESS);
 }
