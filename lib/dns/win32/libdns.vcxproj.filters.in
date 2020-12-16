@@ -298,10 +298,7 @@
     <ClCompile Include="..\openssldh_link.c">
       <Filter>Dst Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\opensslecdsa_link.c">
-      <Filter>Dst Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\openssleddsa_link.c">
+    <ClCompile Include="..\opensslec_link.c">
       <Filter>Dst Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\opensslrsa_link.c">

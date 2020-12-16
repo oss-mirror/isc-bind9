@@ -265,8 +265,7 @@ libdns_la_SOURCES +=		\
 	pkcs11rsa_link.c
 else !HAVE_PKCS11
 libdns_la_SOURCES +=		\
-	opensslecdsa_link.c	\
-	openssleddsa_link.c	\
+	opensslec_link.c	\
 	opensslrsa_link.c
 endif
 

@@ -221,11 +221,9 @@ dst__openssldh_init(struct dst_func **funcp);
 isc_result_t
 dst__opensslrsa_init(struct dst_func **funcp, unsigned char algorithm);
 isc_result_t
-dst__opensslecdsa_init(struct dst_func **funcp);
-#if HAVE_OPENSSL_ED25519 || HAVE_OPENSSL_ED448
+dst__opensslec_init(struct dst_func **funcp);
 isc_result_t
-dst__openssleddsa_init(struct dst_func **funcp);
-#endif /* HAVE_OPENSSL_ED25519 || HAVE_OPENSSL_ED448 */
+dst__opensslec_init(struct dst_func **funcp);
 #endif /* USE_OPENSSL */
 #if USE_PKCS11
 isc_result_t

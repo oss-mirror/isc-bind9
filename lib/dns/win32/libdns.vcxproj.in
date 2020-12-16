@@ -171,8 +171,7 @@
     <ClCompile Include="..\nsec3.c" />
     <ClCompile Include="..\nta.c" />
     <ClCompile Include="..\openssldh_link.c" />
-    <ClCompile Include="..\opensslecdsa_link.c" />
-    <ClCompile Include="..\openssleddsa_link.c" />
+    <ClCompile Include="..\opensslec_link.c" />
     <ClCompile Include="..\opensslrsa_link.c" />
     <ClCompile Include="..\openssl_link.c" />
     <ClCompile Include="..\order.c" />
