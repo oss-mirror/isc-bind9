@@ -670,6 +670,8 @@ renderend:
 				   ns_statscounter_truncatedresp);
 	}
 
+	client->query.attributes |= NS_QUERYATTR_ANSWERED;
+
 	return;
 
 cleanup:
@@ -2328,6 +2330,7 @@ ns__client_setup(ns_client_t *client, ns_clientmgr_t *mgr, bool new) {
 					 .query = query };
 	}
 
+	client->query.attributes &= ~NS_QUERYATTR_ANSWERED;
 	client->state = NS_CLIENTSTATE_INACTIVE;
 	client->udpsize = 512;
 	client->ednsversion = -1;
