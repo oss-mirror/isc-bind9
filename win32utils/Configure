@@ -2688,7 +2688,6 @@ exit 0;
 #  --with-docbook-xsl not supported (?)
 #  --with-idn[lib] supported
 #  --with-[lib]iconv supported (part of IDN)
-#  --with-atf not supported on WIN32 (package not available on WIN32)
 #  --with-tuning supported
 #  --with-dlopen included without a way to disable it
 #  --with-dlz-* ?
