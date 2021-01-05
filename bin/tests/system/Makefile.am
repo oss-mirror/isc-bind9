@@ -66,13 +66,11 @@ tkey_keydelete_LDADD =		\
 
 TESTS =
 
-if HAVE_PERLMOD_TIME_HIRES
-TESTS += serve-stale
-endif HAVE_PERLMOD_TIME_HIRES
-
 if HAVE_PERLMOD_NET_DNS
 TESTS +=		\
-	rpzrecurse
+	rpzrecurse	\
+	serve-stale	\
+	tsig
 endif HAVE_PERLMOD_NET_DNS
 
 TESTS +=			\
@@ -143,7 +141,6 @@ TESTS +=			\
 	synthfromdnssec		\
 	tkey			\
 	tools			\
-	tsig			\
 	tsiggss			\
 	ttl			\
 	unknown			\
