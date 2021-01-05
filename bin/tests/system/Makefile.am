@@ -184,10 +184,6 @@ if HAVE_DNSTAP
 TESTS += dnstap
 endif
 
-if HAVE_PERLMOD_FILE_FETCH
-TESTS += statschannel
-endif HAVE_PERLMOD_FILE_FETCH
-
 if HAVE_PERLMOD_DIGEST_HMAC
 TESTS += xfer
 endif HAVE_PERLMOD_DIGEST_HMAC
@@ -202,7 +198,7 @@ if HAVE_PYTHON
 TESTS += kasp tcp pipelined
 
 if HAVE_PYMOD_DNS
-TESTS += qmin cookie
+TESTS += cookie statschannel qmin
 
 if HAVE_PERLMOD_NET_DNS
 TESTS += dnssec
