@@ -1408,7 +1408,7 @@ respdiff:
     - *setup_softhsm
     - make -j${BUILD_PARALLEL_JOBS:-1} -k all V=1
     - make install
-    - git clone --depth 1 https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.isc.org/isc-private/bind-qa.git
+    - git clone --branch mnowak/rename-combined-mode-to-rpz --depth 1 https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.isc.org/isc-private/bind-qa.git
     - cd bind-qa/bind9/stress
     - DIG="${BIND_INSTALL_PATH}/bin/dig" WORKSPACE="${CI_PROJECT_DIR}" bash stress.sh
   needs:
@@ -1448,6 +1448,20 @@ stress:recursive:fedora:33:amd64:
     variables:
       - $CI_COMMIT_TAG || ($BIND_STRESS_TEST_OS =~ /linux/i && $BIND_STRESS_TEST_MODE =~ /recursive/i && $BIND_STRESS_TEST_ARCH =~ /amd64/i)
 
+stress:rpz:fedora:33:amd64:
+  <<: *fedora_33_amd64_image
+  <<: *linux_stress_amd64
+  <<: *stress_job
+  variables:
+    CC: gcc
+    FLAME: /usr/bin/flame
+    MODE: rpz
+    RATE: 10000
+    RUN_TIME: 1
+  only:
+    variables:
+      - $CI_COMMIT_TAG || ($BIND_STRESS_TEST_OS =~ /linux/i && $BIND_STRESS_TEST_MODE =~ /rpz/i && $BIND_STRESS_TEST_ARCH =~ /amd64/i)
+
 stress:authoritative:fedora:33:arm64:
   <<: *fedora_33_arm64_image
   <<: *linux_stress_arm64
@@ -1475,6 +1489,20 @@ stress:recursive:fedora:33:arm64:
   only:
     variables:
       - $CI_COMMIT_TAG || ($BIND_STRESS_TEST_OS =~ /linux/i && $BIND_STRESS_TEST_MODE =~ /recursive/i && $BIND_STRESS_TEST_ARCH =~ /arm64/i)
+
+stress:rpz:fedora:33:arm64:
+  <<: *fedora_33_arm64_image
+  <<: *linux_stress_arm64
+  <<: *stress_job
+  variables:
+    CC: gcc
+    FLAME: /usr/bin/flame
+    MODE: rpz
+    RATE: 10000
+    RUN_TIME: 1
+  only:
+    variables:
+      - $CI_COMMIT_TAG || ($BIND_STRESS_TEST_OS =~ /linux/i && $BIND_STRESS_TEST_MODE =~ /rpz/i && $BIND_STRESS_TEST_ARCH =~ /arm64/i)
 
 stress:authoritative:freebsd12:amd64:
   <<: *freebsd_12_amd64_image
@@ -1507,6 +1535,20 @@ stress:recursive:freebsd12:amd64:
       - $CI_COMMIT_TAG || ($BIND_STRESS_TEST_OS =~ /freebsd/i && $BIND_STRESS_TEST_MODE =~ /recursive/i && $BIND_STRESS_TEST_ARCH =~ /amd64/i)
   # See: https://gitlab.isc.org/isc-projects/bind9/-/issues/1941
   allow_failure: true
+
+stress:rpz:freebsd12:amd64:
+  <<: *freebsd_12_amd64_image
+  <<: *freebsd_stress_amd64
+  <<: *stress_job
+  variables:
+    CC: clang
+    FLAME: /usr/local/bin/flame
+    MODE: rpz
+    RATE: 10000
+    RUN_TIME: 1
+  only:
+    variables:
+      - $CI_COMMIT_TAG || ($BIND_STRESS_TEST_OS =~ /freebsd/i && $BIND_STRESS_TEST_MODE =~ /rpz/i && $BIND_STRESS_TEST_ARCH =~ /amd64/i)
 
 # ABI check
 
