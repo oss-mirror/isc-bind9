@@ -153,9 +153,9 @@ echoinfo  "I:$systest:PORTS:${PORT},${TLSPORT},${EXTRAPORT1},${EXTRAPORT2},${EXT
 
 $PERL ${srcdir}/testsock.pl -p "$PORT"  || {
     echowarn "I:$systest:Network interface aliases not set up.  Skipping test."
-    echowarn "R:$systest:FAIL"
+    echowarn "R:$systest:SKIPPED"
     echoend  "E:$systest:$(date_with_args)"
-    exit 1;
+    exit 77
 }
 
 # Check for test-specific prerequisites.
@@ -172,7 +172,7 @@ else
         echowarn "R:$systest:UNTESTED"
     fi
     echoend "E:$systest:$(date_with_args)"
-    exit 0
+    exit 77
 fi
 
 # Check for PKCS#11 support
@@ -184,7 +184,7 @@ else
     echowarn "I:$systest:Need PKCS#11, skipping test."
     echowarn "R:$systest:PKCS11ONLY"
     echoend  "E:$systest:$(date_with_args)"
-    exit 0
+    exit 77
 fi
 
 # Clean up files left from any potential previous runs
@@ -240,7 +240,7 @@ fi
 
 if [ "$run" -eq "0" ]; then
     echoinfo "I:$systest:No tests were found and run"
-    status=255
+    status=99
 fi
 
 if $stopservers
