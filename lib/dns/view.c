@@ -2521,12 +2521,15 @@ dns_view_setviewrevert(dns_view_t *view) {
 
 bool
 dns_view_staleanswerenabled(dns_view_t *view) {
-	uint32_t stale_ttl;
+	uint32_t stale_ttl = 0;
 	bool result = false;
 
 	REQUIRE(DNS_VIEW_VALID(view));
 
-	(void)dns_db_getservestalettl(view->cachedb, &stale_ttl);
+	if (dns_db_getservestalettl(view->cachedb, &stale_ttl) != ISC_R_SUCCESS)
+	{
+		return (false);
+	}
 	if (stale_ttl > 0) {
 		if (view->staleanswersok == dns_stale_answer_yes) {
 			result = true;
