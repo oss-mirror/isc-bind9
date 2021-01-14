@@ -690,7 +690,6 @@ isc__nm_tcpdns_read(isc_nmhandle_t *handle, isc_nm_recv_cb_t cb, void *cbarg) {
 
 	REQUIRE(sock->type == isc_nm_tcpdnssocket);
 	REQUIRE(sock->statichandle == handle);
-	REQUIRE(sock->tid == isc_nm_tid());
 	REQUIRE(!sock->recv_read);
 
 	sock->recv_cb = cb;
@@ -1056,13 +1055,15 @@ failure:
 void
 isc__nm_tcpdns_send(isc_nmhandle_t *handle, isc_region_t *region,
 		    isc_nm_cb_t cb, void *cbarg) {
-	REQUIRE(VALID_NMHANDLE(handle));
-	REQUIRE(VALID_NMSOCK(handle->sock));
-
-	isc_nmsocket_t *sock = handle->sock;
 	isc__netievent_tcpdnssend_t *ievent = NULL;
 	isc__nm_uvreq_t *uvreq = NULL;
+	isc_nmsocket_t *sock = NULL;
 
+	REQUIRE(VALID_NMHANDLE(handle));
+
+	sock = handle->sock;
+
+	REQUIRE(VALID_NMSOCK(sock));
 	REQUIRE(sock->type == isc_nm_tcpdnssocket);
 
 	uvreq = isc__nm_uvreq_get(sock->mgr, sock);
@@ -1107,23 +1108,22 @@ tcpdns_send_cb(uv_write_t *req, int status) {
  */
 void
 isc__nm_async_tcpdnssend(isc__networker_t *worker, isc__netievent_t *ev0) {
+	isc_result_t result;
 	isc__netievent_tcpdnssend_t *ievent =
 		(isc__netievent_tcpdnssend_t *)ev0;
-
-	REQUIRE(ievent->sock->type == isc_nm_tcpdnssocket);
-	REQUIRE(ievent->sock->tid == isc_nm_tid());
-	REQUIRE(VALID_NMSOCK(ievent->sock));
-	REQUIRE(VALID_UVREQ(ievent->req));
-	REQUIRE(ievent->sock->tid == isc_nm_tid());
-
-	isc_result_t result;
 	isc_nmsocket_t *sock = ievent->sock;
 	isc__nm_uvreq_t *uvreq = ievent->req;
+	int nbufs = 2;
+	int r;
+
+	REQUIRE(sock->type == isc_nm_tcpdnssocket);
+	REQUIRE(sock->tid == isc_nm_tid());
+	REQUIRE(VALID_NMSOCK(sock));
+	REQUIRE(VALID_UVREQ(uvreq));
+
 	uv_buf_t bufs[2] = { { .base = uvreq->tcplen, .len = 2 },
 			     { .base = uvreq->uvbuf.base,
 			       .len = uvreq->uvbuf.len } };
-	int nbufs = 2;
-	int r;
 
 	UNUSED(worker);
 

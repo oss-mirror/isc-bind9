@@ -843,7 +843,6 @@ isc__nm_tlsdns_read(isc_nmhandle_t *handle, isc_nm_recv_cb_t cb, void *cbarg) {
 
 	REQUIRE(sock->type == isc_nm_tlsdnssocket);
 	REQUIRE(sock->statichandle == handle);
-	REQUIRE(sock->tid == isc_nm_tid());
 	REQUIRE(!sock->recv_read);
 
 	sock->recv_cb = cb;
@@ -1278,6 +1277,8 @@ done:
 
 static void
 async_tlsdns_cycle(isc_nmsocket_t *sock) {
+	isc__netievent_tlsdnscycle_t *ievent = NULL;
+
 	REQUIRE(VALID_NMSOCK(sock));
 
 	/* Socket was closed midflight by isc__nm_tlsdns_shutdown() */
@@ -1285,8 +1286,7 @@ async_tlsdns_cycle(isc_nmsocket_t *sock) {
 		return;
 	}
 
-	isc__netievent_tlsdnscycle_t *ievent =
-		isc__nm_get_netievent_tlsdnscycle(sock->mgr, sock);
+	ievent = isc__nm_get_netievent_tlsdnscycle(sock->mgr, sock);
 	isc__nm_enqueue_ievent(&sock->mgr->workers[sock->tid],
 			       (isc__netievent_t *)ievent);
 }
@@ -1579,13 +1579,15 @@ failure:
 void
 isc__nm_tlsdns_send(isc_nmhandle_t *handle, isc_region_t *region,
 		    isc_nm_cb_t cb, void *cbarg) {
-	REQUIRE(VALID_NMHANDLE(handle));
-	REQUIRE(VALID_NMSOCK(handle->sock));
-
-	isc_nmsocket_t *sock = handle->sock;
 	isc__netievent_tlsdnssend_t *ievent = NULL;
 	isc__nm_uvreq_t *uvreq = NULL;
+	isc_nmsocket_t *sock = NULL;
 
+	REQUIRE(VALID_NMHANDLE(handle));
+
+	sock = handle->sock;
+
+	REQUIRE(VALID_NMSOCK(sock));
 	REQUIRE(sock->type == isc_nm_tlsdnssocket);
 
 	uvreq = isc__nm_uvreq_get(sock->mgr, sock);

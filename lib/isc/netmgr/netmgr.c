@@ -3121,6 +3121,45 @@ isc__nm_socket_disable_pmtud(uv_os_sock_t fd, sa_family_t sa_family) {
 	return (ISC_R_NOTIMPLEMENTED);
 }
 
+isc_result_t
+isc_nm_checkaddr(const isc_sockaddr_t *addr, isc_socktype_t type) {
+	int proto, pf, addrlen, fd, r;
+
+	REQUIRE(addr != NULL);
+
+	switch (type) {
+	case isc_socktype_tcp:
+		proto = SOCK_STREAM;
+		break;
+	case isc_socktype_udp:
+		proto = SOCK_DGRAM;
+		break;
+	default:
+		return (ISC_R_NOTIMPLEMENTED);
+	}
+
+	pf = isc_sockaddr_pf(addr);
+	if (pf == AF_INET) {
+		addrlen = sizeof(struct sockaddr_in);
+	} else {
+		addrlen = sizeof(struct sockaddr_in6);
+	}
+
+	fd = socket(pf, proto, 0);
+	if (fd < 0) {
+		return (isc_errno_toresult(errno));
+	}
+
+	r = bind(fd, (const struct sockaddr *)&addr->type.sa, addrlen);
+	if (r < 0) {
+		close(fd);
+		return (isc_errno_toresult(errno));
+	}
+
+	close(fd);
+	return (ISC_R_SUCCESS);
+}
+
 #if defined(TCP_CONNECTIONTIMEOUT)
 #define TIMEOUT_TYPE	int
 #define TIMEOUT_DIV	1000

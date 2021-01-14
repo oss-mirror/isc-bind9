@@ -796,9 +796,9 @@ dns_view_createzonetable(dns_view_t *view) {
 
 isc_result_t
 dns_view_createresolver(dns_view_t *view, isc_taskmgr_t *taskmgr,
-			unsigned int ntasks, unsigned int ndisp,
-			isc_socketmgr_t *socketmgr, isc_timermgr_t *timermgr,
-			unsigned int options, dns_dispatchmgr_t *dispatchmgr,
+			unsigned int ntasks, unsigned int ndisp, isc_nm_t *nm,
+			isc_timermgr_t *timermgr, unsigned int options,
+			dns_dispatchmgr_t *dispatchmgr,
 			dns_dispatch_t *dispatchv4,
 			dns_dispatch_t *dispatchv6) {
 	isc_result_t result;
@@ -815,8 +815,8 @@ dns_view_createresolver(dns_view_t *view, isc_taskmgr_t *taskmgr,
 	}
 	isc_task_setname(view->task, "view", view);
 
-	result = dns_resolver_create(view, taskmgr, ntasks, ndisp, socketmgr,
-				     timermgr, options, dispatchmgr, dispatchv4,
+	result = dns_resolver_create(view, taskmgr, ntasks, ndisp, nm, timermgr,
+				     options, dispatchmgr, dispatchv4,
 				     dispatchv6, &view->resolver);
 	if (result != ISC_R_SUCCESS) {
 		isc_task_detach(&view->task);
@@ -841,11 +841,10 @@ dns_view_createresolver(dns_view_t *view, isc_taskmgr_t *taskmgr,
 	atomic_fetch_and(&view->attributes, ~DNS_VIEWATTR_ADBSHUTDOWN);
 	isc_refcount_increment(&view->weakrefs);
 
-	result = dns_requestmgr_create(view->mctx, timermgr, socketmgr,
-				       dns_resolver_taskmgr(view->resolver),
-				       dns_resolver_dispatchmgr(view->resolver),
-				       dispatchv4, dispatchv6,
-				       &view->requestmgr);
+	result = dns_requestmgr_create(
+		view->mctx, dns_resolver_taskmgr(view->resolver),
+		dns_resolver_dispatchmgr(view->resolver), dispatchv4,
+		dispatchv6, &view->requestmgr);
 	if (result != ISC_R_SUCCESS) {
 		dns_adb_shutdown(view->adb);
 		dns_resolver_shutdown(view->resolver);
