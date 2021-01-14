@@ -566,9 +566,7 @@ query_send(ns_client_t *client) {
 	}
 
 	inc_stats(client, counter);
-	if (!QUERY_ANSWERED(&client->query)) {
-		ns_client_send(client);
-	}
+	ns_client_send(client);
 
 	if (!QUERY_STALEONLY(&client->query)) {
 		isc_nmhandle_detach(&client->reqhandle);

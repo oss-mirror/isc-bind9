@@ -421,6 +421,10 @@ ns_client_send(ns_client_t *client) {
 
 	REQUIRE(NS_CLIENT_VALID(client));
 
+	if ((client->query.attributes & NS_QUERYATTR_ANSWERED) != 0) {
+		return;
+	}
+
 	/*
 	 * XXXWPK TODO
 	 * Delay the response according to the -T delay option
@@ -881,9 +885,7 @@ ns_client_error(ns_client_t *client, isc_result_t result) {
 		}
 	}
 
-	if ((client->query.attributes & NS_QUERYATTR_ANSWERED) == 0) {
-		ns_client_send(client);
-	}
+	ns_client_send(client);
 }
 
 isc_result_t
