@@ -1556,7 +1556,7 @@ if [ $ret != 0 ]; then echo_i "failed"; fi
 ########################################################
 # Test for stale-answer-client-timeout (default 1.8s). #
 ########################################################
-echo_i "Testing stale-answer-client-timeout statement"
+echo_i "test stale-answer-client-timeout (default 1.8)"
 
 n=$((n+1))
 echo_i "updating ns3/named.conf ($n)"
@@ -1630,6 +1630,7 @@ status=$((status+ret))
 #############################################
 # Test for stale-answer-client-timeout off. #
 #############################################
+echo_i "test stale-answer-client-timeout (off)"
 
 n=$((n+1))
 echo_i "updating ns3/named.conf ($n)"
@@ -1674,8 +1675,9 @@ if [ $ret != 0 ]; then echo_i "failed"; fi
 status=$((status+ret+log_ret))
 
 #############################################
-# Test for stale-answer-client-timeout 0. #
+# Test for stale-answer-client-timeout 0.   #
 #############################################
+echo_i "test stale-answer-client-timeout (0)"
 
 n=$((n+1))
 echo_i "updating ns3/named.conf ($n)"
