@@ -1728,9 +1728,9 @@ fctx_sendevents(fetchctx_t *fctx, isc_result_t result, int line) {
 		ISC_LIST_UNLINK(fctx->events, event, ev_link);
 		if (event->ev_type == DNS_EVENT_TRYSTALE) {
 			/*
-			 * Not applicable to TRY STALE events, this function is called
-			 * when the fetch has either completed or timed out due to
-			 * resolver-query-timeout being reached.
+			 * Not applicable to TRY STALE events, this function is
+			 * called when the fetch has either completed or timed
+			 * out due to resolver-query-timeout being reached.
 			 */
 			isc_task_detach((isc_task_t **)&event->ev_sender);
 			isc_event_free((isc_event_t **)&event);
