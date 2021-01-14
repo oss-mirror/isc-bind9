@@ -1565,10 +1565,8 @@ copy_setports ns3/named2.conf.in ns3/named.conf
 if [ $ret != 0 ]; then echo_i "failed"; fi
 status=$((status+ret))
 
-echo_i "restart ns1, ns3"
-$PERL ../stop.pl --use-rndc --port ${CONTROLPORT} serve-stale ns1
+echo_i "restart ns3"
 $PERL ../stop.pl --use-rndc --port ${CONTROLPORT} serve-stale ns3
-start_server --noclean --restart --port ${PORT} serve-stale ns1
 start_server --noclean --restart --port ${PORT} serve-stale ns3
 
 n=$((n+1))
