@@ -15,4 +15,3 @@ rm -f */named.run */named.memstats
 rm -f ns*/managed-keys.bind*
 rm -f ns*/named_dump*
 rm -f ns*/named.stats*
-rm -f ns*/named.run.prev
