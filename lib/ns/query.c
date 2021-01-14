@@ -136,8 +136,6 @@
 /*% Was the query already answered due to stale-answer-client-timeout? */
 #define QUERY_ANSWERED(q) (((q)->attributes & NS_QUERYATTR_ANSWERED) != 0)
 
-#define MARK_AS_ANSWERED(q) ((q)->attributes |= NS_QUERYATTR_ANSWERED)
-
 /*% Does the query only wants to check for stale RRset? */
 #define QUERY_STALEONLY(q) (((q)->dboptions & DNS_DBFIND_STALEONLY) != 0)
 
