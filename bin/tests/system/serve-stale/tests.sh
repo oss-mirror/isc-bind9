@@ -884,7 +884,7 @@ $DIG -p ${PORT} @10.53.0.1 data.example TXT > dig.out.test$((n+1))
 
 # Step 8.
 n=$((n+1))
-echo_i "check stale data.example comes from authoritative (stale-refresh-time disabled) ($n)"
+echo_i "check data.example comes from authoritative (stale-refresh-time disabled) ($n)"
 ret=0
 grep "status: NOERROR" dig.out.test$n > /dev/null || ret=1
 grep "ANSWER: 1," dig.out.test$n > /dev/null || ret=1
@@ -1666,7 +1666,7 @@ status=$((status+ret))
 wait
 
 n=$((n+1))
-echo_i "check stale data.example comes from authoritative server (stale-answer-client-timeout off) ($n)"
+echo_i "check data.example comes from authoritative server (stale-answer-client-timeout off) ($n)"
 grep "status: NOERROR" dig.out.test$n > /dev/null || ret=1
 grep "ANSWER: 1," dig.out.test$n > /dev/null || ret=1
 grep "data\.example\..*[12].*IN.*TXT.*A text record with a 2 second ttl" dig.out.test$n > /dev/null || ret=1
