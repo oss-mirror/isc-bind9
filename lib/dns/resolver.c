@@ -5213,6 +5213,8 @@ fctx_create(dns_resolver_t *res, const dns_name_t *name, dns_rdatatype_t type,
 
 	try_stale = ((options & DNS_FETCHOPT_TRYSTALE_ONTIMEOUT) != 0);
 	if (try_stale) {
+		INSIST(res->view->staleanswerclienttimeout <=
+		       (res->query_timeout - 1000));
 		/*
 		 * Compute an expiration time after which stale data will
 		 * attempted to be served, if stale answers are enabled and
