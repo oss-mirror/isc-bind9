@@ -179,11 +179,11 @@ client_trace(ns_client_t *client, int level, const char *message) {
 #define CCTRACE(l, m) ((void)m)
 #endif /* WANT_QUERYTRACE */
 
-#define DNS_GETDB_NOEXACT   0x01U
-#define DNS_GETDB_NOLOG	    0x02U
-#define DNS_GETDB_PARTIAL   0x04U
-#define DNS_GETDB_IGNOREACL 0x08U
-#define DNS_GETDB_STALEOK   0X0CU
+#define DNS_GETDB_NOEXACT    0x01U
+#define DNS_GETDB_NOLOG	     0x02U
+#define DNS_GETDB_PARTIAL    0x04U
+#define DNS_GETDB_IGNOREACL  0x08U
+#define DNS_GETDB_STALEFIRST 0X0CU
 
 #define PENDINGOK(x) (((x)&DNS_DBFIND_PENDINGOK) != 0)
 
@@ -5606,7 +5606,7 @@ ns__query_start(query_ctx_t *qctx) {
 		 * stale-answer-client-timeout is zero, then we can promptly
 		 * answer with a stale RRset if one is available in cache.
 		 */
-		qctx->options |= DNS_GETDB_STALEOK;
+		qctx->options |= DNS_GETDB_STALEFIRST;
 	}
 
 	result = query_lookup(qctx);
@@ -5616,7 +5616,7 @@ ns__query_start(query_ctx_t *qctx) {
 	 * If a fetch is created to resolve this query, then,
 	 * when it completes, this option is not expected to be set.
 	 */
-	qctx->options &= ~DNS_GETDB_STALEOK;
+	qctx->options &= ~DNS_GETDB_STALEFIRST;
 
 cleanup:
 	return (result);
@@ -5770,9 +5770,9 @@ query_lookup(query_ctx_t *qctx) {
 		rpzqname = qctx->client->query.qname;
 	}
 
-	if ((qctx->options & DNS_GETDB_STALEOK) != 0) {
+	if ((qctx->options & DNS_GETDB_STALEFIRST) != 0) {
 		/*
-		 * If DNS_GETDB_STALEOK is set, it means that stale
+		 * If DNS_GETDB_STALEFIRST is set, it means that stale
 		 * data may be returned as part of this lookup.
 		 * An attempt to refresh the RRset will still take
 		 * place if either an active RRset isn't available or
@@ -5857,7 +5857,7 @@ query_lookup(query_ctx_t *qctx) {
 				      "%s resolver failure, stale answer %s",
 				      namebuf,
 				      stale_used ? "used" : "unavailable");
-		} else if ((qctx->options & DNS_GETDB_STALEOK) != 0 &&
+		} else if ((qctx->options & DNS_GETDB_STALEFIRST) != 0 &&
 			   stale_used) {
 			isc_log_write(ns_lctx, NS_LOGCATEGORY_SERVE_STALE,
 				      NS_LOGMODULE_QUERY, ISC_LOG_INFO,
@@ -5879,7 +5879,8 @@ query_lookup(query_ctx_t *qctx) {
 				      stale_used ? "used" : "unavailable");
 		}
 
-		if (!stale_used && ((qctx->options & DNS_GETDB_STALEOK) == 0)) {
+		if (!stale_used &&
+		    ((qctx->options & DNS_GETDB_STALEFIRST) == 0)) {
 			/*
 			 * At this point, we know that stale data was not
 			 * available. A fetch may still be in progress to
@@ -5915,7 +5916,7 @@ query_lookup(query_ctx_t *qctx) {
 	 * timer has expired. If no stale data was found then we must allow
 	 * a running fetch to complete in order to properly update the RRset.
 	 *
-	 * We must also ensure that if DNS_GETDB_STALEOK is set we won't
+	 * We must also ensure that if DNS_GETDB_STALEFIRST is set we won't
 	 * skip a call to query_gotanswer if we failed to find stale data,
 	 * since this means stale-answer-client-timeout is zero and we only
 	 * want to return stale data if any is available, otherwise we want
@@ -5923,13 +5924,13 @@ query_lookup(query_ctx_t *qctx) {
 	 */
 	if (result != ISC_R_SUCCESS &&
 	    ((dboptions & DNS_DBFIND_STALEONLY) != 0) &&
-	    ((qctx->options & DNS_GETDB_STALEOK) == 0))
+	    ((qctx->options & DNS_GETDB_STALEFIRST) == 0))
 	{
 		goto cleanup;
 	}
 
 	result = query_gotanswer(qctx, result);
-	stale_ok = (qctx->options & DNS_GETDB_STALEOK) != 0;
+	stale_ok = (qctx->options & DNS_GETDB_STALEFIRST) != 0;
 
 	qctx->client->query.dboptions &= ~DNS_DBFIND_STALEOK;
 
@@ -11512,7 +11513,7 @@ ns_query_done(query_ctx_t *qctx) {
 	 */
 	if (RECURSING(qctx->client) &&
 	    (!QUERY_STALEONLY(&qctx->client->query) ||
-	     ((qctx->options & DNS_GETDB_STALEOK) != 0)))
+	     ((qctx->options & DNS_GETDB_STALEFIRST) != 0)))
 	{
 		return (qctx->result);
 	}
