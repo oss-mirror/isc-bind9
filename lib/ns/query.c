@@ -5122,6 +5122,26 @@ qctx_init(ns_client_t *client, dns_fetchevent_t **eventp, dns_rdatatype_t qtype,
 	CALL_HOOK_NORETURN(NS_QUERY_QCTX_INITIALIZED, qctx);
 }
 
+/*
+ * Make 'dst' and exact copy of 'src', with exception of the
+ * option field, which is reset to zero.
+ * This function also attaches dst's view and db to the src's
+ * view and cachedb.
+ */
+static void
+qctx_copy(const query_ctx_t *src, query_ctx_t *dst) {
+	REQUIRE(src != NULL);
+	REQUIRE(dst != NULL);
+
+	memcpy(dst, src, sizeof(*dst));
+	dst->view = NULL;
+	dst->db = NULL;
+	dst->options = 0;
+	dns_view_attach(src->view, &dst->view);
+	dns_db_attach(src->view->cachedb, &dst->db);
+	client_trace(src->client, ISC_LOG_DEBUG(3), "qctx_copy");
+}
+
 /*%
  * Clean up and disassociate the rdataset and node pointers in qctx.
  */
@@ -5681,10 +5701,7 @@ query_refresh_rrset(query_ctx_t *orig_qctx) {
 	REQUIRE(orig_qctx != NULL);
 	REQUIRE(orig_qctx->client != NULL);
 
-	qctx_init(orig_qctx->client, NULL, orig_qctx->client->query.qtype,
-		  &qctx);
-	dns_db_attach(qctx.client->view->cachedb, &qctx.db);
-	qctx.is_zone = orig_qctx->is_zone;
+	qctx_copy(orig_qctx, &qctx);
 
 	/*
 	 * We'll need some resources...
@@ -5694,10 +5711,6 @@ query_refresh_rrset(query_ctx_t *orig_qctx) {
 		qctx_destroy(&qctx);
 		return;
 	}
-
-	qctx.type = orig_qctx->type;
-	qctx.dns64 = orig_qctx->dns64;
-	qctx.dns64_exclude = orig_qctx->dns64_exclude;
 
 	/*
 	 * Pretend we didn't find anything in cache.
