@@ -49,7 +49,8 @@ check_PROGRAMS =	\
 	tcpdns_test	\
 	time_test	\
 	timer_test	\
-	udp_test
+	udp_test	\
+	udp_echo_test
 
 TESTS = $(check_PROGRAMS)
 
@@ -108,6 +109,16 @@ udp_test_CPPFLAGS =	\
 udp_test_LDADD =	\
 	$(LDADD)	\
 	$(LIBUV_LIBS)
+
+udp_echo_test_CPPFLAGS =	\
+	$(AM_CPPFLAGS)	\
+	$(OPENSSL_CFLAGS)	\
+	$(LIBUV_CFLAGS)
+
+udp_echo_test_LDADD =	\
+	$(LDADD)	\
+	$(LIBUV_LIBS)
+
 
 unit-local: check
 
