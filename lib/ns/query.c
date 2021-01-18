@@ -5702,6 +5702,7 @@ query_refresh_rrset(query_ctx_t *orig_qctx) {
 	REQUIRE(orig_qctx->client != NULL);
 
 	qctx_copy(orig_qctx, &qctx);
+	qctx.client->query.dboptions &= ~DNS_DBFIND_STALEONLY;
 
 	/*
 	 * We'll need some resources...
@@ -5816,6 +5817,35 @@ query_lookup(query_ctx_t *qctx) {
 
 	if (!qctx->is_zone) {
 		dns_cache_updatestats(qctx->view->cache, result);
+	}
+
+	/*
+	 * Special case handling, when stale-answer-client-timeout >= 0 and
+	 * stale answers are enabled, we do not want to return a stale NXRRSET
+	 * entry in cache during the initial lookup or a subsequent lookup when
+	 * stale-answer-client-timeout triggers, instead, BIND must attempt to
+	 * refresh the RRset.
+	 * It is fine to return such entry if resolver-query-timeout has
+	 * triggered, in that case DNS_DBFIND_STALEONLY will not be set during
+	 * the lookup.
+	 */
+	if (result == DNS_R_NCACHENXRRSET &&
+	    ((dboptions & DNS_DBFIND_STALEONLY) != 0) && STALE(qctx->rdataset))
+	{
+		if (qctx->node != NULL) {
+			dns_db_detachnode(qctx->db, &qctx->node);
+		}
+		qctx_freedata(qctx);
+		if ((qctx->options & DNS_GETDB_STALEFIRST) != 0) {
+			/*
+			 * stale-answer-client-timeout is zero and we found a
+			 * stale NXRRSET entry in cache during the first lookup.
+			 * BIND must attempt to refresh the RRset instead of
+			 * using it in this case.
+			 */
+			query_refresh_rrset(qctx);
+		}
+		return (result);
 	}
 
 	/*
