@@ -5129,17 +5129,17 @@ qctx_init(ns_client_t *client, dns_fetchevent_t **eventp, dns_rdatatype_t qtype,
  * view and cachedb.
  */
 static void
-qctx_copy(const query_ctx_t *src, query_ctx_t *dst) {
-	REQUIRE(src != NULL);
+qctx_copy(const query_ctx_t *qctx, query_ctx_t *dst) {
+	REQUIRE(qctx != NULL);
 	REQUIRE(dst != NULL);
 
-	memcpy(dst, src, sizeof(*dst));
+	memcpy(dst, qctx, sizeof(*dst));
 	dst->view = NULL;
 	dst->db = NULL;
 	dst->options = 0;
-	dns_view_attach(src->view, &dst->view);
-	dns_db_attach(src->view->cachedb, &dst->db);
-	client_trace(src->client, ISC_LOG_DEBUG(3), "qctx_copy");
+	dns_view_attach(qctx->view, &dst->view);
+	dns_db_attach(qctx->view->cachedb, &dst->db);
+	CCTRACE(ISC_LOG_DEBUG(3), "qctx_copy");
 }
 
 /*%
