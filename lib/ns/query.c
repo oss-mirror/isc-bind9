@@ -5938,27 +5938,6 @@ query_lookup(query_ctx_t *qctx) {
 		qctx->client->query.dboptions &= ~DNS_DBFIND_STALEONLY;
 	}
 
-	/*
-	 * If DNS_DBFIND_STALEONLY is disabled then we proceed as normal,
-	 * otherwise we only proceed with query_gotanswer if we
-	 * successfully found a stale RRset in cache, since this is an
-	 * attempt to find stale data after stale-answer-client-timeout
-	 * timer has expired. If no stale data was found then we must allow
-	 * a running fetch to complete in order to properly update the RRset.
-	 *
-	 * We must also ensure that if DNS_GETDB_STALEFIRST is set we won't
-	 * skip a call to query_gotanswer if we failed to find stale data,
-	 * since this means stale-answer-client-timeout is zero and we only
-	 * want to return stale data if any is available, otherwise we want
-	 * to resolve the query using the standard resolution process.
-	 */
-	if (result != ISC_R_SUCCESS &&
-	    ((dboptions & DNS_DBFIND_STALEONLY) != 0) &&
-	    ((qctx->options & DNS_GETDB_STALEFIRST) == 0))
-	{
-		goto cleanup;
-	}
-
 	result = query_gotanswer(qctx, result);
 	stale_ok = (qctx->options & DNS_GETDB_STALEFIRST) != 0;
 
