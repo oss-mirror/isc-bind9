@@ -5829,12 +5829,10 @@ query_lookup(query_ctx_t *qctx) {
 	 * triggered, in that case DNS_DBFIND_STALEONLY will not be set during
 	 * the lookup.
 	 */
-	if (result == DNS_R_NCACHENXRRSET &&
+	if (result != ISC_R_SUCCESS &&
 	    ((dboptions & DNS_DBFIND_STALEONLY) != 0) && STALE(qctx->rdataset))
 	{
-		if (qctx->node != NULL) {
-			dns_db_detachnode(qctx->db, &qctx->node);
-		}
+		qctx_clean(qctx);
 		qctx_freedata(qctx);
 		if ((qctx->options & DNS_GETDB_STALEFIRST) != 0) {
 			/*
