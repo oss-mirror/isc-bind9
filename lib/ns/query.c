@@ -5702,6 +5702,8 @@ query_refresh_rrset(query_ctx_t *orig_qctx) {
 	REQUIRE(orig_qctx->client != NULL);
 
 	qctx_copy(orig_qctx, &qctx);
+	qctx.client->query.dboptions &= ~DNS_DBFIND_STALEENABLED;
+	qctx.client->query.dboptions &= ~DNS_DBFIND_STALEOK;
 	qctx.client->query.dboptions &= ~DNS_DBFIND_STALEONLY;
 
 	/*
