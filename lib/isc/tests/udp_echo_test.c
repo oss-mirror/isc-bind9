@@ -50,7 +50,7 @@ setup_ephemeral_port(isc_sockaddr_t *addr, sa_family_t family) {
 	int fd;
 	int r;
 
-	isc_sockaddr_fromin6(addr, &in6addr_loopback, 0);
+	isc_sockaddr_fromin6(addr, &in6addr_any, 0);
 	isc_sockaddr_setport(addr, 53);
 
 	fd = socket(AF_INET6, family, 0);
@@ -193,7 +193,12 @@ udp_recv_send(isc_nm_t **nmp) {
 }
 
 int
-main(void) {
+main(int argc, char **argv) {
+	if (argc > 1)
+		workers = atoi(argv[1]);
+	else
+		workers = 1;
+	printf("workers = %d\n", workers);
 	if (isc_test_begin(NULL, true, workers) != ISC_R_SUCCESS) {
 		return (-1);
 	}
@@ -201,7 +206,10 @@ main(void) {
 	signal(SIGPIPE, SIG_IGN);
 
 	isc_nm_t *nm = NULL;
-	nm_setup(&nm);
+	if(nm_setup(&nm)) {
+		printf("network setup failed, exiting\n");
+		return 1;
+	}
 	udp_recv_send(&nm);
 	nm_teardown(&nm);
 	isc_test_end();
