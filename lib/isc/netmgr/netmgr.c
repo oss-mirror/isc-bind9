@@ -721,6 +721,7 @@ process_netievent(isc__networker_t *worker, isc__netievent_t *ievent) {
 		NETIEVENT_CASE(tlsclose);
 		NETIEVENT_CASE(tlsconnect);
 		NETIEVENT_CASE(tlsdobio);
+		NETIEVENT_CASE(tlscancel);
 
 		NETIEVENT_CASE(tlsdnscycle);
 		NETIEVENT_CASE(tlsdnsaccept);
@@ -786,6 +787,7 @@ NETIEVENT_SOCKET_DEF(tlsclose);
 NETIEVENT_SOCKET_DEF(tlsconnect);
 NETIEVENT_SOCKET_DEF(tlsdobio);
 NETIEVENT_SOCKET_DEF(tlsstartread);
+NETIEVENT_SOCKET_HANDLE_DEF(tlscancel);
 NETIEVENT_SOCKET_DEF(udpclose);
 NETIEVENT_SOCKET_DEF(udplisten);
 NETIEVENT_SOCKET_DEF(udpread);
@@ -997,6 +999,8 @@ nmsocket_cleanup(isc_nmsocket_t *sock, bool dofree FLARG) {
 	isc_mutex_destroy(&sock->lock);
 	isc_condition_destroy(&sock->cond);
 	isc_condition_destroy(&sock->scond);
+	isc__nm_tls_cleanup_data(sock);
+
 #ifdef NETMGR_TRACE
 	LOCK(&sock->mgr->lock);
 	ISC_LIST_UNLINK(sock->mgr->active_sockets, sock, active_link);
@@ -1153,7 +1157,8 @@ isc_nmsocket_close(isc_nmsocket_t **sockp) {
 	REQUIRE((*sockp)->type == isc_nm_udplistener ||
 		(*sockp)->type == isc_nm_tcplistener ||
 		(*sockp)->type == isc_nm_tcpdnslistener ||
-		(*sockp)->type == isc_nm_tlsdnslistener);
+		(*sockp)->type == isc_nm_tlsdnslistener ||
+		(*sockp)->type == isc_nm_tlslistener);
 
 	isc__nmsocket_detach(sockp);
 }
@@ -1231,6 +1236,9 @@ isc___nmsocket_init(isc_nmsocket_t *sock, isc_nm_t *mgr, isc_nmsocket_type type,
 	isc_condition_init(&sock->cond);
 	isc_condition_init(&sock->scond);
 	isc_refcount_init(&sock->references, 1);
+
+	memset(&sock->tls, 0, sizeof(sock->tls));
+	ISC_LIST_INIT(sock->tlsstream.sends);
 
 	NETMGR_TRACE_LOG("isc__nmsocket_init():%p->references = %lu\n", sock,
 			 isc_refcount_current(&sock->references));
@@ -1743,6 +1751,9 @@ isc_nm_cancelread(isc_nmhandle_t *handle) {
 		break;
 	case isc_nm_tlsdnssocket:
 		isc__nm_tlsdns_cancelread(handle);
+		break;
+	case isc_nm_tlssocket:
+		isc__nm_tls_cancelread(handle);
 		break;
 	default:
 		INSIST(0);

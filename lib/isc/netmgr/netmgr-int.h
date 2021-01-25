@@ -257,6 +257,7 @@ typedef enum isc__netievent_type {
 	netievent_tlsstartread,
 	netievent_tlsconnect,
 	netievent_tlsdobio,
+	netievent_tlscancel,
 
 	netievent_tlsdnsaccept,
 	netievent_tlsdnsconnect,
@@ -678,6 +679,12 @@ enum {
 	STATID_ACTIVE = 10
 };
 
+
+typedef struct isc_nmsocket_tls_send_req {
+	isc_nmsocket_t *tlssock;
+	isc_region_t data;
+} isc_nmsocket_tls_send_req_t;
+
 struct isc_nmsocket {
 	/*% Unlocked, RO */
 	int magic;
@@ -720,15 +727,16 @@ struct isc_nmsocket {
 		SSL *ssl;
 		SSL_CTX *ctx;
 		BIO *ssl_bio;
+		isc_nmsocket_t *tlslistener;
 		enum {
 			TLS_INIT,
 			TLS_HANDSHAKE,
 			TLS_IO,
 			TLS_ERROR,
-			TLS_CLOSING
+			TLS_CLOSING,
+			TLS_CLOSED
 		} state;
-		isc_region_t senddata;
-		bool sending;
+		size_t nsending;
 		/* List of active send requests. */
 		ISC_LIST(isc__nm_uvreq_t) sends;
 	} tlsstream;
@@ -1263,6 +1271,9 @@ isc__nm_async_tlsstartread(isc__networker_t *worker, isc__netievent_t *ev0);
 void
 isc__nm_async_tlsdobio(isc__networker_t *worker, isc__netievent_t *ev0);
 
+void
+isc__nm_async_tlscancel(isc__networker_t *worker, isc__netievent_t *ev0);
+
 /*%<
  * Callback handlers for asynchronouse TLS events.
  */
@@ -1338,6 +1349,10 @@ isc__nm_async_tlsdnslisten(isc__networker_t *worker, isc__netievent_t *ev0);
 void
 isc__nm_tlsdns_send(isc_nmhandle_t *handle, isc_region_t *region,
 		    isc_nm_cb_t cb, void *cbarg);
+
+void
+isc__nm_tls_cancelread(isc_nmhandle_t *handle);
+
 /*%<
  * Back-end implementation of isc_nm_send() for TLSDNS handles.
  */
@@ -1416,6 +1431,9 @@ isc__nm_tls_resumeread(isc_nmhandle_t *handle);
  * Resume reading from the handle.
  *
  */
+
+void
+isc__nm_tls_cleanup_data(isc_nmsocket_t *sock);
 
 void
 isc__nm_tls_stoplistening(isc_nmsocket_t *sock);
@@ -1511,12 +1529,6 @@ isc__nm_socket_connectiontimeout(uv_os_sock_t fd, int timeout_ms);
  * the minimum value must be at least 1000 (1 second).
  */
 
-void
-isc__nm_tls_initialize(void);
-/*%<
- * Initialize OpenSSL library, idempotent.
- */
-
 /*
  * typedef all the netievent types
  */
@@ -1531,6 +1543,7 @@ NETIEVENT_SOCKET_TYPE(tlsclose);
 					  */
 NETIEVENT_SOCKET_TYPE(tlsdobio);
 NETIEVENT_SOCKET_TYPE(tlsstartread);
+NETIEVENT_SOCKET_HANDLE_TYPE(tlscancel);
 NETIEVENT_SOCKET_TYPE(udpclose);
 NETIEVENT_SOCKET_TYPE(udplisten);
 NETIEVENT_SOCKET_TYPE(udpread);
@@ -1590,6 +1603,7 @@ NETIEVENT_SOCKET_DECL(tlsclose);
 NETIEVENT_SOCKET_DECL(tlsconnect);
 NETIEVENT_SOCKET_DECL(tlsdobio);
 NETIEVENT_SOCKET_DECL(tlsstartread);
+NETIEVENT_SOCKET_HANDLE_DECL(tlscancel);
 NETIEVENT_SOCKET_DECL(udpclose);
 NETIEVENT_SOCKET_DECL(udplisten);
 NETIEVENT_SOCKET_DECL(udpread);

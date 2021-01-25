@@ -509,3 +509,15 @@ isc_nm_tlsdnsconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 isc_result_t
 isc_nm_tls_create_server_ctx(const char *keyfile, const char *certfile,
 			     isc_tlsctx_t **ctxp);
+
+void
+isc_nm_tls_initialize(void);
+/*%<
+ * Initialize OpenSSL library, idempotent.
+ */
+
+void
+isc_nm_tls_deinitialize(void);
+/*%<
+ * De-Initialize OpenSSL library, idempotent.
+ */
