@@ -221,6 +221,7 @@ totext_rrsig(ARGS_TOTEXT) {
 	 * Sig exp.
 	 */
 	exp = uint32_fromregion(&sr);
+	TAINT_INSIST(exp <= 0xffffffffU);
 	isc_region_consume(&sr, 4);
 	RETERR(dns_time32_totext(exp, target));
 	RETERR(str_totext(" ", target));
@@ -229,6 +230,7 @@ totext_rrsig(ARGS_TOTEXT) {
 	 * Time signed.
 	 */
 	when = uint32_fromregion(&sr);
+	TAINT_INSIST(when <= 0xffffffffU);
 	isc_region_consume(&sr, 4);
 	RETERR(dns_time32_totext(when, target));
 	RETERR(str_totext(" ", target));
