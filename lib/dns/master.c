@@ -2599,6 +2599,7 @@ load_raw(dns_loadctx_t *lctx) {
 				goto cleanup;
 			}
 			rdlen = isc_buffer_getuint16(&target);
+			TAINT_INSIST(rdlen <= 0xffff);
 
 			/* rdata */
 			result = read_and_check(sequential_read, &target, rdlen,
