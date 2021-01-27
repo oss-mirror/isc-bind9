@@ -1942,7 +1942,7 @@ read_one_rr(dns_journal_t *j) {
 	isc_result_t result;
 	dns_rdatatype_t rdtype;
 	dns_rdataclass_t rdclass;
-	unsigned int rdlen;
+	unsigned int rdlen, remaininglength;
 	uint32_t ttl;
 	journal_xhdr_t xhdr;
 	journal_rrhdr_t rrhdr;
@@ -2044,8 +2044,10 @@ read_one_rr(dns_journal_t *j) {
 
 	/*
 	 * Parse the rdata.
+	 * Assign to remaininglength to prevent Coverity false positive.
 	 */
-	if (isc_buffer_remaininglength(&j->it.source) != rdlen) {
+	remaininglength = isc_buffer_remaininglength(&j->it.source);
+	if (remaininglength != rdlen) {
 		FAIL(DNS_R_FORMERR);
 	}
 	isc_buffer_setactive(&j->it.source, rdlen);
