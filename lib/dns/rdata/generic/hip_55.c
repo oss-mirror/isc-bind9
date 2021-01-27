@@ -470,6 +470,7 @@ casecompare_hip(ARGS_COMPARE) {
 	int order;
 	uint8_t hit_len;
 	uint16_t key_len;
+	size_t len;
 
 	REQUIRE(rdata1->type == rdata2->type);
 	REQUIRE(rdata1->rdclass == rdata2->rdclass);
@@ -492,15 +493,16 @@ casecompare_hip(ARGS_COMPARE) {
 	key_len = uint16_fromregion(&r1);
 	isc_region_consume(&r1, 2); /* key length */
 	isc_region_consume(&r2, 4);
+	len = hit_len + key_len;
 
-	INSIST(r1.length >= (unsigned)(hit_len + key_len));
-	INSIST(r2.length >= (unsigned)(hit_len + key_len));
-	order = memcmp(r1.base, r2.base, hit_len + key_len);
+	INSIST(r1.length >= len);
+	INSIST(r2.length >= len);
+	order = memcmp(r1.base, r2.base, len);
 	if (order != 0) {
 		return (order);
 	}
-	isc_region_consume(&r1, hit_len + key_len);
-	isc_region_consume(&r2, hit_len + key_len);
+	isc_region_consume(&r1, len);
+	isc_region_consume(&r2, len);
 
 	dns_name_init(&name1, NULL);
 	dns_name_init(&name2, NULL);
