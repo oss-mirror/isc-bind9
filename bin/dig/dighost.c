@@ -608,97 +608,35 @@ make_empty_lookup(void) {
 
 	INSIST(!free_now);
 
-	looknew = isc_mem_allocate(mctx, sizeof(struct dig_lookup));
-	looknew->pending = true;
-	looknew->textname[0] = 0;
-	looknew->cmdline[0] = 0;
-	looknew->rdtype = dns_rdatatype_a;
-	looknew->qrdtype = dns_rdatatype_a;
-	looknew->rdclass = dns_rdataclass_in;
-	looknew->rdtypeset = false;
-	looknew->rdclassset = false;
-	looknew->sendspace = NULL;
-	looknew->sendmsg = NULL;
-	looknew->name = NULL;
-	looknew->oname = NULL;
-	looknew->xfr_q = NULL;
-	looknew->current_query = NULL;
-	looknew->doing_xfr = false;
-	looknew->ixfr_serial = 0;
-	looknew->trace = false;
-	looknew->trace_root = false;
-	looknew->identify = false;
-	looknew->identify_previous_line = false;
-	looknew->ignore = false;
-	looknew->servfail_stops = true;
-	looknew->besteffort = true;
-	looknew->dns64prefix = false;
-	looknew->dnssec = false;
-	looknew->ednsflags = 0;
-	looknew->opcode = dns_opcode_query;
-	looknew->expire = false;
-	looknew->nsid = false;
-	looknew->tcp_keepalive = false;
-	looknew->padding = 0;
-	looknew->header_only = false;
-	looknew->sendcookie = false;
-	looknew->seenbadcookie = false;
-	looknew->badcookie = true;
-	looknew->multiline = false;
-	looknew->nottl = false;
-	looknew->noclass = false;
-	looknew->onesoa = false;
-	looknew->use_usec = false;
-	looknew->nocrypto = false;
-	looknew->ttlunits = false;
-	looknew->expandaaaa = false;
-	looknew->qr = false;
+	looknew = isc_mem_allocate(mctx, sizeof(*looknew));
+	*looknew = (dig_lookup_t){
+		.pending = true,
+		.rdtype = dns_rdatatype_a,
+		.qrdtype = dns_rdatatype_a,
+		.rdclass = dns_rdataclass_in,
+		.servfail_stops = true,
+		.besteffort = true,
+		.opcode = dns_opcode_query,
+		.badcookie = true,
 #ifdef HAVE_LIBIDN2
-	looknew->idnin = isatty(1) ? (getenv("IDN_DISABLE") == NULL) : false;
-	looknew->idnout = looknew->idnin;
-#else  /* ifdef HAVE_LIBIDN2 */
-	looknew->idnin = false;
-	looknew->idnout = false;
+		.idnin = isatty(1) ? (getenv("IDN_DISABLE") == NULL) : false,
+		.idnout = looknew->idnin,
 #endif /* HAVE_LIBIDN2 */
-	looknew->udpsize = -1;
-	looknew->edns = -1;
-	looknew->recurse = true;
-	looknew->aaonly = false;
-	looknew->adflag = false;
-	looknew->cdflag = false;
-	looknew->raflag = false;
-	looknew->tcflag = false;
-	looknew->print_unknown_format = false;
-	looknew->zflag = false;
-	looknew->setqid = false;
-	looknew->qid = 0;
-	looknew->ns_search_only = false;
-	looknew->origin = NULL;
-	looknew->tsigctx = NULL;
-	looknew->querysig = NULL;
-	looknew->retries = tries;
-	looknew->nsfound = 0;
-	looknew->tcp_mode = false;
-	looknew->tcp_mode_set = false;
-	looknew->tls_mode = false;
-	looknew->comments = true;
-	looknew->stats = true;
-	looknew->section_question = true;
-	looknew->section_answer = true;
-	looknew->section_authority = true;
-	looknew->section_additional = true;
-	looknew->new_search = false;
-	looknew->done_as_is = false;
-	looknew->need_search = false;
-	looknew->ecs_addr = NULL;
-	looknew->cookie = NULL;
-	looknew->ednsopts = NULL;
-	looknew->ednsoptscnt = 0;
-	looknew->ednsneg = true;
-	looknew->mapped = true;
-	looknew->dscp = -1;
-	looknew->rrcomments = 0;
-	looknew->eoferr = 0;
+		.udpsize = -1,
+		.edns = -1,
+		.recurse = true,
+		.retries = tries,
+		.comments = true,
+		.stats = true,
+		.section_question = true,
+		.section_answer = true,
+		.section_authority = true,
+		.section_additional = true,
+		.ednsneg = true,
+		.mapped = true,
+		.dscp = -1,
+	};
+
 	dns_fixedname_init(&looknew->fdomain);
 	ISC_LINK_INIT(looknew, link);
 	ISC_LIST_INIT(looknew->q);
@@ -787,6 +725,11 @@ clone_lookup(dig_lookup_t *lookold, bool servers) {
 	looknew->nsid = lookold->nsid;
 	looknew->tcp_keepalive = lookold->tcp_keepalive;
 	looknew->header_only = lookold->header_only;
+	looknew->https_mode = lookold->https_mode;
+	if (lookold->https_path != NULL) {
+		looknew->https_path = isc_mem_strdup(mctx, lookold->https_path);
+	}
+	looknew->https_get = lookold->https_get;
 	looknew->sendcookie = lookold->sendcookie;
 	looknew->seenbadcookie = lookold->seenbadcookie;
 	looknew->badcookie = lookold->badcookie;
@@ -1636,6 +1579,10 @@ _destroy_lookup(dig_lookup_t *lookup) {
 			}
 		}
 		isc_mem_free(mctx, lookup->ednsopts);
+	}
+
+	if (lookup->https_path) {
+		isc_mem_free(mctx, lookup->https_path);
 	}
 
 	isc_mem_free(mctx, lookup);
@@ -2760,7 +2707,17 @@ start_tcp(dig_query_t *query) {
 	 * For TLS connections, we want to override the default
 	 * port number.
 	 */
-	port = port_set ? port : (query->lookup->tls_mode ? 853 : 53);
+	if (!port_set) {
+		if (query->lookup->tls_mode) {
+			port = 853;
+		} else if (query->lookup->https_mode) {
+			port = 443;
+		} else {
+			port = 53;
+		}
+	}
+
+	fprintf(stderr, "query->servname = %s\n", query->servname);
 
 	result = get_address(query->servname, port, &query->sockaddr);
 	if (result != ISC_R_SUCCESS) {
@@ -2835,7 +2792,27 @@ start_tcp(dig_query_t *query) {
 				(isc_nmiface_t *)&query->sockaddr,
 				tcp_connected, query, local_timeout, 0,
 				query->tlsctx);
-			check_result(result, "isc_nm_tcpdnsconnect");
+			check_result(result, "isc_nm_tlsdnsconnect");
+		} else if (query->lookup->https_mode) {
+			char portbuf[12];
+			char uri[4096] = { 0 };
+			snprintf(portbuf, sizeof(portbuf), "%u",
+				 (uint16_t)port);
+
+			strlcpy(uri, "https://", sizeof(uri));
+			strlcat(uri, query->servname, sizeof(uri));
+			strlcat(uri, ":", sizeof(uri));
+			strlcat(uri, portbuf, sizeof(uri));
+			strlcat(uri, query->lookup->https_path, sizeof(uri));
+
+			result = isc_tlsctx_createclient(&query->tlsctx);
+			RUNTIME_CHECK(result == ISC_R_SUCCESS);
+			result = isc_nm_httpconnect(
+				netmgr, (isc_nmiface_t *)&localaddr,
+				(isc_nmiface_t *)&query->sockaddr, uri,
+				!query->lookup->https_get, tcp_connected, query,
+				query->tlsctx, local_timeout, 0);
+			check_result(result, "isc_nm_httpconnect");
 		} else {
 			result = isc_nm_tcpdnsconnect(
 				netmgr, (isc_nmiface_t *)&localaddr,
@@ -3183,7 +3160,12 @@ launch_next_query(dig_query_t *query) {
 	isc_nmhandle_settimeout(query->handle, local_timeout);
 
 	query_attach(query, &readquery);
-	isc_nm_read(query->handle, recv_done, readquery);
+	if (query->lookup->https_mode) {
+		isc_nm_httprequest(query->handle, &r, recv_done, readquery);
+		goto cleanup;
+	} else {
+		isc_nm_read(query->handle, recv_done, readquery);
+	}
 
 	if (!query->first_soa_rcvd) {
 		dig_query_t *sendquery = NULL;
@@ -3211,6 +3193,7 @@ launch_next_query(dig_query_t *query) {
 			}
 		}
 	}
+cleanup:
 	lookup_detach(&l);
 	return;
 }
