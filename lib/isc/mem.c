@@ -947,9 +947,6 @@ isc__mem_putanddetach(isc_mem_t **ctxp, void *ptr, size_t size FLARG) {
 	*ctxp = NULL;
 
 #if USE_ALLOCATOR_CUSTOM
-	isc_mem_t *ctx = *ctxp;
-	*ctxp = NULL;
-
 	if (ISC_UNLIKELY((isc_mem_debugging &
 			  (ISC_MEM_DEBUGSIZE | ISC_MEM_DEBUGCTX)) != 0))
 	{
@@ -1029,7 +1026,6 @@ isc__mem_get(isc_mem_t *ctx, size_t size FLARG) {
 	void *ptr = NULL;
 
 #if USE_ALLOCATOR_CUSTOM
-	isc__mem_t *ctx = (isc__mem_t *)ctx0;
 	bool call_water = false;
 
 	if (ISC_UNLIKELY((isc_mem_debugging &
@@ -1098,6 +1094,8 @@ isc__mem_get(isc_mem_t *ctx, size_t size FLARG) {
 	UNUSED(file);
 	UNUSED(line);
 	ptr = default_memalloc(size);
+#else
+	#error Unknown allocator
 #endif
 	return (ptr);
 }
@@ -1620,11 +1618,10 @@ isc__mem_strdup(isc_mem_t *mctx, const char *s FLARG) {
 }
 
 char *
-isc__mem_strndup(isc_mem_t *mctx0, const char *s, size_t size FLARG) {
-	REQUIRE(VALID_CONTEXT(mctx0));
+isc__mem_strndup(isc_mem_t *mctx, const char *s, size_t size FLARG) {
+	REQUIRE(VALID_CONTEXT(mctx));
 	REQUIRE(s != NULL);
 
-	isc__mem_t *mctx = (isc__mem_t *)mctx0;
 	size_t len;
 	char *ns;
 
@@ -1958,7 +1955,6 @@ isc__mempool_get(isc_mempool_t *mpctx FLARG) {
 	}
 
 #if USE_ALLOCATOR_CUSTOM
-	isc__mem_t *mctx = mpctx->mctx;
 	if (ISC_UNLIKELY(mpctx->items == NULL)) {
 		/*
 		 * We need to dip into the well.  Lock the memory context
@@ -2704,12 +2700,27 @@ isc__strdup(const char *s1 FLARG) {
 }
 
 char *
-isc__strndup(const char *s1 FLARG) {
-	return (isc__mem_strndup(isc__mem_mctx, s1 FLARG_PASS));
+isc__strndup(const char *s1, size_t size FLARG) {
+	return (isc__mem_strndup(isc__mem_mctx, s1, size FLARG_PASS));
 }
 
 isc_mem_t *
 isc_get_default_mctx(void) {
 	REQUIRE(isc__mem_mctx != NULL);
 	return ((isc_mem_t *)isc__mem_mctx);
+}
+
+void
+isc_mem_initialize(void) {
+	REQUIRE(isc__mem_mctx == NULL);
+	isc_mem_create(&isc__mem_mctx);
+	isc_mem_setname(isc__mem_mctx, "default");
+}
+
+void
+isc_mem_shutdown(void) {
+	REQUIRE(isc__mem_mctx != NULL);
+	isc_mem_destroy(&isc__mem_mctx);
+	/* FIXME: All code using raw 'exit(1);' has to be fixed first */
+	/* isc_mem_checkdestroyed(stderr); */
 }

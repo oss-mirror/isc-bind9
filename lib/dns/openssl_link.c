@@ -39,8 +39,6 @@
 #include "dst_internal.h"
 #include "dst_openssl.h"
 
-static isc_mem_t *dst__mctx = NULL;
-
 #if !defined(OPENSSL_NO_ENGINE)
 #include <openssl/engine.h>
 #endif /* if !defined(OPENSSL_NO_ENGINE) */
@@ -49,54 +47,13 @@ static isc_mem_t *dst__mctx = NULL;
 static ENGINE *e = NULL;
 #endif /* if !defined(OPENSSL_NO_ENGINE) */
 
-static void
-enable_fips_mode(void) {
-#ifdef HAVE_FIPS_MODE
-	if (FIPS_mode() != 0) {
-		/*
-		 * FIPS mode is already enabled.
-		 */
-		return;
-	}
-
-	if (FIPS_mode_set(1) == 0) {
-		dst__openssl_toresult2("FIPS_mode_set", DST_R_OPENSSLFAILURE);
-		exit(1);
-	}
-#endif /* HAVE_FIPS_MODE */
-}
-
 isc_result_t
-dst__openssl_init(isc_mem_t *mctx, const char *engine) {
+dst__openssl_init(const char *engine) {
 	isc_result_t result;
-
-	REQUIRE(dst__mctx == NULL);
-	isc_mem_attach(mctx, &dst__mctx);
 
 #if defined(OPENSSL_NO_ENGINE)
 	UNUSED(engine);
-#endif /* if defined(OPENSSL_NO_ENGINE) */
-
-	enable_fips_mode();
-
-	isc_tls_initialize();
-
-#if !defined(OPENSSL_NO_ENGINE)
-#if !defined(CONF_MFLAGS_DEFAULT_SECTION)
-	OPENSSL_config(NULL);
-#else  /* if !defined(CONF_MFLAGS_DEFAULT_SECTION) */
-	/*
-	 * OPENSSL_config() can only be called a single time as of
-	 * 1.0.2e so do the steps individually.
-	 */
-	OPENSSL_load_builtin_modules();
-	ENGINE_load_builtin_engines();
-	ERR_clear_error();
-	CONF_modules_load_file(NULL, NULL,
-			       CONF_MFLAGS_DEFAULT_SECTION |
-				       CONF_MFLAGS_IGNORE_MISSING_FILE);
-#endif /* if !defined(CONF_MFLAGS_DEFAULT_SECTION) */
-
+#else /* if defined(OPENSSL_NO_ENGINE) */
 	if (engine != NULL && *engine == '\0') {
 		engine = NULL;
 	}
@@ -116,14 +73,6 @@ dst__openssl_init(isc_mem_t *mctx, const char *engine) {
 
 #endif /* !defined(OPENSSL_NO_ENGINE) */
 
-	/* Protect ourselves against unseeded PRNG */
-	if (RAND_status() != 1) {
-		FATAL_ERROR(__FILE__, __LINE__,
-			    "OpenSSL pseudorandom number generator "
-			    "cannot be initialized (see the `PRNG not "
-			    "seeded' message in the OpenSSL FAQ)");
-	}
-
 	return (ISC_R_SUCCESS);
 
 #if !defined(OPENSSL_NO_ENGINE)
@@ -138,30 +87,7 @@ cleanup_rm:
 
 void
 dst__openssl_destroy(void) {
-#if (OPENSSL_VERSION_NUMBER < 0x10100000L) || defined(LIBRESSL_VERSION_NUMBER)
-	/*
-	 * Sequence taken from apps_shutdown() in <apps/apps.h>.
-	 */
-	CONF_modules_free();
-	OBJ_cleanup();
-	EVP_cleanup();
-#if !defined(OPENSSL_NO_ENGINE)
-	if (e != NULL) {
-		ENGINE_free(e);
-	}
-	e = NULL;
-	ENGINE_cleanup();
-#endif /* if !defined(OPENSSL_NO_ENGINE) */
-	CRYPTO_cleanup_all_ex_data();
-	ERR_clear_error();
-
-#ifdef DNS_CRYPTO_LEAKS
-	CRYPTO_mem_leaks_fp(stderr);
-#endif /* ifdef DNS_CRYPTO_LEAKS */
-
-#endif
-	isc_tls_destroy();
-	isc_mem_detach(&dst__mctx);
+	/* Empty */
 }
 
 static isc_result_t

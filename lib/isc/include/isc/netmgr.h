@@ -548,3 +548,9 @@ isc_result_t
 isc_nm_http_add_doh_endpoint(isc_nmsocket_t *sock, const char *uri,
 			     isc_nm_recv_cb_t cb, void *cbarg,
 			     size_t extrahandlesize);
+
+void
+isc_nm_initialize(void);
+
+void
+isc_nm_shutdown(void);

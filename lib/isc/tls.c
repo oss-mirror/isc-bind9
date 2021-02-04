@@ -9,6 +9,7 @@
  * information regarding copyright ownership.
  */
 
+#include <openssl/conf.h>
 #include <openssl/err.h>
 #include <openssl/opensslv.h>
 
@@ -46,14 +47,71 @@ static void
 isc__tls_set_thread_id(CRYPTO_THREADID *id) {
 	CRYPTO_THREADID_set_numeric(id, (unsigned long)isc_thread_self());
 }
+
+# if !defined(OPENSSL_NO_ENGINE)
+#  define apps_startup() {						\
+		CRYPTO_malloc_init();					\
+		ERR_load_crypto_strings();				\
+		OpenSSL_add_all_algorithms();				\
+		ENGINE_load_builtin_engines();				\
+	}
+#  define apps_shutdown() {						\
+		CONF_modules_unload(1);					\
+		OBJ_cleanup();						\
+		EVP_cleanup();						\
+		ENGINE_cleanup();					\
+		CRYPTO_cleanup_all_ex_data();				\
+		ERR_remove_thread_state(NULL);				\
+		RAND_cleanup();						\
+		ERR_free_strings();					\
+	}
+# else
+#  define apps_startup() {						\
+		CRYPTO_malloc_init();					\
+		ERR_load_crypto_strings();				\
+		OpenSSL_add_all_algorithms();				\
+	}
+#  define apps_shutdown() {						\
+		CONF_modules_unload(1);					\
+		OBJ_cleanup();						\
+		EVP_cleanup();						\
+		CRYPTO_cleanup_all_ex_data();				\
+		ERR_remove_thread_state(NULL);				\
+		RAND_cleanup();						\
+		ERR_free_strings();					\
+	}
+# endif
+
 #endif
+
+static void
+enable_fips_mode(void) {
+#ifdef HAVE_FIPS_MODE
+	if (FIPS_mode() != 0) {
+		/*
+		 * FIPS mode is already enabled.
+		 */
+		return;
+	}
+
+	if (FIPS_mode_set(1) == 0) {
+		FATAL_ERROR(__FILE__, __LINE__,
+			    "OpenSSL FIPS mode cannot be set");
+		exit(1);
+	}
+#endif /* HAVE_FIPS_MODE */
+}
 
 static void
 isc__tls_initialize(void) {
 	REQUIRE(!atomic_load(&init_done));
-	RUNTIME_CHECK(OPENSSL_init_ssl(0, NULL) == 1);
 
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
+	enable_fips_mode();
+
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+	RUNTIME_CHECK(OPENSSL_init_ssl(OPENSSL_INIT_ENGINE_ALL_BUILTIN
+				       | OPENSSL_INIT_LOAD_CONFIG, NULL) == 1);
+#else
 	isc_mem_create(&isc__tls_mctx);
 
 	nlocks = CRYPTO_num_locks();
@@ -61,8 +119,25 @@ isc__tls_initialize(void) {
 	isc_mutexblock_init(locks, nlocks);
 	CRYPTO_set_locking_callback(isc__tls_lock_callback);
 	CRYPTO_THREADID_set_callback(isc__tls_set_thread_id);
-	ERR_load_crypto_strings();
+
+	apps_startup();
 #endif
+
+#if !defined(CONF_MFLAGS_DEFAULT_SECTION)
+	OPENSSL_config(NULL);
+#else  /* if !defined(CONF_MFLAGS_DEFAULT_SECTION) */
+	/*
+	 * OPENSSL_config() can only be called a single time as of
+	 * 1.0.2e so do the steps individually.
+	 */
+	OPENSSL_load_builtin_modules();
+	ENGINE_load_builtin_engines();
+	ERR_clear_error();
+	CONF_modules_load_file(NULL, NULL,
+			       CONF_MFLAGS_DEFAULT_SECTION |
+			       CONF_MFLAGS_IGNORE_MISSING_FILE);
+#endif /* if !defined(CONF_MFLAGS_DEFAULT_SECTION) */
+
 	atomic_store(&init_done, true);
 }
 
@@ -71,15 +146,23 @@ isc_tls_initialize(void) {
 	isc_result_t result = isc_once_do(&init_once, isc__tls_initialize);
 	REQUIRE(result == ISC_R_SUCCESS);
 	REQUIRE(atomic_load(&init_done));
+
+	/* Protect ourselves against unseeded PRNG */
+	if (RAND_status() != 1) {
+		FATAL_ERROR(__FILE__, __LINE__,
+			    "OpenSSL pseudorandom number generator "
+			    "cannot be initialized (see the `PRNG not "
+			    "seeded' message in the OpenSSL FAQ)");
+	}
 }
 
 void
-isc_tls_destroy(void) {
+isc_tls_shutdown(void) {
 	REQUIRE(atomic_load(&init_done));
-#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
-	ERR_free_strings();
 
-	ERR_remove_thread_state(NULL);
+#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+	apps_shutdown();
+
 	CRYPTO_set_locking_callback(NULL);
 
 	if (locks != NULL) {

@@ -16,6 +16,8 @@
 #include <isc/bind9.h>
 #include <isc/lib.h>
 #include <isc/mem.h>
+#include <isc/netmgr.h>
+#include <isc/tls.h>
 #include <isc/util.h>
 
 /***
@@ -27,71 +29,21 @@ isc_lib_register(void) {
 	isc_bind9 = false;
 }
 
-LIBISC_EXTERNAL_DATA extern isc_mem_t *isc__mem_mctx;
+void
+isc__initialize(void) ISC_CONSTRUCTOR(101);
+void
+isc__shutdown(void) ISC_DESTRUCTOR(101);
 
 void
-isc__mem_initialize(void) ISC_CONSTRUCTOR(101);
-void
-isc__mem_shutdown(void) ISC_DESTRUCTOR(101);
-
-void
-isc__mem_initialize(void) {
-	REQUIRE(isc__mem_mctx == NULL);
-	isc_mem_create(&isc__mem_mctx);
-	isc_mem_setname(isc__mem_mctx, "default");
+isc__initialize(void) {
+	isc_mem_initialize(); /* Priority 102 */
+	isc_tls_initialize(); /* Priority 103 */
+	isc_nm_initialize();  /* Priority 104 */
 }
 
 void
-isc__mem_shutdown(void) {
-	REQUIRE(isc__mem_mctx != NULL);
-	isc_mem_destroy(&isc__mem_mctx);
-	/* FIXME: All code using raw 'exit(1);' has to be fixed first */
-	/* isc_mem_checkdestroyed(stderr); */
+isc__shutdown(void) {
+	isc_nm_shutdown();  /* Priority 104 */
+	isc_tls_shutdown(); /* Priority 103 */
+	isc_mem_shutdown(); /* Priority 102 */
 }
-
-void
-isc__nm_initialize(void) ISC_CONSTRUCTOR(102);
-void
-isc__nm_shutdown(void) ISC_DESTRUCTOR(102);
-
-#if UV_VERSION_MAJOR > 1 || (UV_VERSION_MAJOR == 1 && UV_VERSION_MINOR >= 38)
-
-static void *
-_malloc(size_t size) {
-	return (isc_malloc(size));
-}
-
-static void *
-_calloc(size_t num, size_t size) {
-	return (isc_calloc(num, size));
-}
-
-static void *
-_realloc(void *ptr, size_t size) {
-	return (isc_realloc(ptr, size));
-}
-
-static void
-_free(void *ptr) {
-	return (isc_free(ptr));
-}
-
-void
-isc__nm_initialize(void) {
-	uv_replace_allocator(_malloc, _realloc, _calloc, _free);
-}
-
-void
-isc__nm_shutdown(void) {
-	uv_library_shutdown();
-}
-
-#else
-
-void
-isc__nm_initialize(void) {}
-
-void
-isc__nm_shutdown(void) {}
-
-#endif

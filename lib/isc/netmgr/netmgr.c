@@ -216,8 +216,6 @@ isc_nm_start(isc_mem_t *mctx, uint32_t workers) {
 	isc__nm_winsock_initialize();
 #endif /* WIN32 */
 
-	isc_tls_initialize();
-
 	mgr = isc_mem_get(mctx, sizeof(*mgr));
 	*mgr = (isc_nm_t){ .nworkers = workers };
 
@@ -373,8 +371,6 @@ nm_destroy(isc_nm_t **mgr0) {
 	isc_mem_put(mgr->mctx, mgr->workers,
 		    mgr->nworkers * sizeof(isc__networker_t));
 	isc_mem_putanddetach(&mgr->mctx, mgr, sizeof(*mgr));
-
-	isc_tls_destroy();
 
 #ifdef WIN32
 	isc__nm_winsock_destroy();
@@ -2522,12 +2518,8 @@ isc__nm_dump_active(isc_nm_t *nm) {
 }
 #endif
 
-void
-isc__nm_initialize(void);
-void
-isc__nm_shutdown(void);
-
 #if UV_VERSION_MAJOR > 1 || (UV_VERSION_MAJOR == 1 && UV_VERSION_MINOR >= 38)
+
 static void *
 isc__nm_malloc(size_t size) {
 	return (isc_malloc(size));
@@ -2547,21 +2539,23 @@ static void
 isc__nm_free(void *ptr) {
 	return (isc_free(ptr));
 }
-#endif
 
-ISC_CONSTRUCTOR(200)
 void
-isc__nm_initialize(void) {
-#if UV_VERSION_MAJOR > 1 || (UV_VERSION_MAJOR == 1 && UV_VERSION_MINOR >= 38)
-	uv_replace_allocator(isc__nm_malloc, isc__nm_realloc, isc__nm_calloc,
-			     isc__nm_free);
-#endif
+isc_nm_initialize(void) {
+	uv_replace_allocator(isc__nm_malloc, isc__nm_realloc, isc__nm_calloc, isc__nm_free);
 }
 
-ISC_DESTRUCTOR(200)
 void
-isc__nm_shutdown(void) {
-#if UV_VERSION_MAJOR > 1 || (UV_VERSION_MAJOR == 1 && UV_VERSION_MINOR >= 38)
+isc_nm_shutdown(void) {
 	uv_library_shutdown();
-#endif
 }
+
+#else
+
+void
+isc_nm_initialize(void) {}
+
+void
+isc_nm_shutdown(void) {}
+
+#endif

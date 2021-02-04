@@ -589,10 +589,15 @@ isc__free(void *ptr _ISC_MEM_FLARG);
 char *
 isc__strdup(const char *str _ISC_MEM_FLARG);
 char *
-isc__strndup(const char *str _ISC_MEM_FLARG);
+isc__strndup(const char *str, size_t size _ISC_MEM_FLARG);
 
 isc_mem_t *
 isc_get_default_mctx(void);
+
+void
+isc_mem_initialize(void);
+void
+isc_mem_shutdown(void);
 
 ISC_LANG_ENDDECLS
 

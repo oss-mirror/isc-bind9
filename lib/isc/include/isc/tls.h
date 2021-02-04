@@ -23,7 +23,7 @@ void
 isc_tls_initialize(void);
 
 void
-isc_tls_destroy(void);
+isc_tls_shutdown(void);
 
 void
 isc_tlsctx_free(isc_tlsctx_t **ctpx);
