@@ -38,6 +38,8 @@ _setup(void **state) {
 
 	UNUSED(state);
 
+	fprintf(stderr, "%s\n", __func__);
+
 	result = isc_test_begin(NULL, true, 0);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
@@ -47,6 +49,8 @@ _setup(void **state) {
 static int
 _teardown(void **state) {
 	UNUSED(state);
+
+	fprintf(stderr, "%s\n", __func__);
 
 	isc_test_end();
 

@@ -41,21 +41,6 @@ typedef void (*isc_mem_water_t)(void *, int);
 	  && !defined(USE_ALLOCATOR_TCMALLOC) */
 
 /*%
- * Define ISC_MEM_CHECKOVERRUN=1 to turn on checks for using memory outside
- * the requested space.  This will increase the size of each allocation.
- *
- * If we are performing a Coverity static analysis then ISC_MEM_CHECKOVERRUN
- * can hide bugs that would otherwise discovered so force to zero.
- */
-#ifdef __COVERITY__
-#undef ISC_MEM_CHECKOVERRUN
-#define ISC_MEM_CHECKOVERRUN 0
-#endif /* ifdef __COVERITY__ */
-#ifndef ISC_MEM_CHECKOVERRUN
-#define ISC_MEM_CHECKOVERRUN 1
-#endif /* ifndef ISC_MEM_CHECKOVERRUN */
-
-/*%
  * Define ISC_MEMPOOL_NAMES=1 to make memory pools store a symbolic
  * name so that the leaking pool can be more readily identified in
  * case of a memory leak.
@@ -102,26 +87,8 @@ LIBISC_EXTERNAL_DATA extern unsigned int isc_mem_defaultflags;
  */
 /*@}*/
 
-#if ISC_MEM_TRACKLINES
 #define _ISC_MEM_FILELINE , __FILE__, __LINE__
 #define _ISC_MEM_FLARG	  , const char *, unsigned int
-#else /* if ISC_MEM_TRACKLINES */
-#define _ISC_MEM_FILELINE
-#define _ISC_MEM_FLARG
-#endif /* if ISC_MEM_TRACKLINES */
-
-/*!
- * Define ISC_MEM_USE_INTERNAL_MALLOC=1 to use the internal malloc()
- * implementation in preference to the system one.  The internal malloc()
- * is very space-efficient, and quite fast on uniprocessor systems.  It
- * performs poorly on multiprocessor machines.
- * JT: we can overcome the performance issue on multiprocessor machines
- * by carefully separating memory contexts.
- */
-
-#ifndef ISC_MEM_USE_INTERNAL_MALLOC
-#define ISC_MEM_USE_INTERNAL_MALLOC 1
-#endif /* ifndef ISC_MEM_USE_INTERNAL_MALLOC */
 
 /*
  * Flags for isc_mem_create() calls.
@@ -415,8 +382,10 @@ isc_mem_renderjson(void *memobj0);
  * Memory pools
  */
 
+#define isc_mempool_create(mctx, size, mpctxp)				\
+	isc__mempool_create(mctx, size, mpctxp _ISC_MEM_FILELINE)
 void
-isc_mempool_create(isc_mem_t *mctx, size_t size, isc_mempool_t **mpctxp);
+isc__mempool_create(isc_mem_t *mctx, size_t size, isc_mempool_t **mpctxp _ISC_MEM_FLARG);
 /*%<
  * Create a memory pool.
  *

@@ -67,7 +67,7 @@ cleanup_managers(void) {
 		isc_timermgr_destroy(&timermgr);
 	}
 	if (netmgr != NULL) {
-		isc_nm_detach(&netmgr);
+		isc_nm_destroy(&netmgr);
 	}
 }
 
@@ -108,8 +108,7 @@ isc_test_begin(FILE *logfile, bool start_managers, unsigned int workers) {
 
 	isc_mem_debugging |= ISC_MEM_DEBUGRECORD;
 
-	REQUIRE(test_mctx == NULL);
-	test_mctx = isc_get_default_mctx();
+	isc_mem_create(&test_mctx);
 
 	if (logfile != NULL) {
 		isc_logdestination_t destination;
@@ -156,7 +155,8 @@ isc_test_end(void) {
 	if (test_lctx != NULL) {
 		isc_log_destroy(&test_lctx);
 	}
-	test_mctx = NULL;
+
+	isc_mem_detach(&test_mctx);
 
 	test_running = false;
 }
