@@ -16,10 +16,6 @@
 #include <signal.h>
 #include <string.h>
 
-#include <openssl/conf.h>
-#include <openssl/err.h>
-#include <openssl/ssl.h>
-
 #include <isc/base64.h>
 #include <isc/netmgr.h>
 #include <isc/print.h>
@@ -96,8 +92,8 @@ struct isc_nm_http_session {
 	uint8_t buf[MAX_DNS_MESSAGE_SIZE];
 	size_t bufsize;
 
-	bool ssl_ctx_created;
-	SSL_CTX *ssl_ctx;
+	bool free_tlsctx;
+	isc_tlsctx_t *tlsctx;
 };
 
 typedef enum isc_http_error_responses {
@@ -246,8 +242,8 @@ delete_http_session(isc_nm_http_session_t *session) {
 	REQUIRE(ISC_LIST_EMPTY(session->cstreams));
 
 	session->magic = 0;
-	if (session->ssl_ctx_created) {
-		SSL_CTX_free(session->ssl_ctx);
+	if (session->free_tlsctx) {
+		isc_tlsctx_free(&session->tlsctx);
 	}
 	isc_mem_putanddetach(&session->mctx, session,
 			     sizeof(isc_nm_http_session_t));
@@ -769,8 +765,8 @@ typedef struct http_connect_data {
 	isc_nm_cb_t connect_cb;
 	void *connect_cbarg;
 	bool post;
-	bool ssl_ctx_created;
-	SSL_CTX *ssl_ctx;
+	bool free_tlsctx;
+	isc_tlsctx_t *tlsctx;
 } http_connect_data_t;
 
 static void
@@ -797,9 +793,9 @@ transport_connect_cb(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 
 	session = isc_mem_get(mctx, sizeof(isc_nm_http_session_t));
 	*session = (isc_nm_http_session_t){ .magic = HTTP2_SESSION_MAGIC,
-					    .ssl_ctx_created =
-						    conn_data.ssl_ctx_created,
-					    .ssl_ctx = conn_data.ssl_ctx,
+					    .free_tlsctx =
+						    conn_data.free_tlsctx,
+					    .tlsctx = conn_data.tlsctx,
 					    .handle = NULL,
 					    .client = true };
 	isc_mem_attach(mctx, &session->mctx);
@@ -807,32 +803,21 @@ transport_connect_cb(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 	handle->sock->h2.connect.uri = conn_data.uri;
 	handle->sock->h2.connect.post = conn_data.post;
 
-	session->ssl_ctx = conn_data.ssl_ctx;
-	conn_data.ssl_ctx = NULL;
-	session->ssl_ctx_created = conn_data.ssl_ctx_created;
-	conn_data.ssl_ctx_created = false;
+	session->tlsctx = conn_data.tlsctx;
+	conn_data.tlsctx = NULL;
+	session->free_tlsctx = conn_data.free_tlsctx;
+	conn_data.free_tlsctx = false;
 
-	if (session->ssl_ctx != NULL) {
+	if (session->tlsctx != NULL) {
 		const unsigned char *alpn = NULL;
 		unsigned int alpnlen = 0;
-		SSL *ssl = NULL;
 
 		REQUIRE(VALID_NMHANDLE(handle));
 		REQUIRE(VALID_NMSOCK(handle->sock));
 		REQUIRE(handle->sock->type == isc_nm_tlssocket);
 
-		ssl = handle->sock->tlsstream.ssl;
-		INSIST(ssl != NULL);
-#ifndef OPENSSL_NO_NEXTPROTONEG
-		SSL_get0_next_proto_negotiated(handle->sock->tlsstream.ssl,
-					       &alpn, &alpnlen);
-#endif
-#if OPENSSL_VERSION_NUMBER >= 0x10002000L
-		if (alpn == NULL) {
-			SSL_get0_alpn_selected(ssl, &alpn, &alpnlen);
-		}
-#endif
-
+		isc_tls_get_http2_alpn(handle->sock->tlsstream.tls,
+				       &alpn, &alpnlen);
 		if (alpn == NULL || alpnlen != 2 ||
 		    memcmp(NGHTTP2_PROTO_VERSION_ID, alpn,
 			   NGHTTP2_PROTO_VERSION_ID_LEN) != 0)
@@ -863,8 +848,8 @@ transport_connect_cb(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 
 error:
 	conn_data.connect_cb(handle, result, conn_data.connect_cbarg);
-	if (conn_data.ssl_ctx_created && conn_data.ssl_ctx) {
-		SSL_CTX_free(conn_data.ssl_ctx);
+	if (conn_data.free_tlsctx && conn_data.tlsctx != NULL) {
+		isc_tlsctx_free(&conn_data.tlsctx);
 	}
 
 	if (session != NULL) {
@@ -879,7 +864,8 @@ error:
 isc_result_t
 isc_nm_httpconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 		   const char *uri, bool post, isc_nm_cb_t cb, void *cbarg,
-		   SSL_CTX *ctx, unsigned int timeout, size_t extrahandlesize) {
+		   isc_tlsctx_t *ctx, unsigned int timeout,
+		   size_t extrahandlesize) {
 	isc_result_t result;
 	isc_nmiface_t localhost;
 	http_connect_data_t *conn_data = NULL;
@@ -902,10 +888,11 @@ isc_nm_httpconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 				       .post = post,
 				       .connect_cb = cb,
 				       .connect_cbarg = cbarg,
-				       .ssl_ctx_created = (ctx != NULL),
-				       .ssl_ctx = ctx };
+				       .free_tlsctx = (ctx != NULL),
+				       .tlsctx = ctx };
 
 	if (ctx != NULL) {
+		isc_tlsctx_enable_http2client_alpn(ctx);
 		result = isc_nm_tlsconnect(mgr, local, peer,
 					   transport_connect_cb, conn_data, ctx,
 					   timeout, extrahandlesize);
@@ -1669,7 +1656,7 @@ httplisten_acceptcb(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 	session = isc_mem_get(httplistensock->mgr->mctx,
 			      sizeof(isc_nm_http_session_t));
 	*session = (isc_nm_http_session_t){ .magic = HTTP2_SESSION_MAGIC,
-					    .ssl_ctx_created = false,
+					    .free_tlsctx = false,
 					    .client = false };
 	initialize_nghttp2_server_session(session);
 	handle->sock->h2.session = session;
@@ -1685,42 +1672,10 @@ httplisten_acceptcb(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 	return (ISC_R_SUCCESS);
 }
 
-#ifndef OPENSSL_NO_NEXTPROTONEG
-static int
-next_proto_cb(SSL *ssl, const unsigned char **data, unsigned int *len,
-	      void *arg) {
-	UNUSED(ssl);
-	UNUSED(arg);
-
-	*data = (const unsigned char *)NGHTTP2_PROTO_ALPN;
-	*len = (unsigned int)NGHTTP2_PROTO_ALPN_LEN;
-	return (SSL_TLSEXT_ERR_OK);
-}
-#endif /* !OPENSSL_NO_NEXTPROTONEG */
-
-#if OPENSSL_VERSION_NUMBER >= 0x10002000L
-static int
-alpn_select_proto_cb(SSL *ssl, const unsigned char **out, unsigned char *outlen,
-		     const unsigned char *in, unsigned int inlen, void *arg) {
-	int ret;
-
-	UNUSED(ssl);
-	UNUSED(arg);
-
-	ret = nghttp2_select_next_protocol((unsigned char **)(uintptr_t)out,
-					   outlen, in, inlen);
-
-	if (ret != 1) {
-		return (SSL_TLSEXT_ERR_NOACK);
-	}
-
-	return (SSL_TLSEXT_ERR_OK);
-}
-#endif /* OPENSSL_VERSION_NUMBER >= 0x10002000L */
-
 isc_result_t
 isc_nm_listenhttp(isc_nm_t *mgr, isc_nmiface_t *iface, int backlog,
-		  isc_quota_t *quota, SSL_CTX *ctx, isc_nmsocket_t **sockp) {
+		  isc_quota_t *quota, isc_tlsctx_t *ctx,
+		  isc_nmsocket_t **sockp) {
 	isc_nmsocket_t *sock = NULL;
 	isc_result_t result;
 
@@ -1728,12 +1683,7 @@ isc_nm_listenhttp(isc_nm_t *mgr, isc_nmiface_t *iface, int backlog,
 	isc__nmsocket_init(sock, mgr, isc_nm_httplistener, iface);
 
 	if (ctx != NULL) {
-#ifndef OPENSSL_NO_NEXTPROTONEG
-		SSL_CTX_set_next_protos_advertised_cb(ctx, next_proto_cb, NULL);
-#endif // OPENSSL_NO_NEXTPROTONEG
-#if OPENSSL_VERSION_NUMBER >= 0x10002000L
-		SSL_CTX_set_alpn_select_cb(ctx, alpn_select_proto_cb, NULL);
-#endif // OPENSSL_VERSION_NUMBER >= 0x10002000L
+		isc_tlsctx_enable_http2server_alpn(ctx);
 		result = isc_nm_listentls(mgr, iface, httplisten_acceptcb, sock,
 					  sizeof(isc_nm_http_session_t),
 					  backlog, quota, ctx, &sock->outer);
@@ -1874,8 +1824,8 @@ isc__nm_http_clear_session(isc_nmsocket_t *sock) {
 		isc_nm_http_session_t *session = sock->h2.session;
 		INSIST(ISC_LIST_EMPTY(session->sstreams));
 		session->magic = 0;
-		if (session->ssl_ctx_created) {
-			SSL_CTX_free(session->ssl_ctx);
+		if (session->free_tlsctx) {
+			isc_tlsctx_free(&session->tlsctx);
 		}
 		isc_mem_putanddetach(&sock->h2.session->mctx, session,
 				     sizeof(isc_nm_http_session_t));

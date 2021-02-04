@@ -33,6 +33,7 @@
 #include <isc/rwlock.h>
 #include <isc/sockaddr.h>
 #include <isc/stats.h>
+#include <isc/tls.h>
 #include <isc/thread.h>
 #include <isc/util.h>
 
@@ -761,6 +762,7 @@ typedef struct isc_nmsocket_h2 {
 		bool post;
 	} connect;
 } isc_nmsocket_h2_t;
+
 struct isc_nmsocket {
 	/*% Unlocked, RO */
 	int magic;
@@ -777,8 +779,8 @@ struct isc_nmsocket {
 
 	/*% TLS stuff */
 	struct tls {
-		SSL *ssl;
-		SSL_CTX *ctx;
+		isc_tls_t *tls;
+		isc_tlsctx_t *ctx;
 		BIO *app_rbio;
 		BIO *app_wbio;
 		BIO *ssl_rbio;
@@ -801,8 +803,8 @@ struct isc_nmsocket {
 	struct tlsstream {
 		bool server;
 		BIO *app_bio;
-		SSL *ssl;
-		SSL_CTX *ctx;
+		isc_tls_t *tls;
+		isc_tlsctx_t *ctx;
 		BIO *ssl_bio;
 		isc_nmsocket_t *tlslistener;
 		enum {

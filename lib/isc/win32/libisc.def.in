@@ -704,11 +704,16 @@ isc_timermgr_create
 isc_timermgr_createinctx
 isc_timermgr_destroy
 isc_timermgr_poke
+isc_tls_get_http2_alpn
 isc_tls_initialize
+isc_tls_create
 isc_tls_destroy
+isc_tls_free
 isc_tlsctx_createclient
 isc_tlsctx_createserver
 isc_tlsctx_free
+isc_tlsctx_enable_http2client_alpn
+isc_tlsctx_enable_http2server_alpn
 isc_tm_timegm
 isc_tm_strptime
 isc_url_parse

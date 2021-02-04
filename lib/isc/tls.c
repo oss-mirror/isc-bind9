@@ -9,6 +9,7 @@
  * information regarding copyright ownership.
  */
 
+#include <inttypes.h>
 #include <nghttp2/nghttp2.h>
 
 #include <openssl/err.h>
@@ -108,23 +109,6 @@ isc_tlsctx_free(isc_tlsctx_t **ctxp) {
 	SSL_CTX_free(ctx);
 }
 
-#ifndef OPENSSL_NO_NEXTPROTONEG
-/*
- * NPN TLS extension client callback.
- */
-static int
-select_next_proto_cb(SSL *ssl, unsigned char **out, unsigned char *outlen,
-		     const unsigned char *in, unsigned int inlen, void *arg) {
-	UNUSED(ssl);
-	UNUSED(arg);
-
-	if (nghttp2_select_next_protocol(out, outlen, in, inlen) <= 0) {
-		return (SSL_TLSEXT_ERR_NOACK);
-	}
-	return (SSL_TLSEXT_ERR_OK);
-}
-#endif /* !OPENSSL_NO_NEXTPROTONEG */
-
 isc_result_t
 isc_tlsctx_createclient(isc_tlsctx_t **ctxp) {
 	unsigned long err;
@@ -151,15 +135,6 @@ isc_tlsctx_createclient(isc_tlsctx_t **ctxp) {
 			     SSL_OP_NO_TLSv1_1 | SSL_OP_NO_COMPRESSION |
 			     SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION);
 #endif
-
-#ifndef OPENSSL_NO_NEXTPROTONEG
-	SSL_CTX_set_next_proto_select_cb(ctx, select_next_proto_cb, NULL);
-#endif /* !OPENSSL_NO_NEXTPROTONEG */
-
-#if OPENSSL_VERSION_NUMBER >= 0x10002000L
-	SSL_CTX_set_alpn_protos(ctx, (const unsigned char *)NGHTTP2_PROTO_ALPN,
-				NGHTTP2_PROTO_ALPN_LEN);
-#endif /* OPENSSL_VERSION_NUMBER >= 0x10002000L */
 
 	*ctxp = ctx;
 
@@ -190,14 +165,7 @@ isc_tlsctx_createserver(const char *keyfile, const char *certfile,
 	const SSL_METHOD *method = NULL;
 
 	REQUIRE(ctxp != NULL && *ctxp == NULL);
-
-	if (ephemeral) {
-		INSIST(keyfile == NULL);
-		INSIST(certfile == NULL);
-	} else {
-		INSIST(keyfile != NULL);
-		INSIST(certfile != NULL);
-	}
+	REQUIRE((keyfile == NULL) == (certfile == NULL));
 
 	method = TLS_server_method();
 	if (method == NULL) {
@@ -323,4 +291,113 @@ ssl_error:
 	}
 
 	return (ISC_R_TLSERROR);
+}
+
+isc_tls_t *
+isc_tls_create(isc_tlsctx_t *ctx) {
+	REQUIRE(ctx != NULL);
+
+	return (SSL_new(ctx));
+}
+
+void
+isc_tls_free(isc_tls_t **tlsp) {
+	REQUIRE(tlsp != NULL && *tlsp != NULL);
+
+	SSL_free(*tlsp);
+	*tlsp = NULL;
+}
+
+#ifndef OPENSSL_NO_NEXTPROTONEG
+/*
+ * NPN TLS extension client callback.
+ */
+static int
+select_next_proto_cb(SSL *ssl, unsigned char **out, unsigned char *outlen,
+		     const unsigned char *in, unsigned int inlen, void *arg) {
+	UNUSED(ssl);
+	UNUSED(arg);
+
+	if (nghttp2_select_next_protocol(out, outlen, in, inlen) <= 0) {
+		return (SSL_TLSEXT_ERR_NOACK);
+	}
+	return (SSL_TLSEXT_ERR_OK);
+}
+#endif /* !OPENSSL_NO_NEXTPROTONEG */
+
+void
+isc_tlsctx_enable_http2client_alpn(isc_tlsctx_t *ctx) {
+	REQUIRE(ctx != NULL);
+
+#ifndef OPENSSL_NO_NEXTPROTONEG
+	SSL_CTX_set_next_proto_select_cb(ctx, select_next_proto_cb, NULL);
+#endif /* !OPENSSL_NO_NEXTPROTONEG */
+
+#if OPENSSL_VERSION_NUMBER >= 0x10002000L
+	SSL_CTX_set_alpn_protos(ctx, (const unsigned char *)NGHTTP2_PROTO_ALPN,
+				NGHTTP2_PROTO_ALPN_LEN);
+#endif /* OPENSSL_VERSION_NUMBER >= 0x10002000L */
+
+}
+
+#ifndef OPENSSL_NO_NEXTPROTONEG
+static int
+next_proto_cb(isc_tls_t *ssl, const unsigned char **data, unsigned int *len,
+	      void *arg) {
+	UNUSED(ssl);
+	UNUSED(arg);
+
+	*data = (const unsigned char *)NGHTTP2_PROTO_ALPN;
+	*len = (unsigned int)NGHTTP2_PROTO_ALPN_LEN;
+	return (SSL_TLSEXT_ERR_OK);
+}
+#endif /* !OPENSSL_NO_NEXTPROTONEG */
+
+#if OPENSSL_VERSION_NUMBER >= 0x10002000L
+static int
+alpn_select_proto_cb(SSL *ssl, const unsigned char **out, unsigned char *outlen,
+		     const unsigned char *in, unsigned int inlen, void *arg) {
+	int ret;
+
+	UNUSED(ssl);
+	UNUSED(arg);
+
+	ret = nghttp2_select_next_protocol((unsigned char **)(uintptr_t)out,
+					   outlen, in, inlen);
+
+	if (ret != 1) {
+		return (SSL_TLSEXT_ERR_NOACK);
+	}
+
+	return (SSL_TLSEXT_ERR_OK);
+}
+#endif /* OPENSSL_VERSION_NUMBER >= 0x10002000L */
+
+void
+isc_tlsctx_enable_http2server_alpn(isc_tlsctx_t *tls) {
+	REQUIRE(tls != NULL);
+
+#ifndef OPENSSL_NO_NEXTPROTONEG
+	SSL_CTX_set_next_protos_advertised_cb(tls, next_proto_cb, NULL);
+#endif // OPENSSL_NO_NEXTPROTONEG
+#if OPENSSL_VERSION_NUMBER >= 0x10002000L
+	SSL_CTX_set_alpn_select_cb(tls, alpn_select_proto_cb, NULL);
+#endif // OPENSSL_VERSION_NUMBER >= 0x10002000L
+}
+
+void
+isc_tls_get_http2_alpn(isc_tls_t *tls, const unsigned char **alpn,
+		       unsigned int *alpnlen) {
+	REQUIRE(tls != NULL);
+	REQUIRE(alpn != NULL);
+	REQUIRE(alpnlen != NULL);
+
+#ifndef OPENSSL_NO_NEXTPROTONEG
+	SSL_get0_next_proto_negotiated(tls, alpn, alpnlen);
+#endif
+#if OPENSSL_VERSION_NUMBER >= 0x10002000L
+	if (*alpn == NULL) {
+		SSL_get0_alpn_selected(tls, alpn, alpnlen);
+	}
+#endif
 }

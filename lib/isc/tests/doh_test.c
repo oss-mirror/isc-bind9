@@ -72,7 +72,7 @@ static bool reuse_supported = true;
 static atomic_bool POST = ATOMIC_VAR_INIT(true);
 
 static atomic_bool use_TLS = ATOMIC_VAR_INIT(false);
-static SSL_CTX *server_ssl_ctx = NULL;
+static SSL_CTX *server_tlsctx = NULL;
 
 #define NSENDS	100
 #define NWRITES 10
@@ -300,8 +300,8 @@ nm_setup(void **state) {
 		assert_non_null(nm[i]);
 	}
 
-	server_ssl_ctx = NULL;
-	isc_tlsctx_createserver(NULL, NULL, &server_ssl_ctx);
+	server_tlsctx = NULL;
+	isc_tlsctx_createserver(NULL, NULL, &server_tlsctx);
 
 	*state = nm;
 
@@ -318,8 +318,8 @@ nm_teardown(void **state) {
 	}
 	isc_mem_put(test_mctx, nm, MAX_NM * sizeof(nm[0]));
 
-	if (server_ssl_ctx != NULL) {
-		isc_tlsctx_free(&server_ssl_ctx);
+	if (server_tlsctx != NULL) {
+		isc_tlsctx_free(&server_tlsctx);
 	}
 
 	return (0);
@@ -611,7 +611,7 @@ doh_recv_one(void **state) {
 
 	result = isc_nm_listenhttp(
 		listen_nm, (isc_nmiface_t *)&tcp_listen_addr, 0, NULL,
-		atomic_load(&use_TLS) ? server_ssl_ctx : NULL, &listen_sock);
+		atomic_load(&use_TLS) ? server_tlsctx : NULL, &listen_sock);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	result = isc_nm_http_endpoint(listen_sock, DOH_PATH,
@@ -732,7 +732,7 @@ doh_recv_two(void **state) {
 
 	result = isc_nm_listenhttp(
 		listen_nm, (isc_nmiface_t *)&tcp_listen_addr, 0, NULL,
-		atomic_load(&use_TLS) ? server_ssl_ctx : NULL, &listen_sock);
+		atomic_load(&use_TLS) ? server_tlsctx : NULL, &listen_sock);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	result = isc_nm_http_endpoint(listen_sock, DOH_PATH,
@@ -823,7 +823,7 @@ doh_recv_send(void **state) {
 
 	result = isc_nm_listenhttp(
 		listen_nm, (isc_nmiface_t *)&tcp_listen_addr, 0, NULL,
-		atomic_load(&use_TLS) ? server_ssl_ctx : NULL, &listen_sock);
+		atomic_load(&use_TLS) ? server_tlsctx : NULL, &listen_sock);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	result = isc_nm_http_endpoint(listen_sock, DOH_PATH,
@@ -892,7 +892,7 @@ doh_recv_half_send(void **state) {
 
 	result = isc_nm_listenhttp(
 		listen_nm, (isc_nmiface_t *)&tcp_listen_addr, 0, NULL,
-		atomic_load(&use_TLS) ? server_ssl_ctx : NULL, &listen_sock);
+		atomic_load(&use_TLS) ? server_tlsctx : NULL, &listen_sock);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	result = isc_nm_http_endpoint(listen_sock, DOH_PATH,
@@ -966,7 +966,7 @@ doh_half_recv_send(void **state) {
 
 	result = isc_nm_listenhttp(
 		listen_nm, (isc_nmiface_t *)&tcp_listen_addr, 0, NULL,
-		atomic_load(&use_TLS) ? server_ssl_ctx : NULL, &listen_sock);
+		atomic_load(&use_TLS) ? server_tlsctx : NULL, &listen_sock);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	result = isc_nm_http_endpoint(listen_sock, DOH_PATH,
@@ -1040,7 +1040,7 @@ doh_half_recv_half_send(void **state) {
 
 	result = isc_nm_listenhttp(
 		listen_nm, (isc_nmiface_t *)&tcp_listen_addr, 0, NULL,
-		atomic_load(&use_TLS) ? server_ssl_ctx : NULL, &listen_sock);
+		atomic_load(&use_TLS) ? server_tlsctx : NULL, &listen_sock);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	result = isc_nm_http_endpoint(listen_sock, DOH_PATH,
