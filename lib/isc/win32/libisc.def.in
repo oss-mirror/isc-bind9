@@ -448,9 +448,7 @@ isc_nm_cancelread
 isc_nm_closedown
 isc_nm_destroy
 isc_nm_detach
-isc_nm_http_add_doh_endpoint
-isc_nm_http_add_endpoint
-isc_nm_http_connect_send_request
+isc_nm_http_endpoint
 isc_nm_httpconnect
 isc_nm_httprequest
 isc_nm_listenhttp

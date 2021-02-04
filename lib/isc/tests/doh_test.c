@@ -101,6 +101,63 @@ static SSL_CTX *server_ssl_ctx = NULL;
 #define X(v)
 #endif
 
+typedef struct csdata {
+	isc_nm_recv_cb_t reply_cb;
+	void *cb_arg;
+	isc_region_t region;
+} csdata_t;
+
+static void
+connect_send_cb(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
+	csdata_t data;
+
+	REQUIRE(VALID_NMHANDLE(handle));
+
+	memmove(&data, arg, sizeof(data));
+	isc_mem_put(handle->sock->mgr->mctx, arg, sizeof(data));
+	if (result != ISC_R_SUCCESS) {
+		goto error;
+	}
+
+	result = isc_nm_httprequest(handle, &data.region, data.reply_cb,
+				    data.cb_arg);
+	if (result != ISC_R_SUCCESS) {
+		goto error;
+	}
+
+	isc_mem_put(handle->sock->mgr->mctx, data.region.base,
+		    data.region.length);
+	return;
+error:
+	data.reply_cb(handle, result, NULL, data.cb_arg);
+	isc_mem_put(handle->sock->mgr->mctx, data.region.base,
+		    data.region.length);
+}
+
+static isc_result_t
+connect_send_request(isc_nm_t *mgr, const char *uri, bool post,
+		     isc_region_t *region, isc_nm_recv_cb_t cb, void *cbarg,
+		     bool tls, unsigned int timeout) {
+	isc_result_t result;
+	isc_region_t copy;
+	csdata_t *data = NULL;
+	SSL_CTX *ctx = NULL;
+
+	copy = (isc_region_t){ .base = isc_mem_get(mgr->mctx, region->length),
+			       .length = region->length };
+	memmove(copy.base, region->base, region->length);
+	data = isc_mem_get(mgr->mctx, sizeof(*data));
+	*data = (csdata_t){ .reply_cb = cb, .cb_arg = cbarg, .region = copy };
+	if (tls) {
+		isc_tlsctx_createclient(&ctx);
+	}
+
+	result = isc_nm_httpconnect(
+		mgr, NULL, (isc_nmiface_t *)&tcp_listen_addr, uri, post,
+		connect_send_cb, data, ctx, timeout, 0);
+	return (result);
+}
+
 static int
 setup_ephemeral_port(isc_sockaddr_t *addr, sa_family_t family) {
 	isc_result_t result;
@@ -261,7 +318,7 @@ nm_teardown(void **state) {
 	}
 	isc_mem_put(test_mctx, nm, MAX_NM * sizeof(nm[0]));
 
-	if (server_ssl_ctx) {
+	if (server_ssl_ctx != NULL) {
 		isc_tlsctx_free(&server_ssl_ctx);
 	}
 
@@ -276,6 +333,7 @@ sockaddr_to_url(isc_sockaddr_t *sa, const bool https, char *outbuf,
 	uint16_t port;
 	char saddr[INET6_ADDRSTRLEN] = { 0 };
 	int family;
+
 	if (sa == NULL || outbuf == NULL || outbuf_len == 0) {
 		return;
 	}
@@ -382,10 +440,6 @@ mock_doh_uv_tcp_bind(void **state) {
 	isc_nm_t *listen_nm = nm[0];
 	isc_result_t result = ISC_R_SUCCESS;
 	isc_nmsocket_t *listen_sock = NULL;
-	isc_sockaddr_t tcp_connect_addr;
-
-	tcp_connect_addr = (isc_sockaddr_t){ .length = 0 };
-	isc_sockaddr_fromin6(&tcp_connect_addr, &in6addr_loopback, 0);
 
 	WILL_RETURN(uv_tcp_bind, UV_EADDRINUSE);
 
@@ -404,17 +458,13 @@ doh_noop(void **state) {
 	isc_nm_t *connect_nm = nm[1];
 	isc_result_t result = ISC_R_SUCCESS;
 	isc_nmsocket_t *listen_sock = NULL;
-	isc_sockaddr_t tcp_connect_addr;
 	char req_url[256];
-
-	tcp_connect_addr = (isc_sockaddr_t){ .length = 0 };
-	isc_sockaddr_fromin6(&tcp_connect_addr, &in6addr_loopback, 0);
 
 	result = isc_nm_listenhttp(listen_nm, (isc_nmiface_t *)&tcp_listen_addr,
 				   0, NULL, NULL, &listen_sock);
 	assert_int_equal(result, ISC_R_SUCCESS);
-	result = isc_nm_http_add_doh_endpoint(listen_sock, DOH_PATH,
-					      noop_read_cb, NULL, 0);
+	result = isc_nm_http_endpoint(listen_sock, DOH_PATH, noop_read_cb, NULL,
+				      0);
 
 	isc_nm_stoplistening(listen_sock);
 	isc_nmsocket_close(&listen_sock);
@@ -422,11 +472,11 @@ doh_noop(void **state) {
 
 	sockaddr_to_url(&tcp_listen_addr, false, req_url, sizeof(req_url),
 			DOH_PATH);
-	(void)isc_nm_http_connect_send_request(
+	(void)connect_send_request(
 		connect_nm, req_url, atomic_load(&POST),
 		&(isc_region_t){ .base = (uint8_t *)send_msg.base,
 				 .length = send_msg.len },
-		noop_read_cb, NULL, NULL, 30000);
+		noop_read_cb, NULL, atomic_load(&use_TLS), 30000);
 
 	isc_nm_closedown(connect_nm);
 
@@ -455,27 +505,23 @@ doh_noresponse(void **state) {
 	isc_nm_t *connect_nm = nm[1];
 	isc_result_t result = ISC_R_SUCCESS;
 	isc_nmsocket_t *listen_sock = NULL;
-	isc_sockaddr_t tcp_connect_addr;
 	char req_url[256];
-
-	tcp_connect_addr = (isc_sockaddr_t){ .length = 0 };
-	isc_sockaddr_fromin6(&tcp_connect_addr, &in6addr_loopback, 0);
 
 	result = isc_nm_listenhttp(listen_nm, (isc_nmiface_t *)&tcp_listen_addr,
 				   0, NULL, NULL, &listen_sock);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
-	result = isc_nm_http_add_doh_endpoint(listen_sock, DOH_PATH,
-					      noop_read_cb, NULL, 0);
+	result = isc_nm_http_endpoint(listen_sock, DOH_PATH, noop_read_cb, NULL,
+				      0);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	sockaddr_to_url(&tcp_listen_addr, false, req_url, sizeof(req_url),
 			DOH_PATH);
-	(void)isc_nm_http_connect_send_request(
+	(void)connect_send_request(
 		connect_nm, req_url, atomic_load(&POST),
 		&(isc_region_t){ .base = (uint8_t *)send_msg.base,
 				 .length = send_msg.len },
-		noop_read_cb, NULL, NULL, 30000);
+		noop_read_cb, NULL, atomic_load(&use_TLS), 30000);
 
 	isc_nm_stoplistening(listen_sock);
 	isc_nmsocket_close(&listen_sock);
@@ -535,20 +581,18 @@ doh_receive_send_reply_cb(isc_nmhandle_t *handle, isc_result_t eresult,
 static isc_threadresult_t
 doh_connect_thread(isc_threadarg_t arg) {
 	isc_nm_t *connect_nm = (isc_nm_t *)arg;
-	isc_sockaddr_t tcp_connect_addr;
 	char req_url[256];
 
-	tcp_connect_addr = (isc_sockaddr_t){ .length = 0 };
-	isc_sockaddr_fromin6(&tcp_connect_addr, &in6addr_loopback, 0);
 	sockaddr_to_url(&tcp_listen_addr, atomic_load(&use_TLS), req_url,
 			sizeof(req_url), DOH_PATH);
 
 	while (atomic_load(&nsends) > 0) {
-		(void)isc_nm_http_connect_send_request(
+		(void)connect_send_request(
 			connect_nm, req_url, atomic_load(&POST),
 			&(isc_region_t){ .base = (uint8_t *)send_msg.base,
 					 .length = send_msg.len },
-			doh_receive_send_reply_cb, NULL, NULL, 5000);
+			doh_receive_send_reply_cb, NULL, atomic_load(&use_TLS),
+			30000);
 	}
 
 	return ((isc_threadresult_t)0);
@@ -561,33 +605,26 @@ doh_recv_one(void **state) {
 	isc_nm_t *connect_nm = nm[1];
 	isc_result_t result = ISC_R_SUCCESS;
 	isc_nmsocket_t *listen_sock = NULL;
-	isc_sockaddr_t tcp_connect_addr;
 	char req_url[256];
 
-	tcp_connect_addr = (isc_sockaddr_t){ .length = 0 };
-	isc_sockaddr_fromin6(&tcp_connect_addr, &in6addr_loopback, 0);
-
 	atomic_store(&nsends, 1);
-
-	tcp_connect_addr = (isc_sockaddr_t){ .length = 0 };
-	isc_sockaddr_fromin6(&tcp_connect_addr, &in6addr_loopback, 0);
 
 	result = isc_nm_listenhttp(
 		listen_nm, (isc_nmiface_t *)&tcp_listen_addr, 0, NULL,
 		atomic_load(&use_TLS) ? server_ssl_ctx : NULL, &listen_sock);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
-	result = isc_nm_http_add_doh_endpoint(listen_sock, DOH_PATH,
-					      doh_receive_request_cb, NULL, 0);
+	result = isc_nm_http_endpoint(listen_sock, DOH_PATH,
+				      doh_receive_request_cb, NULL, 0);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	sockaddr_to_url(&tcp_listen_addr, atomic_load(&use_TLS), req_url,
 			sizeof(req_url), DOH_PATH);
-	result = isc_nm_http_connect_send_request(
+	result = connect_send_request(
 		connect_nm, req_url, atomic_load(&POST),
 		&(isc_region_t){ .base = (uint8_t *)send_msg.base,
 				 .length = send_msg.len },
-		doh_receive_reply_cb, NULL, NULL, 5000);
+		doh_receive_reply_cb, NULL, atomic_load(&use_TLS), 30000);
 
 	assert_int_equal(result, ISC_R_SUCCESS);
 
@@ -688,31 +725,31 @@ doh_recv_two(void **state) {
 	isc_nm_t *connect_nm = nm[1];
 	isc_result_t result = ISC_R_SUCCESS;
 	isc_nmsocket_t *listen_sock = NULL;
-	isc_sockaddr_t tcp_connect_addr;
 	char req_url[256];
-
-	tcp_connect_addr = (isc_sockaddr_t){ .length = 0 };
-	isc_sockaddr_fromin6(&tcp_connect_addr, &in6addr_loopback, 0);
+	SSL_CTX *ctx = NULL;
 
 	atomic_store(&nsends, 2);
-
-	tcp_connect_addr = (isc_sockaddr_t){ .length = 0 };
-	isc_sockaddr_fromin6(&tcp_connect_addr, &in6addr_loopback, 0);
 
 	result = isc_nm_listenhttp(
 		listen_nm, (isc_nmiface_t *)&tcp_listen_addr, 0, NULL,
 		atomic_load(&use_TLS) ? server_ssl_ctx : NULL, &listen_sock);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
-	result = isc_nm_http_add_doh_endpoint(listen_sock, DOH_PATH,
-					      doh_receive_request_cb, NULL, 0);
+	result = isc_nm_http_endpoint(listen_sock, DOH_PATH,
+				      doh_receive_request_cb, NULL, 0);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	sockaddr_to_url(&tcp_listen_addr, atomic_load(&use_TLS), req_url,
 			sizeof(req_url), DOH_PATH);
+
+	if (atomic_load(&use_TLS)) {
+		isc_tlsctx_createclient(&ctx);
+	}
+
 	result = isc_nm_httpconnect(
-		connect_nm, NULL, NULL, req_url, atomic_load(&POST),
-		doh_connect_send_two_requests_cb, NULL, NULL, 5000, 0);
+		connect_nm, NULL, (isc_nmiface_t *)&tcp_listen_addr, req_url,
+		atomic_load(&POST), doh_connect_send_two_requests_cb, NULL, ctx,
+		5000, 0);
 
 	assert_int_equal(result, ISC_R_SUCCESS);
 
@@ -783,21 +820,14 @@ doh_recv_send(void **state) {
 	isc_nmsocket_t *listen_sock = NULL;
 	size_t nthreads = ISC_MAX(ISC_MIN(workers, 32), 1);
 	isc_thread_t threads[32] = { 0 };
-	isc_sockaddr_t tcp_connect_addr;
-
-	tcp_connect_addr = (isc_sockaddr_t){ .length = 0 };
-	isc_sockaddr_fromin6(&tcp_connect_addr, &in6addr_loopback, 0);
-
-	tcp_connect_addr = (isc_sockaddr_t){ .length = 0 };
-	isc_sockaddr_fromin6(&tcp_connect_addr, &in6addr_loopback, 0);
 
 	result = isc_nm_listenhttp(
 		listen_nm, (isc_nmiface_t *)&tcp_listen_addr, 0, NULL,
 		atomic_load(&use_TLS) ? server_ssl_ctx : NULL, &listen_sock);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
-	result = isc_nm_http_add_doh_endpoint(listen_sock, DOH_PATH,
-					      doh_receive_request_cb, NULL, 0);
+	result = isc_nm_http_endpoint(listen_sock, DOH_PATH,
+				      doh_receive_request_cb, NULL, 0);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	for (size_t i = 0; i < nthreads; i++) {
@@ -859,21 +889,14 @@ doh_recv_half_send(void **state) {
 	isc_nmsocket_t *listen_sock = NULL;
 	size_t nthreads = ISC_MAX(ISC_MIN(workers, 32), 1);
 	isc_thread_t threads[32] = { 0 };
-	isc_sockaddr_t tcp_connect_addr;
-
-	tcp_connect_addr = (isc_sockaddr_t){ .length = 0 };
-	isc_sockaddr_fromin6(&tcp_connect_addr, &in6addr_loopback, 0);
-
-	tcp_connect_addr = (isc_sockaddr_t){ .length = 0 };
-	isc_sockaddr_fromin6(&tcp_connect_addr, &in6addr_loopback, 0);
 
 	result = isc_nm_listenhttp(
 		listen_nm, (isc_nmiface_t *)&tcp_listen_addr, 0, NULL,
 		atomic_load(&use_TLS) ? server_ssl_ctx : NULL, &listen_sock);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
-	result = isc_nm_http_add_doh_endpoint(listen_sock, DOH_PATH,
-					      doh_receive_request_cb, NULL, 0);
+	result = isc_nm_http_endpoint(listen_sock, DOH_PATH,
+				      doh_receive_request_cb, NULL, 0);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	for (size_t i = 0; i < nthreads; i++) {
@@ -940,21 +963,14 @@ doh_half_recv_send(void **state) {
 	isc_nmsocket_t *listen_sock = NULL;
 	size_t nthreads = ISC_MAX(ISC_MIN(workers, 32), 1);
 	isc_thread_t threads[32] = { 0 };
-	isc_sockaddr_t tcp_connect_addr;
-
-	tcp_connect_addr = (isc_sockaddr_t){ .length = 0 };
-	isc_sockaddr_fromin6(&tcp_connect_addr, &in6addr_loopback, 0);
-
-	tcp_connect_addr = (isc_sockaddr_t){ .length = 0 };
-	isc_sockaddr_fromin6(&tcp_connect_addr, &in6addr_loopback, 0);
 
 	result = isc_nm_listenhttp(
 		listen_nm, (isc_nmiface_t *)&tcp_listen_addr, 0, NULL,
 		atomic_load(&use_TLS) ? server_ssl_ctx : NULL, &listen_sock);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
-	result = isc_nm_http_add_doh_endpoint(listen_sock, DOH_PATH,
-					      doh_receive_request_cb, NULL, 0);
+	result = isc_nm_http_endpoint(listen_sock, DOH_PATH,
+				      doh_receive_request_cb, NULL, 0);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	for (size_t i = 0; i < nthreads; i++) {
@@ -1021,21 +1037,14 @@ doh_half_recv_half_send(void **state) {
 	isc_nmsocket_t *listen_sock = NULL;
 	size_t nthreads = ISC_MAX(ISC_MIN(workers, 32), 1);
 	isc_thread_t threads[32] = { 0 };
-	isc_sockaddr_t tcp_connect_addr;
-
-	tcp_connect_addr = (isc_sockaddr_t){ .length = 0 };
-	isc_sockaddr_fromin6(&tcp_connect_addr, &in6addr_loopback, 0);
-
-	tcp_connect_addr = (isc_sockaddr_t){ .length = 0 };
-	isc_sockaddr_fromin6(&tcp_connect_addr, &in6addr_loopback, 0);
 
 	result = isc_nm_listenhttp(
 		listen_nm, (isc_nmiface_t *)&tcp_listen_addr, 0, NULL,
 		atomic_load(&use_TLS) ? server_ssl_ctx : NULL, &listen_sock);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
-	result = isc_nm_http_add_doh_endpoint(listen_sock, DOH_PATH,
-					      doh_receive_request_cb, NULL, 0);
+	result = isc_nm_http_endpoint(listen_sock, DOH_PATH,
+				      doh_receive_request_cb, NULL, 0);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	for (size_t i = 0; i < nthreads; i++) {
@@ -1625,12 +1634,12 @@ doh_cloudflare(void **state) {
 	isc_nm_t **nm = (isc_nm_t **)*state;
 	isc_result_t result = ISC_R_SUCCESS;
 
-	result = isc_nm_http_connect_send_request(
+	result = connect_send_request(
 		nm[0], "https://cloudflare-dns.com/dns-query",
 		atomic_load(&POST),
 		&(isc_region_t){ .base = (uint8_t *)wikipedia_org_A,
 				 .length = sizeof(wikipedia_org_A) },
-		doh_print_reply_cb, NULL, NULL, 5000);
+		doh_print_reply_cb, NULL, atomic_load(&use_TLS), 30000);
 
 	assert_int_equal(result, ISC_R_SUCCESS);
 

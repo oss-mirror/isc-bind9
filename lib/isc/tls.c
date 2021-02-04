@@ -9,6 +9,8 @@
  * information regarding copyright ownership.
  */
 
+#include <nghttp2/nghttp2.h>
+
 #include <openssl/err.h>
 #include <openssl/opensslv.h>
 
@@ -106,6 +108,23 @@ isc_tlsctx_free(isc_tlsctx_t **ctxp) {
 	SSL_CTX_free(ctx);
 }
 
+#ifndef OPENSSL_NO_NEXTPROTONEG
+/*
+ * NPN TLS extension client callback.
+ */
+static int
+select_next_proto_cb(SSL *ssl, unsigned char **out, unsigned char *outlen,
+		     const unsigned char *in, unsigned int inlen, void *arg) {
+	UNUSED(ssl);
+	UNUSED(arg);
+
+	if (nghttp2_select_next_protocol(out, outlen, in, inlen) <= 0) {
+		return (SSL_TLSEXT_ERR_NOACK);
+	}
+	return (SSL_TLSEXT_ERR_OK);
+}
+#endif /* !OPENSSL_NO_NEXTPROTONEG */
+
 isc_result_t
 isc_tlsctx_createclient(isc_tlsctx_t **ctxp) {
 	unsigned long err;
@@ -132,6 +151,15 @@ isc_tlsctx_createclient(isc_tlsctx_t **ctxp) {
 			     SSL_OP_NO_TLSv1_1 | SSL_OP_NO_COMPRESSION |
 			     SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION);
 #endif
+
+#ifndef OPENSSL_NO_NEXTPROTONEG
+	SSL_CTX_set_next_proto_select_cb(ctx, select_next_proto_cb, NULL);
+#endif /* !OPENSSL_NO_NEXTPROTONEG */
+
+#if OPENSSL_VERSION_NUMBER >= 0x10002000L
+	SSL_CTX_set_alpn_protos(ctx, (const unsigned char *)NGHTTP2_PROTO_ALPN,
+				NGHTTP2_PROTO_ALPN_LEN);
+#endif /* OPENSSL_VERSION_NUMBER >= 0x10002000L */
 
 	*ctxp = ctx;
 

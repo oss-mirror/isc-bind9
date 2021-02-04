@@ -506,24 +506,6 @@ isc_nm_tlsdnsconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
  * 'cb'.
  */
 
-typedef void (*isc_nm_http_cb_t)(isc_nmhandle_t *handle, isc_result_t eresult,
-				 isc_region_t *data, void *cbarg);
-/*%<
- * Callback function to be used when receiving an HTTP request.
- *
- * 'handle' the handle that can be used to send back the answer.
- * 'eresult' the result of the event.
- * 'data' contains the received data, if any. It will be freed
- *          after return by caller.
- * 'cbarg'  the callback argument passed to listen function.
- */
-
-isc_result_t
-isc_nm_http_connect_send_request(isc_nm_t *mgr, const char *uri, bool POST,
-				 isc_region_t *message, isc_nm_recv_cb_t cb,
-				 void *cbarg, isc_tlsctx_t *ctx,
-				 unsigned int timeout);
-
 isc_result_t
 isc_nm_httpconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 		   const char *uri, bool POST, isc_nm_cb_t cb, void *cbarg,
@@ -540,11 +522,5 @@ isc_nm_listenhttp(isc_nm_t *mgr, isc_nmiface_t *iface, int backlog,
 		  isc_nmsocket_t **sockp);
 
 isc_result_t
-isc_nm_http_add_endpoint(isc_nmsocket_t *sock, const char *uri,
-			 isc_nm_http_cb_t cb, void *cbarg,
-			 size_t extrahandlesize);
-
-isc_result_t
-isc_nm_http_add_doh_endpoint(isc_nmsocket_t *sock, const char *uri,
-			     isc_nm_recv_cb_t cb, void *cbarg,
-			     size_t extrahandlesize);
+isc_nm_http_endpoint(isc_nmsocket_t *sock, const char *uri, isc_nm_recv_cb_t cb,
+		     void *cbarg, size_t extrahandlesize);
