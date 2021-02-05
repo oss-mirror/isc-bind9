@@ -760,7 +760,7 @@ typedef struct isc_nmsocket_h2 {
 	struct {
 		char *uri;
 		bool post;
-		void *stream;
+		void *cstream;
 	} connect;
 } isc_nmsocket_h2_t;
 
@@ -1524,10 +1524,10 @@ void
 isc__nm_http_stoplistening(isc_nmsocket_t *sock);
 
 void
-isc__nm_http_clear_handlers(isc_nmsocket_t *sock);
+isc__nm_http_initsocket(isc_nmsocket_t *sock);
 
 void
-isc__nm_http_clear_session(isc_nmsocket_t *sock);
+isc__nm_http_cleanup_data(isc_nmsocket_t *sock);
 
 void
 isc__nm_http_send(isc_nmhandle_t *handle, const isc_region_t *region,

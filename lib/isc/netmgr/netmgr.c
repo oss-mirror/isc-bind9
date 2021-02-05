@@ -1008,33 +1008,7 @@ nmsocket_cleanup(isc_nmsocket_t *sock, bool dofree FLARG) {
 	isc_condition_destroy(&sock->cond);
 	isc_condition_destroy(&sock->scond);
 	isc__nm_tls_cleanup_data(sock);
-
-	if (sock->type == isc_nm_httplistener) {
-		isc__nm_http_clear_handlers(sock);
-		isc_rwlock_destroy(&sock->h2.lock);
-	}
-
-	if (sock->h2.request_path != NULL) {
-		isc_mem_free(sock->mgr->mctx, sock->h2.request_path);
-		sock->h2.request_path = NULL;
-	}
-
-	if (sock->h2.query_data != NULL) {
-		isc_mem_free(sock->mgr->mctx, sock->h2.query_data);
-		sock->h2.query_data = NULL;
-	}
-
-	if (sock->h2.connect.uri != NULL) {
-		isc_mem_free(sock->mgr->mctx, sock->h2.connect.uri);
-		sock->h2.query_data = NULL;
-	}
-
-	if (sock->h2.buf != NULL) {
-		isc_mem_free(sock->mgr->mctx, sock->h2.buf);
-		sock->h2.buf = NULL;
-	}
-
-	isc__nm_http_clear_session(sock);
+	isc__nm_http_cleanup_data(sock);
 #ifdef NETMGR_TRACE
 	LOCK(&sock->mgr->lock);
 	ISC_LIST_UNLINK(sock->mgr->active_sockets, sock, active_link);
@@ -1290,16 +1264,7 @@ isc___nmsocket_init(isc_nmsocket_t *sock, isc_nm_t *mgr, isc_nmsocket_type type,
 
 	atomic_store(&sock->active_child_connections, 0);
 
-	sock->h2 = (isc_nmsocket_h2_t){
-		.request_type = ISC_HTTP_REQ_UNSUPPORTED,
-		.request_scheme = ISC_HTTP_SCHEME_UNSUPPORTED,
-	};
-
-	if (type == isc_nm_httplistener) {
-		ISC_LIST_INIT(sock->h2.handlers);
-		ISC_LIST_INIT(sock->h2.handler_cbargs);
-		isc_rwlock_init(&sock->h2.lock, 0, 1);
-	}
+	isc__nm_http_initsocket(sock);
 
 	sock->magic = NMSOCK_MAGIC;
 }
