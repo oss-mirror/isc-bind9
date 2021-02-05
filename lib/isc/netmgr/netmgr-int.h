@@ -33,8 +33,8 @@
 #include <isc/rwlock.h>
 #include <isc/sockaddr.h>
 #include <isc/stats.h>
-#include <isc/tls.h>
 #include <isc/thread.h>
+#include <isc/tls.h>
 #include <isc/util.h>
 
 #include "uv-compat.h"
@@ -757,9 +757,10 @@ typedef struct isc_nmsocket_h2 {
 	ISC_LIST(isc_nm_httpcbarg_t) handler_cbargs;
 	isc_rwlock_t lock;
 
-	struct isc_nmsocket_h2_connect_data {
+	struct {
 		char *uri;
 		bool post;
+		void *stream;
 	} connect;
 } isc_nmsocket_h2_t;
 

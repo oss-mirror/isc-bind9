@@ -38,7 +38,7 @@ typedef struct isc_nm_http_response_status {
 	bool content_type_valid;
 } isc_nm_http_response_status_t;
 
-typedef struct http_client_stream {
+typedef struct http_cstream {
 	isc_nm_recv_cb_t read_cb;
 	void *read_cbarg;
 
@@ -66,8 +66,8 @@ typedef struct http_client_stream {
 
 	isc_nm_http_response_status_t response_status;
 
-	LINK(struct http_client_stream) link;
-} http_client_stream_t;
+	LINK(struct http_cstream) link;
+} http_cstream_t;
 
 #define HTTP2_SESSION_MAGIC    ISC_MAGIC('H', '2', 'S', 'S')
 #define VALID_HTTP2_SESSION(t) ISC_MAGIC_VALID(t, HTTP2_SESSION_MAGIC)
@@ -82,7 +82,7 @@ struct isc_nm_http_session {
 	nghttp2_session *ngsession;
 	bool client;
 
-	ISC_LIST(http_client_stream_t) cstreams;
+	ISC_LIST(http_cstream_t) cstreams;
 	ISC_LIST(isc_nmsocket_h2_t) sstreams;
 
 	isc_nmhandle_t *handle;
@@ -129,9 +129,9 @@ inactive(isc_nmsocket_t *sock) {
 		(sock->server != NULL && !isc__nmsocket_active(sock->server)));
 }
 
-static http_client_stream_t *
-find_http_client_stream(int32_t stream_id, isc_nm_http_session_t *session) {
-	http_client_stream_t *cstream = NULL;
+static http_cstream_t *
+find_http_cstream(int32_t stream_id, isc_nm_http_session_t *session) {
+	http_cstream_t *cstream = NULL;
 	REQUIRE(VALID_HTTP2_SESSION(session));
 
 	for (cstream = ISC_LIST_HEAD(session->cstreams); cstream != NULL;
@@ -146,16 +146,15 @@ find_http_client_stream(int32_t stream_id, isc_nm_http_session_t *session) {
 }
 
 static isc_result_t
-get_http_client_stream(isc_mem_t *mctx, http_client_stream_t **streamp,
-		       const char *uri) {
-	http_client_stream_t *stream = NULL;
+get_http_cstream(isc_mem_t *mctx, http_cstream_t **streamp, const char *uri) {
+	http_cstream_t *stream = NULL;
 	isc_result_t result;
 
 	REQUIRE(streamp != NULL && *streamp == NULL);
 	REQUIRE(uri != NULL);
 
-	stream = isc_mem_get(mctx, sizeof(http_client_stream_t));
-	*stream = (http_client_stream_t){ .stream_id = -1, .rbufsize = 0 };
+	stream = isc_mem_get(mctx, sizeof(http_cstream_t));
+	*stream = (http_cstream_t){ .stream_id = -1, .rbufsize = 0 };
 
 	stream->uri = isc_mem_strdup(mctx, uri);
 
@@ -163,7 +162,7 @@ get_http_client_stream(isc_mem_t *mctx, http_client_stream_t **streamp,
 			       &stream->up);
 	if (result != ISC_R_SUCCESS) {
 		isc_mem_free(mctx, stream->uri);
-		isc_mem_put(mctx, stream, sizeof(http_client_stream_t));
+		isc_mem_put(mctx, stream, sizeof(http_cstream_t));
 		return (result);
 	}
 
@@ -219,7 +218,7 @@ get_http_client_stream(isc_mem_t *mctx, http_client_stream_t **streamp,
 }
 
 static void
-put_http_client_stream(isc_mem_t *mctx, http_client_stream_t *stream) {
+put_http_cstream(isc_mem_t *mctx, http_cstream_t *stream) {
 	isc_mem_put(mctx, stream->path, stream->pathlen);
 	isc_mem_put(mctx, stream->authority,
 		    stream->up.field_data[ISC_UF_HOST].len + AUTHEXTRA);
@@ -233,7 +232,7 @@ put_http_client_stream(isc_mem_t *mctx, http_client_stream_t *stream) {
 		isc_mem_put(mctx, stream->postdata.base,
 			    stream->postdata.length);
 	}
-	isc_mem_put(mctx, stream, sizeof(http_client_stream_t));
+	isc_mem_put(mctx, stream, sizeof(http_cstream_t));
 }
 
 static void
@@ -260,13 +259,11 @@ finish_http_session(isc_nm_http_session_t *session) {
 		session->ngsession = NULL;
 	}
 	if (!ISC_LIST_EMPTY(session->cstreams)) {
-		http_client_stream_t *cstream =
-			ISC_LIST_HEAD(session->cstreams);
+		http_cstream_t *cstream = ISC_LIST_HEAD(session->cstreams);
 		while (cstream != NULL) {
-			http_client_stream_t *next = ISC_LIST_NEXT(cstream,
-								   link);
+			http_cstream_t *next = ISC_LIST_NEXT(cstream, link);
 			ISC_LIST_DEQUEUE(session->cstreams, cstream, link);
-			put_http_client_stream(session->mctx, cstream);
+			put_http_cstream(session->mctx, cstream);
 
 			cstream = next;
 		}
@@ -296,8 +293,7 @@ on_data_chunk_recv_callback(nghttp2_session *ngsession, uint8_t flags,
 	UNUSED(flags);
 
 	if (session->client) {
-		http_client_stream_t *cstream =
-			find_http_client_stream(stream_id, session);
+		http_cstream_t *cstream = find_http_cstream(stream_id, session);
 		if (cstream) {
 			size_t new_rbufsize = cstream->rbufsize + len;
 			if (new_rbufsize <= MAX_DNS_MESSAGE_SIZE &&
@@ -314,24 +310,23 @@ on_data_chunk_recv_callback(nghttp2_session *ngsession, uint8_t flags,
 			return (NGHTTP2_ERR_CALLBACK_FAILURE);
 		}
 	} else {
-		isc_nmsocket_h2_t *sock_h2 = ISC_LIST_HEAD(session->sstreams);
-		while (sock_h2 != NULL) {
-			if (stream_id == sock_h2->stream_id) {
-				size_t new_bufsize = sock_h2->bufsize + len;
+		isc_nmsocket_h2_t *h2 = ISC_LIST_HEAD(session->sstreams);
+		while (h2 != NULL) {
+			if (stream_id == h2->stream_id) {
+				size_t new_bufsize = h2->bufsize + len;
 				if (new_bufsize <= MAX_DNS_MESSAGE_SIZE &&
-				    new_bufsize <= sock_h2->content_length)
-				{
-					memmove(sock_h2->buf + sock_h2->bufsize,
-						data, len);
-					sock_h2->bufsize = new_bufsize;
-				} else {
-					return (NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE);
+				    new_bufsize <= h2->content_length) {
+					memmove(h2->buf + h2->bufsize, data,
+						len);
+					h2->bufsize = new_bufsize;
+					break;
 				}
-				break;
+
+				return (NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE);
 			}
-			sock_h2 = ISC_LIST_NEXT(sock_h2, link);
+			h2 = ISC_LIST_NEXT(h2, link);
 		}
-		if (sock_h2 == NULL) {
+		if (h2 == NULL) {
 			return (NGHTTP2_ERR_CALLBACK_FAILURE);
 		}
 	}
@@ -349,13 +344,14 @@ on_stream_close_callback(nghttp2_session *ngsession, int32_t stream_id,
 
 	UNUSED(error_code);
 
-	/* NOTE: calling isc_nm_cancelread() or
+	/*
+	 * NOTE: calling isc_nm_cancelread() or
 	 * isc__nmsocket_prep_destroy() on a socket will lead to an
 	 * indirect call to the delete_http_session() which will, in
-	 * turn, perform required stream session cleanup.*/
+	 * turn, perform required stream session cleanup.
+	 */
 	if (session->client) {
-		http_client_stream_t *cstream =
-			find_http_client_stream(stream_id, session);
+		http_cstream_t *cstream = find_http_cstream(stream_id, session);
 		if (cstream) {
 			isc_result_t result =
 				cstream->response_status.code >= 200 &&
@@ -368,7 +364,7 @@ on_stream_close_callback(nghttp2_session *ngsession, int32_t stream_id,
 							  cstream->rbufsize },
 					 cstream->read_cbarg);
 			ISC_LIST_UNLINK(session->cstreams, cstream, link);
-			put_http_client_stream(session->mctx, cstream);
+			put_http_cstream(session->mctx, cstream);
 			if (ISC_LIST_EMPTY(session->cstreams)) {
 				rv = nghttp2_session_terminate_session(
 					ngsession, NGHTTP2_NO_ERROR);
@@ -402,38 +398,35 @@ on_stream_close_callback(nghttp2_session *ngsession, int32_t stream_id,
 }
 
 static void
-client_handle_status_header(http_client_stream_t *cstream, const uint8_t *value,
+client_handle_status_header(http_cstream_t *cstream, const uint8_t *value,
 			    const size_t valuelen) {
 	char tmp[32] = { 0 };
 	const size_t tmplen = sizeof(tmp) - 1;
 
-	strncpy(tmp, (const char *)value,
-		valuelen > tmplen ? tmplen : valuelen);
+	strncpy(tmp, (const char *)value, ISC_MIN(tmplen, valuelen));
 	cstream->response_status.code = strtoul(tmp, NULL, 10);
 }
 
 static void
-client_handle_content_length_header(http_client_stream_t *cstream,
+client_handle_content_length_header(http_cstream_t *cstream,
 				    const uint8_t *value,
 				    const size_t valuelen) {
 	char tmp[32] = { 0 };
 	const size_t tmplen = sizeof(tmp) - 1;
 
-	strncpy(tmp, (const char *)value,
-		valuelen > tmplen ? tmplen : valuelen);
+	strncpy(tmp, (const char *)value, ISC_MIN(tmplen, valuelen));
 	cstream->response_status.content_length = strtoul(tmp, NULL, 10);
 }
 
 static void
-client_handle_content_type_header(http_client_stream_t *cstream,
-				  const uint8_t *value, const size_t valuelen) {
+client_handle_content_type_header(http_cstream_t *cstream, const uint8_t *value,
+				  const size_t valuelen) {
 	const char type_dns_message[] = "application/dns-message";
+	const size_t len = sizeof(type_dns_message) - 1;
 
 	UNUSED(valuelen);
 
-	if (strncasecmp((const char *)value, type_dns_message,
-			sizeof(type_dns_message) - 1) == 0)
-	{
+	if (strncasecmp((const char *)value, type_dns_message, len) == 0) {
 		cstream->response_status.content_type_valid = true;
 	}
 }
@@ -444,7 +437,7 @@ client_on_header_callback(nghttp2_session *ngsession,
 			  size_t namelen, const uint8_t *value, size_t valuelen,
 			  uint8_t flags, void *user_data) {
 	isc_nm_http_session_t *session = (isc_nm_http_session_t *)user_data;
-	http_client_stream_t *cstream = NULL;
+	http_cstream_t *cstream = NULL;
 	const char status[] = ":status";
 	const char content_length[] = "Content-Length";
 	const char content_type[] = "Content-Type";
@@ -456,7 +449,7 @@ client_on_header_callback(nghttp2_session *ngsession,
 	UNUSED(flags);
 	UNUSED(ngsession);
 
-	cstream = find_http_client_stream(frame->hd.stream_id, session);
+	cstream = find_http_cstream(frame->hd.stream_id, session);
 
 	switch (frame->hd.type) {
 	case NGHTTP2_HEADERS:
@@ -472,6 +465,9 @@ client_on_header_callback(nghttp2_session *ngsession,
 		} else if (HEADER_MATCH(content_type, name, namelen)) {
 			client_handle_content_type_header(cstream, value,
 							  valuelen);
+			if (!cstream->response_status.content_type_valid) {
+				return (NGHTTP2_ERR_CALLBACK_FAILURE);
+			}
 		}
 		break;
 	}
@@ -531,7 +527,7 @@ client_read_callback(nghttp2_session *ngsession, int32_t stream_id,
 		     uint8_t *buf, size_t length, uint32_t *data_flags,
 		     nghttp2_data_source *source, void *user_data) {
 	isc_nm_http_session_t *session = (isc_nm_http_session_t *)user_data;
-	http_client_stream_t *cstream = NULL;
+	http_cstream_t *cstream = NULL;
 
 	REQUIRE(session->client);
 	REQUIRE(!ISC_LIST_EMPTY(session->cstreams));
@@ -539,7 +535,7 @@ client_read_callback(nghttp2_session *ngsession, int32_t stream_id,
 	UNUSED(ngsession);
 	UNUSED(source);
 
-	cstream = find_http_client_stream(stream_id, session);
+	cstream = find_http_cstream(stream_id, session);
 	if (!cstream || cstream->stream_id != stream_id) {
 		/* We haven't found the stream, so we are not reading anything
 		 */
@@ -572,8 +568,7 @@ client_read_callback(nghttp2_session *ngsession, int32_t stream_id,
 
 /* Send HTTP request to the remote peer */
 static isc_result_t
-client_submit_request(isc_nm_http_session_t *session,
-		      http_client_stream_t *stream) {
+client_submit_request(isc_nm_http_session_t *session, http_cstream_t *stream) {
 	int32_t stream_id;
 	char *uri = stream->uri;
 	isc_url_parser_t *up = &stream->up;
@@ -792,12 +787,12 @@ transport_connect_cb(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 	}
 
 	session = isc_mem_get(mctx, sizeof(isc_nm_http_session_t));
-	*session = (isc_nm_http_session_t){ .magic = HTTP2_SESSION_MAGIC,
-					    .free_tlsctx =
-						    conn_data.free_tlsctx,
-					    .tlsctx = conn_data.tlsctx,
-					    .handle = NULL,
-					    .client = true };
+	*session =
+		(isc_nm_http_session_t){ .magic = HTTP2_SESSION_MAGIC,
+					 .free_tlsctx = conn_data.free_tlsctx,
+					 .tlsctx = conn_data.tlsctx,
+					 .handle = NULL,
+					 .client = true };
 	isc_mem_attach(mctx, &session->mctx);
 
 	handle->sock->h2.connect.uri = conn_data.uri;
@@ -816,8 +811,8 @@ transport_connect_cb(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 		REQUIRE(VALID_NMSOCK(handle->sock));
 		REQUIRE(handle->sock->type == isc_nm_tlssocket);
 
-		isc_tls_get_http2_alpn(handle->sock->tlsstream.tls,
-				       &alpn, &alpnlen);
+		isc_tls_get_http2_alpn(handle->sock->tlsstream.tls, &alpn,
+				       &alpnlen);
 		if (alpn == NULL || alpnlen != 2 ||
 		    memcmp(NGHTTP2_PROTO_VERSION_ID, alpn,
 			   NGHTTP2_PROTO_VERSION_ID_LEN) != 0)
@@ -908,7 +903,7 @@ isc_nm_httpconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 isc_result_t
 isc_nm_httprequest(isc_nmhandle_t *handle, isc_region_t *region,
 		   isc_nm_recv_cb_t reply_cb, void *cbarg) {
-	http_client_stream_t *cstream = NULL;
+	http_cstream_t *cstream = NULL;
 	isc_result_t result = ISC_R_SUCCESS;
 	isc_nm_http_session_t *session = NULL;
 	isc_mem_t *mctx;
@@ -926,8 +921,7 @@ isc_nm_httprequest(isc_nmhandle_t *handle, isc_region_t *region,
 	session = handle->sock->h2.session;
 	mctx = handle->sock->mgr->mctx;
 
-	result = get_http_client_stream(mctx, &cstream,
-					handle->sock->h2.connect.uri);
+	result = get_http_cstream(mctx, &cstream, handle->sock->h2.connect.uri);
 	if (result != ISC_R_SUCCESS) {
 		goto error;
 	}
@@ -936,14 +930,16 @@ isc_nm_httprequest(isc_nmhandle_t *handle, isc_region_t *region,
 	cstream->read_cbarg = cbarg;
 	cstream->post = handle->sock->h2.connect.post;
 
-	if (cstream->post) { /* POST */
+	if (cstream->post) {
+		/* POST */
 		cstream->postdata = (isc_region_t){
 			.base = isc_mem_get(mctx, region->length),
 			.length = region->length
 		};
 		memmove(cstream->postdata.base, region->base, region->length);
 		cstream->postdata_pos = 0;
-	} else { /* GET */
+	} else {
+		/* GET */
 		size_t path_size = 0;
 		char *base64url_data = NULL;
 		size_t base64url_data_len = 0;
@@ -999,7 +995,7 @@ isc_nm_httprequest(isc_nmhandle_t *handle, isc_region_t *region,
 error:
 	reply_cb(handle, result, NULL, cbarg);
 	if (cstream != NULL) {
-		put_http_client_stream(mctx, cstream);
+		put_http_cstream(mctx, cstream);
 	}
 	return (result);
 }
@@ -1718,7 +1714,7 @@ isc_nm_listenhttp(isc_nm_t *mgr, isc_nmiface_t *iface, int backlog,
  */
 static void
 http_callback(isc_nmhandle_t *handle, isc_result_t result, isc_region_t *data,
-	     void *arg) {
+	      void *arg) {
 	isc_nm_httpcbarg_t *httpcbarg = arg;
 
 	REQUIRE(VALID_NMHANDLE(handle));
@@ -1792,7 +1788,7 @@ isc__nm_http_clear_handlers(isc_nmsocket_t *sock) {
 	isc_nm_httphandler_t *handler = NULL;
 	isc_nm_httpcbarg_t *httpcbarg = NULL;
 
-	/* delete all handlers */
+	/* Delete all handlers */
 	RWLOCK(&sock->h2.lock, isc_rwlocktype_write);
 	handler = ISC_LIST_HEAD(sock->h2.handlers);
 	while (handler != NULL) {
@@ -1877,8 +1873,11 @@ http_close_direct(isc_nmsocket_t *sock) {
 			isc_nm_cancelread(session->handle);
 		}
 	}
-	/* If session is closed then the only reference to the socket is
-	 * the one, created when handling the netievent. */
+
+	/*
+	 * If session is closed then the only reference to the
+	 * socket is the one created when handling the netievent.
+	 */
 	if (!session->closed) {
 		INSIST(session->handle != NULL);
 		isc__nmsocket_detach(&sock);
@@ -1949,19 +1948,17 @@ failed_read_cb(isc_result_t result, isc_nm_http_session_t *session) {
 	REQUIRE(VALID_HTTP2_SESSION(session));
 
 	if (session->client) {
-		http_client_stream_t *cstream = NULL;
+		http_cstream_t *cstream = NULL;
 		cstream = ISC_LIST_HEAD(session->cstreams);
 		while (cstream != NULL) {
-			http_client_stream_t *next = ISC_LIST_NEXT(cstream,
-								   link);
+			http_cstream_t *next = ISC_LIST_NEXT(cstream, link);
 			ISC_LIST_DEQUEUE(session->cstreams, cstream, link);
-
 			cstream->read_cb(session->handle, result,
 					 &(isc_region_t){ cstream->rbuf,
 							  cstream->rbufsize },
 					 cstream->read_cbarg);
 
-			put_http_client_stream(session->mctx, cstream);
+			put_http_cstream(session->mctx, cstream);
 			cstream = next;
 		}
 	} else {
@@ -1986,6 +1983,7 @@ failed_read_cb(isc_result_t result, isc_nm_http_session_t *session) {
 			h2data = next;
 		}
 	}
+
 	finish_http_session(session);
 }
 

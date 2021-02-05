@@ -1598,6 +1598,10 @@ nmhandle_detach_cb(isc_nmhandle_t **handlep FLARG) {
 		sock->statichandle = NULL;
 	}
 
+	if (sock->type == isc_nm_httpsocket) {
+		handle->httpsession = sock->h2.session;
+	}
+
 	isc___nmsocket_detach(&sock FLARG_PASS);
 }
 
