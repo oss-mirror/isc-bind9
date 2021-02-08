@@ -337,7 +337,6 @@ isc_tlsctx_enable_http2client_alpn(isc_tlsctx_t *ctx) {
 	SSL_CTX_set_alpn_protos(ctx, (const unsigned char *)NGHTTP2_PROTO_ALPN,
 				NGHTTP2_PROTO_ALPN_LEN);
 #endif /* OPENSSL_VERSION_NUMBER >= 0x10002000L */
-
 }
 
 #ifndef OPENSSL_NO_NEXTPROTONEG

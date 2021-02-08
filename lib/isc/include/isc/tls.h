@@ -17,7 +17,7 @@
 #include <isc/types.h>
 
 typedef struct ssl_ctx_st isc_tlsctx_t;
-typedef struct ssl_st isc_tls_t;
+typedef struct ssl_st	  isc_tls_t;
 
 void
 isc_tls_initialize(void);

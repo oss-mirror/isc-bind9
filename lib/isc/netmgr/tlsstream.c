@@ -245,7 +245,7 @@ tls_do_bio(isc_nmsocket_t *sock) {
 	/* Data from TLS to network */
 	pending = BIO_pending(sock->tlsstream.app_bio);
 	if (pending > 0) {
-		/*TODO Should we keep the track of these requests in a list? */
+		/* TODO Should we keep track of these requests in a list? */
 		isc_nmsocket_tls_send_req_t *send_req = NULL;
 		if (pending > TLS_BUF_SIZE) {
 			pending = TLS_BUF_SIZE;
@@ -891,8 +891,11 @@ isc__nm_async_tlsconnect(isc__networker_t *worker, isc__netievent_t *ev0) {
 	tlssock->timer_initialized = true;
 	tlssock->tlsstream.state = TLS_INIT;
 
-	/* We ignore the error code because even in the case of failure callback
-	 * gets called and the error code gets passed to it. */
+	/*
+	 * We ignore the return code, because even in the case of
+	 * failure, the callback will be called and the error code
+	 * passed to it.
+	 */
 	(void)isc_nm_tcpconnect(worker->mgr, (isc_nmiface_t *)&ievent->local,
 				(isc_nmiface_t *)&ievent->peer, tls_connect_cb,
 				tlssock, tlssock->connect_timeout, 0);

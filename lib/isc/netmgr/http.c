@@ -1061,13 +1061,8 @@ server_on_begin_headers_callback(nghttp2_session *ngsession,
 	isc__nmsocket_init(socket, session->serversocket->mgr,
 			   isc_nm_httpsocket, (isc_nmiface_t *)&iface);
 	socket->h2 = (isc_nmsocket_h2_t){
-		.bufpos = 0,
-		.bufsize = 0,
 		.buf = isc_mem_allocate(session->mctx, MAX_DNS_MESSAGE_SIZE),
 		.psock = socket,
-		.handler = NULL,
-		.request_path = NULL,
-		.query_data = NULL,
 		.stream_id = frame->hd.stream_id,
 		.session = session
 	};
@@ -2210,9 +2205,10 @@ void
 isc__nm_http_initsocket(isc_nmsocket_t *sock) {
 	REQUIRE(sock != NULL);
 
-	memset(&sock->h2, 0, sizeof(sock->h2));
-	sock->h2.request_type = ISC_HTTP_REQ_UNSUPPORTED;
-	sock->h2.request_scheme = ISC_HTTP_SCHEME_UNSUPPORTED;
+	sock->h2 = (isc_nmsocket_h2_t){
+		.request_type = ISC_HTTP_REQ_UNSUPPORTED,
+		.request_scheme = ISC_HTTP_SCHEME_UNSUPPORTED,
+	};
 
 	if (sock->type == isc_nm_httplistener) {
 		ISC_LIST_INIT(sock->h2.handlers);
