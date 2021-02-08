@@ -96,8 +96,7 @@ tls_call_connect_cb(isc_nmsocket_t *sock, isc_nmhandle_t *handle,
 		return;
 	}
 	sock->connect_cb(handle, result, sock->connect_cbarg);
-	if (!sock->tlsstream.server)
-		update_result(handle->sock, result);
+	update_result(sock, result);
 	if (result != ISC_R_SUCCESS) {
 		isc__nmsocket_clearcb(handle->sock);
 	}
@@ -120,18 +119,6 @@ tls_senddone(isc_nmhandle_t *handle, isc_result_t eresult, void *cbarg) {
 		    send_req->data.length);
 	isc_mem_put(handle->sock->mgr->mctx, send_req, sizeof(*send_req));
 	sock->tlsstream.nsending--;
-
-	/*if (eresult != ISC_R_SUCCESS &&
-	    (sock->tlsstream.state == TLS_INIT ||
-	     sock->tlsstream.state == TLS_HANDSHAKE))
-	{
-		isc_nmhandle_t *tlshandle = isc__nmhandle_get(sock, NULL, NULL);
-		printf("eresult: %d\n", eresult);
-		tls_call_connect_cb(sock, tlshandle, eresult);
-		isc_nmhandle_detach(&tlshandle);
-		isc__nmsocket_detach(&sock);
-		return;
-	}*/
 
 	async_tls_do_bio(sock);
 
@@ -839,7 +826,7 @@ isc_nm_tlsconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 }
 
 static void
-tls_connect_cb(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
+tcp_connected(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 	isc_nmsocket_t *tlssock = (isc_nmsocket_t *)cbarg;
 
 	REQUIRE(VALID_NMSOCK(tlssock));
@@ -897,7 +884,7 @@ isc__nm_async_tlsconnect(isc__networker_t *worker, isc__netievent_t *ev0) {
 	 * passed to it.
 	 */
 	(void)isc_nm_tcpconnect(worker->mgr, (isc_nmiface_t *)&ievent->local,
-				(isc_nmiface_t *)&ievent->peer, tls_connect_cb,
+				(isc_nmiface_t *)&ievent->peer, tcp_connected,
 				tlssock, tlssock->connect_timeout, 0);
 	return;
 
