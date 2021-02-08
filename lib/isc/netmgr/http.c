@@ -1554,9 +1554,8 @@ isc__nm_async_httpsend(isc__networker_t *worker, isc__netievent_t *ev0) {
 	session = sock->h2.session;
 	if (session != NULL && session->client) {
 		result = client_send(
-			handle,
-			&(isc_region_t){ (uint8_t *)req->uvbuf.base,
-					 req->uvbuf.len });
+			handle, &(isc_region_t){ (uint8_t *)req->uvbuf.base,
+						 req->uvbuf.len });
 		if (result != ISC_R_SUCCESS) {
 			failed_send_cb(sock, req, result);
 			return;
@@ -1589,8 +1588,8 @@ isc__nm_async_httpsend(isc__networker_t *worker, isc__netievent_t *ev0) {
 	};
 
 	result = server_send_response(handle->httpsession->ngsession,
-		sock->h2.stream_id, hdrs,
-		sizeof(hdrs) / sizeof(nghttp2_nv), sock);
+				      sock->h2.stream_id, hdrs,
+				      sizeof(hdrs) / sizeof(nghttp2_nv), sock);
 
 	http_do_bio(handle->httpsession);
 	cb(handle, result, cbarg);
@@ -2211,10 +2210,9 @@ void
 isc__nm_http_initsocket(isc_nmsocket_t *sock) {
 	REQUIRE(sock != NULL);
 
-	sock->h2 = (isc_nmsocket_h2_t){
-		.request_type = ISC_HTTP_REQ_UNSUPPORTED,
-		.request_scheme = ISC_HTTP_SCHEME_UNSUPPORTED,
-	};
+	memset(&sock->h2, 0, sizeof(sock->h2));
+	sock->h2.request_type = ISC_HTTP_REQ_UNSUPPORTED;
+	sock->h2.request_scheme = ISC_HTTP_SCHEME_UNSUPPORTED;
 
 	if (sock->type == isc_nm_httplistener) {
 		ISC_LIST_INIT(sock->h2.handlers);
