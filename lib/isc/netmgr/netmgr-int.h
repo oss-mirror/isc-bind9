@@ -1521,7 +1521,23 @@ void
 isc__nm_tls_stoplistening(isc_nmsocket_t *sock);
 
 void
+isc__nm_tls_settimeout(isc_nmhandle_t *handle, uint32_t timeout);
+/*%<
+ * Set the read timeout and reset the timer for the socket
+ * associated with 'handle', and the TCP socket it wraps
+ * around.
+ */
+
+void
 isc__nm_http_stoplistening(isc_nmsocket_t *sock);
+
+void
+isc__nm_http_settimeout(isc_nmhandle_t *handle, uint32_t timeout);
+/*%<
+ * Set the read timeout and reset the timer for the socket
+ * associated with 'handle', and the TLS/TCP socket it wraps
+ * around.
+ */
 
 void
 isc__nm_http_initsocket(isc_nmsocket_t *sock);

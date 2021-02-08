@@ -1604,6 +1604,12 @@ isc_nmhandle_settimeout(isc_nmhandle_t *handle, uint32_t timeout) {
 	case isc_nm_tlsdnssocket:
 		isc__nm_tlsdns_settimeout(handle, timeout);
 		break;
+	case isc_nm_tlssocket:
+		isc__nm_tls_settimeout(handle, timeout);
+		break;
+	case isc_nm_httpsocket:
+		isc__nm_http_settimeout(handle, timeout);
+		break;
 	default:
 		INSIST(0);
 		ISC_UNREACHABLE();

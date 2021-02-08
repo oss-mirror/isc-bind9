@@ -2258,6 +2258,13 @@ isc__nm_http_cleanup_data(isc_nmsocket_t *sock) {
 	clear_session(sock);
 }
 
+void
+isc__nm_http_settimeout(isc_nmhandle_t *handle, uint32_t timeout) {
+	UNUSED(handle);
+	UNUSED(timeout);
+	/* XXX not implemented yet */
+}
+
 /* DoH GET Query String Scanner-less Recursive Descent Parser/Verifier
 
 It is based on the following grammar (using WSN/EBNF):

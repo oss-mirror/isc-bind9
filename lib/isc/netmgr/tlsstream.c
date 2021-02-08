@@ -81,11 +81,6 @@ update_result(isc_nmsocket_t *sock, const isc_result_t result) {
 		WAIT(&sock->scond, &sock->lock);
 	}
 	UNLOCK(&sock->lock);
-	if (sock->parent != NULL) {
-		LOCK(&sock->parent->lock);
-		sock->parent->result = result;
-		UNLOCK(&sock->parent->lock);
-	}
 }
 
 static void
@@ -258,7 +253,8 @@ tls_do_bio(isc_nmsocket_t *sock) {
 		} else {
 			sock->connect_cb(tlshandle, ISC_R_SUCCESS,
 					 sock->connect_cbarg);
-			update_result(tlshandle->sock, ISC_R_SUCCESS);
+			//update_result(tlshandle->sock, ISC_R_SUCCESS);
+			tlshandle->sock->result = ISC_R_SUCCESS;
 		}
 		isc_nmhandle_detach(&tlshandle);
 		sock->tlsstream.state = TLS_IO;
@@ -877,16 +873,19 @@ isc__nm_async_tlsconnect(isc__networker_t *worker, isc__netievent_t *ev0) {
 				   (isc_nmiface_t *)&ievent->peer,
 				   tls_connect_cb, tlssock,
 				   tlssock->connect_timeout, 0);
+	atomic_store(&tlssock->active, true);
+	update_result(tlssock, result);
 	if (result != ISC_R_SUCCESS) {
 		goto error;
 	}
 	return;
+
 error:
 	tlshandle = isc__nmhandle_get(tlssock, NULL, NULL);
 	atomic_store(&tlssock->closed, true);
 	tlssock->connect_cb(tlshandle, result, tlssock->connect_cbarg);
 	isc_nmhandle_detach(&tlshandle);
-	update_result(tlssock, result);
+	atomic_store(&tlssock->active, false);
 	tls_close_direct(tlssock);
 }
 
@@ -940,4 +939,11 @@ isc__nm_tls_cleanup_data(isc_nmsocket_t *sock) {
 		REQUIRE(VALID_NMSOCK(sock->tlsstream.tlslistener));
 		isc__nmsocket_detach(&sock->tlsstream.tlslistener);
 	}
+}
+
+void
+isc__nm_tls_settimeout(isc_nmhandle_t *handle, uint32_t timeout) {
+	UNUSED(handle);
+	UNUSED(timeout);
+	/* XXX not implemented yet */
 }
