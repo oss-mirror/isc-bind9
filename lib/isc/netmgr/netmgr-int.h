@@ -1155,7 +1155,6 @@ void
 isc__nm_async_connectcb(isc__networker_t *worker, isc__netievent_t *ev0);
 /*%<
  * Issue a connect callback on the socket, used to call the callback
-
  */
 
 void
