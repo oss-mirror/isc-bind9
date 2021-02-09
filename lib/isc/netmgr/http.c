@@ -1903,7 +1903,7 @@ clear_handlers(isc_nmsocket_t *sock) {
 
 static void
 clear_session(isc_nmsocket_t *sock) {
-	if (sock->type != isc_nm_httpsocket && sock->h2.session != NULL) {
+	if (sock->h2.session != NULL) {
 		isc_nm_http_session_t *session = sock->h2.session;
 		INSIST(ISC_LIST_EMPTY(session->sstreams));
 		delete_http_session(session);
@@ -2221,6 +2221,11 @@ isc__nm_http_initsocket(isc_nmsocket_t *sock) {
 
 void
 isc__nm_http_cleanup_data(isc_nmsocket_t *sock) {
+	if (sock->type != isc_nm_httplistener &&
+	    sock->type != isc_nm_httpsocket) {
+		return;
+	}
+
 	if (sock->type == isc_nm_httplistener) {
 		clear_handlers(sock);
 		isc_rwlock_destroy(&sock->h2.lock);
