@@ -157,8 +157,6 @@ isc__nm_dump_active(isc_nm_t *nm);
 #define isc__nmsocket_prep_destroy(sock) isc___nmsocket_prep_destroy(sock)
 #endif
 
-typedef struct isc_nm_http_session isc_nm_http_session_t;
-
 /*
  * Single network event loop worker.
  */
@@ -196,6 +194,7 @@ typedef struct isc__networker {
 	 atomic_load(&(t)->references) > 0)
 
 typedef void (*isc__nm_closecb)(isc_nmhandle_t *);
+typedef struct isc_nm_http_session isc_nm_http_session_t;
 
 struct isc_nmhandle {
 	int magic;
