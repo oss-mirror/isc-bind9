@@ -828,24 +828,28 @@ isc_nm_tlsconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 static void
 tcp_connected(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 	isc_nmsocket_t *tlssock = (isc_nmsocket_t *)cbarg;
+	isc_nmhandle_t *tlshandle = NULL;
 
 	REQUIRE(VALID_NMSOCK(tlssock));
 	REQUIRE(VALID_NMHANDLE(handle));
 
 	if (result != ISC_R_SUCCESS) {
-		tls_call_connect_cb(tlssock, handle, result);
-		tls_close_direct(tlssock);
-		return;
+		goto error;
 	}
 
 	tlssock->peer = isc_nmhandle_peeraddr(handle);
 	isc_nmhandle_attach(handle, &tlssock->outerhandle);
 	result = initialize_tls(tlssock, false);
 	if (result != ISC_R_SUCCESS) {
-		tls_call_connect_cb(tlssock, handle, result);
-		tls_close_direct(tlssock);
-		return;
+		goto error;
 	}
+	return;
+error:
+	tlshandle = isc__nmhandle_get(tlssock, NULL, NULL);
+	atomic_store(&tlssock->closed, true);
+	tls_call_connect_cb(tlssock, tlshandle, result);
+	isc_nmhandle_detach(&tlshandle);
+	tls_close_direct(tlssock);
 }
 
 void
