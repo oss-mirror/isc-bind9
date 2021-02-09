@@ -380,7 +380,7 @@ doh_receive_reply_cb(isc_nmhandle_t *handle, isc_result_t eresult,
 		}
 		atomic_store(&was_error, true);
 		/* Send failed, we need to stop reading too */
-		isc_nm_cancelread(handle);
+		/* isc_nm_cancelread(handle); */
 	}
 }
 

@@ -1864,14 +1864,14 @@ isc_nm_stoplistening(isc_nmsocket_t *sock) {
 	}
 }
 
-void
-isc__nm_connectcb(isc_nmsocket_t *sock, isc__nm_uvreq_t *uvreq,
-		  isc_result_t eresult) {
+static void
+nm_connectcb(isc_nmsocket_t *sock, isc__nm_uvreq_t *uvreq, isc_result_t eresult,
+	     bool force_async) {
 	REQUIRE(VALID_NMSOCK(sock));
 	REQUIRE(VALID_UVREQ(uvreq));
 	REQUIRE(VALID_NMHANDLE(uvreq->handle));
 
-	if (eresult == ISC_R_SUCCESS) {
+	if (eresult == ISC_R_SUCCESS && !force_async) {
 		isc__netievent_connectcb_t ievent = { .sock = sock,
 						      .req = uvreq,
 						      .result = eresult };
@@ -1883,6 +1883,18 @@ isc__nm_connectcb(isc_nmsocket_t *sock, isc__nm_uvreq_t *uvreq,
 		isc__nm_enqueue_ievent(&sock->mgr->workers[sock->tid],
 				       (isc__netievent_t *)ievent);
 	}
+}
+
+void
+isc__nm_connectcb(isc_nmsocket_t *sock, isc__nm_uvreq_t *uvreq,
+		  isc_result_t eresult) {
+	nm_connectcb(sock, uvreq, eresult, false);
+}
+
+void
+isc__nm_connectcb_force_async(isc_nmsocket_t *sock, isc__nm_uvreq_t *uvreq,
+			      isc_result_t eresult) {
+	nm_connectcb(sock, uvreq, eresult, true);
 }
 
 void

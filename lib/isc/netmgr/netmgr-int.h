@@ -761,6 +761,7 @@ typedef struct isc_nmsocket_h2 {
 		char *uri;
 		bool post;
 		void *cstream;
+		isc_nmsocket_t *transport;
 	} connect;
 } isc_nmsocket_h2_t;
 
@@ -1151,6 +1152,11 @@ isc__nmsocket_clearcb(isc_nmsocket_t *sock);
 void
 isc__nm_connectcb(isc_nmsocket_t *sock, isc__nm_uvreq_t *uvreq,
 		  isc_result_t eresult);
+
+void
+isc__nm_connectcb_force_async(isc_nmsocket_t *sock, isc__nm_uvreq_t *uvreq,
+			      isc_result_t eresult);
+
 void
 isc__nm_async_connectcb(isc__networker_t *worker, isc__netievent_t *ev0);
 /*%<

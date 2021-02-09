@@ -787,7 +787,7 @@ http_call_connect_cb(isc_nmsocket_t *sock, isc_result_t result) {
 	req->cb.connect = sock->connect_cb;
 	req->cbarg = sock->connect_cbarg;
 	req->handle = isc__nmhandle_get(sock, &sock->peer, &sock->iface->addr);
-	isc__nm_connectcb(sock, req, result);
+	isc__nm_connectcb_force_async(sock, req, result);
 }
 
 static void
@@ -795,6 +795,7 @@ transport_connect_cb(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 	isc_nmsocket_t *http_sock = (isc_nmsocket_t *)cbarg;
 	isc_nm_http_session_t *session = NULL;
 	isc_nmsocket_t *transp_sock = NULL;
+	http_cstream_t *cstream = NULL;
 	isc_mem_t *mctx = NULL;
 	bool freectx;
 
@@ -823,12 +824,14 @@ transport_connect_cb(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 					    .handle = NULL,
 					    .client = true };
 	isc_mem_attach(mctx, &session->mctx);
+	ISC_LIST_INIT(session->cstreams);
 
 	transp_sock->h2.connect.post = http_sock->h2.connect.post;
 	transp_sock->h2.connect.uri = http_sock->h2.connect.uri;
 	http_sock->h2.connect.uri = NULL;
 	http_sock->tls.ctx = NULL;
 	isc_nmhandle_attach(handle, &session->handle);
+	isc__nmsocket_attach(handle->sock, &http_sock->h2.connect.transport);
 	transp_sock->h2.session = session;
 	http_sock->h2.session = session;
 
@@ -855,21 +858,14 @@ transport_connect_cb(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 		goto error;
 	}
 
-	result = get_http_cstream(
-		transp_sock,
-		(http_cstream_t **)&transp_sock->h2.connect.cstream);
+	result = get_http_cstream(transp_sock, &cstream);
+	transp_sock->h2.connect.cstream = cstream;
 	if (result != ISC_R_SUCCESS) {
 		goto error;
 	}
 
 	http_call_connect_cb(http_sock, result);
-	if (ISC_LIST_EMPTY(session->cstreams)) {
-		delete_http_session(session);
-		isc__nmsocket_prep_destroy(transp_sock);
-	} else {
-		http_do_bio(session);
-	}
-
+	http_do_bio(session);
 	isc__nmsocket_detach(&http_sock);
 	return;
 
@@ -877,10 +873,6 @@ error:
 	http_call_connect_cb(http_sock, result);
 	if (http_sock->tls.ctx != NULL) {
 		isc_tlsctx_free(&http_sock->tls.ctx);
-	}
-
-	if (session != NULL) {
-		delete_http_session(session);
 	}
 
 	if (http_sock->h2.connect.uri != NULL) {
@@ -1036,7 +1028,7 @@ isc_nm_httprequest(isc_nmhandle_t *handle, isc_region_t *region,
 	sock = handle->sock;
 
 	isc__nm_http_read(handle, cb, cbarg);
-	client_send(handle, region);
+	result = client_send(handle, region);
 	if (result != ISC_R_SUCCESS) {
 		goto error;
 	}
@@ -1044,7 +1036,7 @@ isc_nm_httprequest(isc_nmhandle_t *handle, isc_region_t *region,
 	return (ISC_R_SUCCESS);
 
 error:
-	sock->h2.connect.cstream = cstream;
+	cstream = sock->h2.connect.cstream;
 	if (cstream->read_cb != NULL) {
 		cstream->read_cb(handle, result, NULL, cstream->read_cbarg);
 	}
@@ -1949,6 +1941,9 @@ http_close_direct(isc_nmsocket_t *sock) {
 	atomic_store(&sock->closed, true);
 
 	if (atomic_load(&sock->client)) {
+		if (sock->h2.connect.transport) {
+			isc__nmsocket_detach(&sock->h2.connect.transport);
+		}
 		return;
 	}
 	INSIST(VALID_HTTP2_SESSION(sock->h2.session));
@@ -2052,7 +2047,6 @@ failed_read_cb(isc_result_t result, isc_nm_http_session_t *session) {
 					 &(isc_region_t){ cstream->rbuf,
 							  cstream->rbufsize },
 					 cstream->read_cbarg);
-
 			put_http_cstream(session->mctx, cstream);
 			cstream = next;
 		}
