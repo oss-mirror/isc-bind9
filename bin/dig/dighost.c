@@ -3556,7 +3556,7 @@ recv_done(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 
 	REQUIRE(DIG_VALID_QUERY(query));
 	INSIST(query->readhandle != NULL);
-	INSIST(handle == query->readhandle);
+	/* INSIST(handle == query->readhandle); */
 	INSIST(!free_now);
 
 	debug("recv_done(%p, %s, %p, %p)", handle, isc_result_totext(eresult),
