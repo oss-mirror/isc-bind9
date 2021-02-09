@@ -711,8 +711,6 @@ doh_connect_send_two_requests_cb(isc_nmhandle_t *handle, isc_result_t result,
 	if (result != ISC_R_SUCCESS) {
 		goto error;
 	}
-
-	isc_nm_resumeread(handle);
 	return;
 error:
 	atomic_store(&was_error, true);
