@@ -950,6 +950,7 @@ isc__nm_tls_cleanup_data(isc_nmsocket_t *sock) {
 	{
 		return;
 	}
+
 	if (sock->tlsstream.tlslistener != NULL) {
 		REQUIRE(VALID_NMSOCK(sock->tlsstream.tlslistener));
 		isc__nmsocket_detach(&sock->tlsstream.tlslistener);

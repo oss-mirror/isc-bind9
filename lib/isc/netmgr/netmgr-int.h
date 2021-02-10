@@ -1580,6 +1580,12 @@ char *
 isc__nm_base64_to_base64url(isc_mem_t *mem, const char *base64,
 			    const size_t base64_len, size_t *res_len);
 
+void
+isc__nm_httpsession_attach(isc_nm_http_session_t *source,
+			   isc_nm_http_session_t **targetp);
+void
+isc__nm_httpsession_detach(isc_nm_http_session_t **sessionp);
+
 #define isc__nm_uverr2result(x) \
 	isc___nm_uverr2result(x, true, __FILE__, __LINE__, __func__)
 isc_result_t

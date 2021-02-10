@@ -1408,8 +1408,10 @@ isc___nmhandle_get(isc_nmsocket_t *sock, isc_sockaddr_t *peer,
 	}
 
 	if (sock->type == isc_nm_httpsocket) {
-		handle->httpsession = sock->h2.session;
+		isc__nm_httpsession_attach(sock->h2.session,
+					   &handle->httpsession);
 	}
+
 
 	return (handle);
 }
@@ -1563,8 +1565,8 @@ nmhandle_detach_cb(isc_nmhandle_t **handlep FLARG) {
 		sock->statichandle = NULL;
 	}
 
-	if (sock->type == isc_nm_httpsocket) {
-		handle->httpsession = sock->h2.session;
+	if (sock->type == isc_nm_httpsocket && handle->httpsession != NULL) {
+		isc__nm_httpsession_detach(&handle->httpsession);
 	}
 
 	isc___nmsocket_detach(&sock FLARG_PASS);

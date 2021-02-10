@@ -158,8 +158,9 @@ new_session(isc_mem_t *mctx, isc_tlsctx_t *tctx,
 	*sessionp = session;
 }
 
-static void
-session_attach(isc_nm_http_session_t *source, isc_nm_http_session_t **targetp) {
+void
+isc__nm_httpsession_attach(isc_nm_http_session_t *source,
+			   isc_nm_http_session_t **targetp) {
 	REQUIRE(VALID_HTTP2_SESSION(source));
 	REQUIRE(targetp != NULL && *targetp == NULL);
 
@@ -168,8 +169,8 @@ session_attach(isc_nm_http_session_t *source, isc_nm_http_session_t **targetp) {
 	*targetp = source;
 }
 
-static void
-session_detach(isc_nm_http_session_t **sessionp) {
+void
+isc__nm_httpsession_detach(isc_nm_http_session_t **sessionp) {
 	isc_nm_http_session_t *session = NULL;
 
 	REQUIRE(sessionp != NULL);
@@ -873,8 +874,8 @@ transport_connect_cb(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 	http_sock->tls.ctx = NULL;
 	isc_nmhandle_attach(handle, &session->handle);
 	isc__nmsocket_attach(handle->sock, &http_sock->h2.connect.transport);
-	session_attach(session, &transp_sock->h2.session);
-	session_attach(session, &http_sock->h2.session);
+	isc__nm_httpsession_attach(session, &transp_sock->h2.session);
+	isc__nm_httpsession_attach(session, &http_sock->h2.session);
 
 	if (session->tlsctx != NULL) {
 		const unsigned char *alpn = NULL;
@@ -895,12 +896,11 @@ transport_connect_cb(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 
 	initialize_nghttp2_client_session(session);
 	if (!send_client_connection_header(session)) {
-		session_detach(&transp_sock->h2.session);
 		goto error;
 	}
 
 	result = get_http_cstream(transp_sock, &cstream);
-	transp_sock->h2.connect.cstream = cstream;
+	http_sock->h2.connect.cstream = cstream;
 	if (result != ISC_R_SUCCESS) {
 		goto error;
 	}
@@ -908,7 +908,7 @@ transport_connect_cb(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 	http_call_connect_cb(http_sock, result);
 	http_do_bio(session);
 	isc__nmsocket_detach(&http_sock);
-	session_detach(&session);
+	isc__nm_httpsession_detach(&session);
 	return;
 
 error:
@@ -921,8 +921,16 @@ error:
 		isc_mem_free(mctx, http_sock->h2.connect.uri);
 	}
 
+	if (transp_sock->h2.session != NULL) {
+		isc__nm_httpsession_detach(&transp_sock->h2.session);
+	}
+
+	if (http_sock->h2.session != NULL) {
+		isc__nm_httpsession_detach(&http_sock->h2.session);
+	}
+
 	if (session != NULL) {
-		session_detach(&session);
+		isc__nm_httpsession_detach(&session);
 	}
 
 	isc__nmsocket_detach(&http_sock);
@@ -1042,9 +1050,11 @@ client_send(isc_nmhandle_t *handle, const isc_region_t *region) {
 	}
 
 	cstream->sending = true;
+	if (!ISC_LINK_LINKED(cstream, link)) {
+		ISC_LIST_APPEND(session->cstreams, cstream, link);
+	}
 	if (cstream->reading) {
 		sock->h2.connect.cstream = NULL;
-		ISC_LIST_APPEND(session->cstreams, cstream, link);
 		result = client_submit_request(session, cstream);
 		if (result != ISC_R_SUCCESS) {
 			ISC_LIST_UNLINK(session->cstreams, cstream, link);
@@ -1641,6 +1651,7 @@ void
 isc__nm_http_read(isc_nmhandle_t *handle, isc_nm_recv_cb_t cb, void *cbarg) {
 	isc_result_t result;
 	http_cstream_t *cstream = NULL;
+	isc_nm_http_session_t *session = handle->sock->h2.session;
 
 	result = get_http_cstream(handle->sock, &cstream);
 	if (result != ISC_R_SUCCESS) {
@@ -1652,11 +1663,11 @@ isc__nm_http_read(isc_nmhandle_t *handle, isc_nm_recv_cb_t cb, void *cbarg) {
 	cstream->read_cbarg = cbarg;
 	cstream->reading = true;
 
-	if (cstream->sending) {
-		isc_nm_http_session_t *session = handle->sock->h2.session;
-
-		handle->sock->h2.connect.cstream = NULL;
+	if (!ISC_LINK_LINKED(cstream, link)) {
 		ISC_LIST_APPEND(session->cstreams, cstream, link);
+	}
+
+	if (cstream->sending) {
 		result = client_submit_request(session, cstream);
 		if (result != ISC_R_SUCCESS) {
 			ISC_LIST_UNLINK(session->cstreams, cstream, link);
@@ -1975,6 +1986,11 @@ http_close_direct(isc_nmsocket_t *sock) {
 		if (sock->h2.connect.transport) {
 			isc__nmsocket_detach(&sock->h2.connect.transport);
 		}
+		if (sock->h2.session != NULL) {
+			isc_nmsocket_t *tlssock =
+				sock->h2.session->handle->sock;
+			isc__nm_httpsession_detach(&tlssock->h2.session);
+		}
 		return;
 	}
 	INSIST(VALID_HTTP2_SESSION(sock->h2.session));
@@ -2288,7 +2304,7 @@ isc__nm_http_cleanup_data(isc_nmsocket_t *sock) {
 	}
 
 	if (sock->h2.session != NULL) {
-		session_detach(&sock->h2.session);
+		isc__nm_httpsession_detach(&sock->h2.session);
 	}
 }
 
