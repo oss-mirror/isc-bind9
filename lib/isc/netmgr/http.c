@@ -346,14 +346,14 @@ on_stream_close_callback(nghttp2_session *ngsession, int32_t stream_id,
 	UNUSED(error_code);
 
 	/*
-	 * NOTE: calling isc_nm_cancelread() or
-	 * isc__nmsocket_prep_destroy() on a socket will lead to an
-	 * indirect call to the delete_http_session() which will, in
-	 * turn, perform required stream session cleanup.
+	 * NOTE: calling isc_nm_cancelread() or isc__nmsocket_prep_destroy()
+	 * on a socket will lead to an indirect call to the
+	 * delete_http_session() which will, in turn, perform required
+	 * stream session cleanup.
 	 */
 	if (session->client) {
 		http_cstream_t *cstream = find_http_cstream(stream_id, session);
-		if (cstream) {
+		if (cstream != NULL) {
 			isc_result_t result =
 				cstream->response_status.code >= 200 &&
 						cstream->response_status.code <
@@ -1905,7 +1905,7 @@ static void
 clear_session(isc_nmsocket_t *sock) {
 	if (sock->h2.session != NULL) {
 		isc_nm_http_session_t *session = sock->h2.session;
-		INSIST(ISC_LIST_EMPTY(session->sstreams));
+		finish_http_session(session);
 		delete_http_session(session);
 		sock->h2.session = NULL;
 	}
