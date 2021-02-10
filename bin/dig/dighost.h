@@ -172,6 +172,7 @@ struct dig_lookup {
 	unsigned int eoferr;
 	uint16_t qid;
 	struct {
+		bool http_plain;
 		bool https_mode;
 		bool https_get;
 		char *https_path;

@@ -1072,6 +1072,15 @@ plus_option(char *option, bool is_batchfile, bool *need_clone,
 		    (_l >= sizeof(B) || strncasecmp(cmd, B, _l) != 0))   \
 			goto invalid_option;                             \
 	} while (0)
+#define FULLCHECK4(A, B, C, D)                                           \
+	do {                                                             \
+		size_t _l = strlen(cmd);                                 \
+		if ((_l >= sizeof(A) || strncasecmp(cmd, A, _l) != 0) && \
+		    (_l >= sizeof(B) || strncasecmp(cmd, B, _l) != 0) && \
+		    (_l >= sizeof(C) || strncasecmp(cmd, C, _l) != 0) && \
+		    (_l >= sizeof(D) || strncasecmp(cmd, D, _l) != 0))   \
+			goto invalid_option;                             \
+	} while (0)
 
 	switch (cmd[0]) {
 	case 'a':
@@ -1424,28 +1433,50 @@ plus_option(char *option, bool is_batchfile, bool *need_clone,
 			lookup->header_only = state;
 			break;
 		case 't':
-			FULLCHECK2("https", "https-get");
-			switch (cmd[5]) {
-			case '\0':
-				FULLCHECK("https");
-				lookup->https_mode = state;
-				if (!lookup->tcp_mode_set) {
-					lookup->tcp_mode = state;
+			FULLCHECK4("https", "https-get", "https-post",
+				   "http-plain");
+			if (!state) {
+				lookup->https_mode = false;
+				if (lookup->https_path != NULL) {
+					isc_mem_free(mctx, lookup->https_path);
+					lookup->https_path = NULL;
 				}
-				if (value == NULL) {
-					lookup->https_path = isc_mem_strdup(
-						mctx, DEFAULT_HTTPS_PATH);
+				break;
+			}
+			if (cmd[4] == '-') {
+				FULLCHECK("http-plain");
+				lookup->https_mode = true;
+				lookup->http_plain = true;
+			} else {
+				switch (cmd[5]) {
+				case '\0':
+					FULLCHECK("https");
 					break;
+				case '-':
+					switch (cmd[6]) {
+					case 'p':
+						FULLCHECK("https-post");
+						break;
+					case 'g':
+						FULLCHECK("https-get");
+						lookup->https_get = true;
+						break;
+					}
+					break;
+				default:
+					goto invalid_option;
 				}
-				lookup->https_path = isc_mem_strdup(mctx,
-								    value);
-				break;
-			case '-':
-				FULLCHECK("https-get");
-				lookup->https_get = true;
-				break;
-			default:
-				goto invalid_option;
+				lookup->https_mode = true;
+			}
+			if (!lookup->tcp_mode_set) {
+				lookup->tcp_mode = state;
+			}
+			if (value == NULL) {
+				lookup->https_path = isc_mem_strdup(
+					mctx, DEFAULT_HTTPS_PATH);
+			} else {
+				lookup->https_path = isc_mem_strdup(
+					mctx, value);
 			}
 			break;
 		default:

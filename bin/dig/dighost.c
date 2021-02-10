@@ -730,6 +730,7 @@ clone_lookup(dig_lookup_t *lookold, bool servers) {
 		looknew->https_path = isc_mem_strdup(mctx, lookold->https_path);
 	}
 	looknew->https_get = lookold->https_get;
+	looknew->http_plain = lookold->http_plain;
 	looknew->sendcookie = lookold->sendcookie;
 	looknew->seenbadcookie = lookold->seenbadcookie;
 	looknew->badcookie = lookold->badcookie;
@@ -2710,8 +2711,11 @@ start_tcp(dig_query_t *query) {
 	if (!port_set) {
 		if (query->lookup->tls_mode) {
 			port = 853;
-		} else if (query->lookup->https_mode) {
+		} else if (query->lookup->https_mode &&
+			   !query->lookup->http_plain) {
 			port = 443;
+		} else if (query->lookup->https_mode) {
+			port = 80;
 		} else {
 			port = 53;
 		}
@@ -2799,8 +2803,11 @@ start_tcp(dig_query_t *query) {
 				 query->servname, (uint16_t)port,
 				 query->lookup->https_path);
 
-			result = isc_tlsctx_createclient(&query->tlsctx);
-			RUNTIME_CHECK(result == ISC_R_SUCCESS);
+			if (!query->lookup->http_plain) {
+				result = isc_tlsctx_createclient(
+					&query->tlsctx);
+				RUNTIME_CHECK(result == ISC_R_SUCCESS);
+			}
 
 			result = isc_nm_httpconnect(
 				netmgr, (isc_nmiface_t *)&localaddr,
