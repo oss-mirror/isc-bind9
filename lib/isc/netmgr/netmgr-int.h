@@ -759,6 +759,8 @@ typedef struct isc_nmsocket_h2 {
 	struct {
 		char *uri;
 		bool post;
+		bool free_tlsctx;
+		isc_tlsctx_t *tlsctx;
 		void *cstream;
 	} connect;
 } isc_nmsocket_h2_t;

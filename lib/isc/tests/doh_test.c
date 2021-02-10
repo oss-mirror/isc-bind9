@@ -154,7 +154,7 @@ connect_send_request(isc_nm_t *mgr, const char *uri, bool post,
 
 	result = isc_nm_httpconnect(
 		mgr, NULL, (isc_nmiface_t *)&tcp_listen_addr, uri, post,
-		connect_send_cb, data, ctx, timeout, 0);
+		connect_send_cb, data, ctx, true, timeout, 0);
 	return (result);
 }
 
@@ -747,7 +747,7 @@ doh_recv_two(void **state) {
 	result = isc_nm_httpconnect(
 		connect_nm, NULL, (isc_nmiface_t *)&tcp_listen_addr, req_url,
 		atomic_load(&POST), doh_connect_send_two_requests_cb, NULL, ctx,
-		5000, 0);
+		true, 5000, 0);
 
 	assert_int_equal(result, ISC_R_SUCCESS);
 

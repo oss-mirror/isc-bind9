@@ -2806,7 +2806,7 @@ start_tcp(dig_query_t *query) {
 				netmgr, (isc_nmiface_t *)&localaddr,
 				(isc_nmiface_t *)&query->sockaddr, uri,
 				!query->lookup->https_get, tcp_connected, query,
-				query->tlsctx, local_timeout, 0);
+				query->tlsctx, false, local_timeout, 0);
 			check_result(result, "isc_nm_httpconnect");
 		} else {
 			result = isc_nm_tcpdnsconnect(
