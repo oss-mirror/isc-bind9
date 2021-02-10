@@ -946,12 +946,8 @@ isc__nm_async_tlsdobio(isc__networker_t *worker, isc__netievent_t *ev0) {
 
 void
 isc__nm_tls_cleanup_data(isc_nmsocket_t *sock) {
-	if (sock->type != isc_nm_tlslistener && sock->type != isc_nm_tlssocket)
-	{
-		return;
-	}
-
-	if (sock->tlsstream.tlslistener != NULL) {
+	if (sock->type == isc_nm_tcplistener &&
+	    sock->tlsstream.tlslistener != NULL) {
 		REQUIRE(VALID_NMSOCK(sock->tlsstream.tlslistener));
 		isc__nmsocket_detach(&sock->tlsstream.tlslistener);
 	}
