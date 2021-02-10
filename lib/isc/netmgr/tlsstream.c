@@ -887,9 +887,11 @@ isc__nm_async_tlsconnect(isc__networker_t *worker, isc__netievent_t *ev0) {
 	 * failure, the callback will be called and the error code
 	 * passed to it.
 	 */
-	(void)isc_nm_tcpconnect(worker->mgr, (isc_nmiface_t *)&ievent->local,
-				(isc_nmiface_t *)&ievent->peer, tcp_connected,
-				tlssock, tlssock->connect_timeout, 0);
+	result = isc_nm_tcpconnect(worker->mgr, (isc_nmiface_t *)&ievent->local,
+				   (isc_nmiface_t *)&ievent->peer,
+				   tcp_connected, tlssock,
+				   tlssock->connect_timeout, 0);
+	update_result(tlssock, result);
 	return;
 
 error:

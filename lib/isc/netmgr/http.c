@@ -220,7 +220,7 @@ find_http_cstream(int32_t stream_id, isc_nm_http_session_t *session) {
 static isc_result_t
 new_http_cstream(isc_nmsocket_t *sock, http_cstream_t **streamp) {
 	isc_mem_t *mctx = sock->mgr->mctx;
-	const char *uri;
+	const char *uri = NULL;
 	bool post;
 	http_cstream_t *stream = NULL;
 	isc_result_t result;
@@ -982,7 +982,7 @@ client_send(isc_nmhandle_t *handle, const isc_region_t *region) {
 	isc_result_t result = ISC_R_SUCCESS;
 	isc_nmsocket_t *sock = handle->sock;
 	isc_mem_t *mctx = sock->mgr->mctx;
-	isc_nm_http_session_t *session;
+	isc_nm_http_session_t *session = NULL;
 	http_cstream_t *cstream = NULL;
 
 	REQUIRE(VALID_HTTP2_SESSION(session = handle->sock->h2.session));
@@ -1643,7 +1643,7 @@ void
 isc__nm_http_read(isc_nmhandle_t *handle, isc_nm_recv_cb_t cb, void *cbarg) {
 	isc_result_t result;
 	http_cstream_t *cstream = NULL;
-	isc_nm_http_session_t *session;
+	isc_nm_http_session_t *session = NULL;
 
 	REQUIRE(VALID_NMHANDLE(handle));
 
@@ -1927,7 +1927,7 @@ clear_handlers(isc_nmsocket_t *sock) {
 	RWLOCK(&sock->h2.lock, isc_rwlocktype_write);
 	handler = ISC_LIST_HEAD(sock->h2.handlers);
 	while (handler != NULL) {
-		isc_nm_httphandler_t *next;
+		isc_nm_httphandler_t *next = NULL;
 
 		next = ISC_LIST_NEXT(handler, link);
 		ISC_LIST_DEQUEUE(sock->h2.handlers, handler, link);
@@ -1938,7 +1938,7 @@ clear_handlers(isc_nmsocket_t *sock) {
 
 	httpcbarg = ISC_LIST_HEAD(sock->h2.handler_cbargs);
 	while (httpcbarg != NULL) {
-		isc_nm_httpcbarg_t *next;
+		isc_nm_httpcbarg_t *next = NULL;
 
 		next = ISC_LIST_NEXT(httpcbarg, link);
 		ISC_LIST_DEQUEUE(sock->h2.handler_cbargs, httpcbarg, link);
