@@ -2717,7 +2717,7 @@ start_tcp(dig_query_t *query) {
 		}
 	}
 
-	fprintf(stderr, "query->servname = %s\n", query->servname);
+	debug("query->servname = %s\n", query->servname);
 
 	result = get_address(query->servname, port, &query->sockaddr);
 	if (result != ISC_R_SUCCESS) {
