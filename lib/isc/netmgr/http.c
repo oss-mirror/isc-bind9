@@ -1061,8 +1061,8 @@ error:
 }
 
 isc_result_t
-isc_nm_httprequest(isc_nmhandle_t *handle, isc_region_t *region,
-		   isc_nm_recv_cb_t cb, void *cbarg) {
+isc__nm_http_request(isc_nmhandle_t *handle, isc_region_t *region,
+		     isc_nm_recv_cb_t cb, void *cbarg) {
 	isc_result_t result = ISC_R_SUCCESS;
 	isc_nmsocket_t *sock = NULL;
 	http_cstream_t *cstream = NULL;

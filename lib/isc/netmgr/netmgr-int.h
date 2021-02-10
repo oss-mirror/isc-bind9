@@ -1550,6 +1550,10 @@ isc__nm_http_initsocket(isc_nmsocket_t *sock);
 void
 isc__nm_http_cleanup_data(isc_nmsocket_t *sock);
 
+isc_result_t
+isc__nm_http_request(isc_nmhandle_t *handle, isc_region_t *region,
+		     isc_nm_recv_cb_t reply_cb, void *cbarg);
+
 void
 isc__nm_http_send(isc_nmhandle_t *handle, const isc_region_t *region,
 		  isc_nm_cb_t cb, void *cbarg);

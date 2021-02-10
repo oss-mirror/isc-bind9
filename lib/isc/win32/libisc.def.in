@@ -450,7 +450,6 @@ isc_nm_destroy
 isc_nm_detach
 isc_nm_http_endpoint
 isc_nm_httpconnect
-isc_nm_httprequest
 isc_nm_listenhttp
 isc_nm_listentcpdns
 isc_nm_listentls

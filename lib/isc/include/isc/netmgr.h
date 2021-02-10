@@ -513,10 +513,6 @@ isc_nm_httpconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 		   size_t extrahandlesize);
 
 isc_result_t
-isc_nm_httprequest(isc_nmhandle_t *handle, isc_region_t *region,
-		   isc_nm_recv_cb_t reply_cb, void *cbarg);
-
-isc_result_t
 isc_nm_listenhttp(isc_nm_t *mgr, isc_nmiface_t *iface, int backlog,
 		  isc_quota_t *quota, isc_tlsctx_t *ctx,
 		  isc_nmsocket_t **sockp);

@@ -119,8 +119,8 @@ connect_send_cb(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 		goto error;
 	}
 
-	result = isc_nm_httprequest(handle, &data.region, data.reply_cb,
-				    data.cb_arg);
+	result = isc__nm_http_request(handle, &data.region, data.reply_cb,
+				      data.cb_arg);
 	if (result != ISC_R_SUCCESS) {
 		goto error;
 	}
@@ -555,7 +555,7 @@ doh_receive_send_reply_cb(isc_nmhandle_t *handle, isc_result_t eresult,
 			size_t i;
 			atomic_fetch_sub(&nsends, 1);
 			for (i = 0; i < NWRITES / 2; i++) {
-				eresult = isc_nm_httprequest(
+				eresult = isc__nm_http_request(
 					handle,
 					&(isc_region_t){
 						.base = (uint8_t *)send_msg.base,
@@ -694,7 +694,7 @@ doh_connect_send_two_requests_cb(isc_nmhandle_t *handle, isc_result_t result,
 		goto error;
 	}
 
-	result = isc_nm_httprequest(
+	result = isc__nm_http_request(
 		handle,
 		&(isc_region_t){ .base = (uint8_t *)send_msg.base,
 				 .length = send_msg.len },
@@ -703,7 +703,7 @@ doh_connect_send_two_requests_cb(isc_nmhandle_t *handle, isc_result_t result,
 		goto error;
 	}
 
-	result = isc_nm_httprequest(
+	result = isc__nm_http_request(
 		handle,
 		&(isc_region_t){ .base = (uint8_t *)send_msg.base,
 				 .length = send_msg.len },
