@@ -1407,11 +1407,10 @@ isc___nmhandle_get(isc_nmsocket_t *sock, isc_sockaddr_t *peer,
 		sock->statichandle = handle;
 	}
 
-	if (sock->type == isc_nm_httpsocket) {
+	if (sock->type == isc_nm_httpsocket && sock->h2.session) {
 		isc__nm_httpsession_attach(sock->h2.session,
 					   &handle->httpsession);
 	}
-
 
 	return (handle);
 }

@@ -760,7 +760,6 @@ typedef struct isc_nmsocket_h2 {
 		char *uri;
 		bool post;
 		void *cstream;
-		isc_nmsocket_t *transport;
 	} connect;
 } isc_nmsocket_h2_t;
 
