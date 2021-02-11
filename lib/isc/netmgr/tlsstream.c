@@ -961,7 +961,15 @@ isc__nm_tls_cleanup_data(isc_nmsocket_t *sock) {
 
 void
 isc__nm_tls_settimeout(isc_nmhandle_t *handle, uint32_t timeout) {
-	UNUSED(handle);
-	UNUSED(timeout);
-	/* XXX not implemented yet */
+	isc_nmsocket_t *sock = NULL;
+
+	REQUIRE(VALID_NMHANDLE(handle));
+	REQUIRE(VALID_NMSOCK(handle->sock));
+	REQUIRE(handle->sock->type == isc_nm_tlssocket);
+
+	sock = handle->sock;
+	if (sock->outerhandle != NULL) {
+		INSIST(VALID_NMHANDLE(sock->outerhandle));
+		isc_nmhandle_settimeout(sock->outerhandle, timeout);
+	}
 }
