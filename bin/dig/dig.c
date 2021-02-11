@@ -359,7 +359,7 @@ received(unsigned int bytes, isc_sockaddr_t *from, dig_query_t *query) {
 		} else {
 			proto = "UDP";
 		}
-		printf(";; SERVER: %s(%s) (%s)\n", fromtext, query->servname,
+		printf(";; SERVER: %s(%s) (%s)\n", fromtext, query->userarg,
 		       proto);
 		time(&tnow);
 		(void)localtime_r(&tnow, &tmnow);

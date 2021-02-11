@@ -1846,7 +1846,7 @@ isc_nm_listenhttp(isc_nm_t *mgr, isc_nmiface_t *iface, int backlog,
 /*
  * In DoH we just need to intercept the request - the response can be sent
  * to the client code via the nmhandle directly as it's always just the
- * http * content.
+ * http content.
  */
 static void
 http_callback(isc_nmhandle_t *handle, isc_result_t result, isc_region_t *data,

@@ -2800,7 +2800,7 @@ start_tcp(dig_query_t *query) {
 		} else if (query->lookup->https_mode) {
 			char uri[4096] = { 0 };
 			snprintf(uri, sizeof(uri), "https://%s:%u%s",
-				 query->servname, (uint16_t)port,
+				 query->userarg, (uint16_t)port,
 				 query->lookup->https_path);
 
 			if (!query->lookup->http_plain) {
