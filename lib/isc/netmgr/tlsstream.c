@@ -845,6 +845,7 @@ tcp_connected(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 	}
 	return;
 error:
+	update_result(tlssock, result);
 	tlshandle = isc__nmhandle_get(tlssock, NULL, NULL);
 	atomic_store(&tlssock->closed, true);
 	tls_call_connect_cb(tlssock, tlshandle, result);
@@ -882,17 +883,14 @@ isc__nm_async_tlsconnect(isc__networker_t *worker, isc__netievent_t *ev0) {
 	tlssock->timer_initialized = true;
 	tlssock->tlsstream.state = TLS_INIT;
 
-	/*
-	 * We ignore the return code, because even in the case of
-	 * failure, the callback will be called and the error code
-	 * passed to it.
-	 */
 	result = isc_nm_tcpconnect(worker->mgr, (isc_nmiface_t *)&ievent->local,
 				   (isc_nmiface_t *)&ievent->peer,
 				   tcp_connected, tlssock,
 				   tlssock->connect_timeout, 0);
-	update_result(tlssock, result);
-	return;
+	if (result == ISC_R_SUCCESS) {
+		update_result(tlssock, result);
+		return;
+	}
 
 error:
 	tlshandle = isc__nmhandle_get(tlssock, NULL, NULL);

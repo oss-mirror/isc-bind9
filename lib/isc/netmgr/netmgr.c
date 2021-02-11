@@ -1868,21 +1868,20 @@ isc_nm_stoplistening(isc_nmsocket_t *sock) {
 static void
 nm_connectcb(isc_nmsocket_t *sock, isc__nm_uvreq_t *uvreq, isc_result_t eresult,
 	     bool force_async) {
+	isc__netievent_connectcb_t *ievent = NULL;
+
 	REQUIRE(VALID_NMSOCK(sock));
 	REQUIRE(VALID_UVREQ(uvreq));
 	REQUIRE(VALID_NMHANDLE(uvreq->handle));
 
-	if (eresult == ISC_R_SUCCESS && !force_async) {
-		isc__netievent_connectcb_t ievent = { .sock = sock,
-						      .req = uvreq,
-						      .result = eresult };
-		isc__nm_async_connectcb(NULL, (isc__netievent_t *)&ievent);
-	} else {
-		isc__netievent_connectcb_t *ievent =
-			isc__nm_get_netievent_connectcb(sock->mgr, sock, uvreq,
-							eresult);
+	ievent = isc__nm_get_netievent_connectcb(sock->mgr, sock, uvreq,
+						 eresult);
+	if (force_async) {
 		isc__nm_enqueue_ievent(&sock->mgr->workers[sock->tid],
 				       (isc__netievent_t *)ievent);
+	} else {
+		isc__nm_maybe_enqueue_ievent(&sock->mgr->workers[sock->tid],
+					     (isc__netievent_t *)ievent);
 	}
 }
 
