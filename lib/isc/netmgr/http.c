@@ -426,7 +426,7 @@ on_stream_close_callback(nghttp2_session *ngsession, int32_t stream_id,
 				rv = nghttp2_session_terminate_session(
 					ngsession, NGHTTP2_NO_ERROR);
 				if (rv != 0) {
-					return (NGHTTP2_ERR_CALLBACK_FAILURE);
+					return (rv);
 				}
 				if (session->handle->sock->h2.session->reading)
 				{
@@ -447,7 +447,7 @@ on_stream_close_callback(nghttp2_session *ngsession, int32_t stream_id,
 		}
 		isc__nmsocket_prep_destroy(sock);
 		if (rv != 0) {
-			return (NGHTTP2_ERR_CALLBACK_FAILURE);
+			return (rv);
 		}
 	}
 
@@ -523,7 +523,7 @@ client_on_header_callback(nghttp2_session *ngsession,
 			client_handle_content_type_header(cstream, value,
 							  valuelen);
 			if (!cstream->response_status.content_type_valid) {
-				return (NGHTTP2_ERR_CALLBACK_FAILURE);
+				return (NGHTTP2_ERR_HTTP_HEADER);
 			}
 		}
 		break;
@@ -705,7 +705,7 @@ http_readcb(isc_nmhandle_t *handle, isc_result_t result, isc_region_t *region,
 	readlen = nghttp2_session_mem_recv(session->ngsession, region->base,
 					   region->length);
 	if (readlen < 0) {
-		failed_read_cb(ISC_R_CANCELED, session);
+		failed_read_cb(ISC_R_UNEXPECTED, session);
 		return;
 	}
 
