@@ -236,6 +236,7 @@ tostruct_nsec3param(ARGS_TOSTRUCT) {
 	nsec3param->hash = uint8_consume_fromregion(&region);
 	nsec3param->flags = uint8_consume_fromregion(&region);
 	nsec3param->iterations = uint16_consume_fromregion(&region);
+	TAINT_INSIST(nsec3param->iterations <= 0xffffU);
 
 	nsec3param->salt_length = uint8_consume_fromregion(&region);
 	INSIST(nsec3param->salt_length == region.length);
