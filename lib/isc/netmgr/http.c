@@ -1585,6 +1585,7 @@ isc__nm_async_httpsend(isc__networker_t *worker, isc__netievent_t *ev0) {
 
 	REQUIRE(VALID_NMSOCK(sock));
 	REQUIRE(VALID_UVREQ(req));
+	REQUIRE(VALID_HTTP2_SESSION(sock->h2.session));
 
 	ievent->req = NULL;
 	handle = req->handle;
@@ -1610,14 +1611,14 @@ isc__nm_async_httpsend(isc__networker_t *worker, isc__netievent_t *ev0) {
 	}
 
 	/* Server send */
-	REQUIRE(VALID_NMHANDLE(handle->httpsession->handle));
-	REQUIRE(VALID_NMSOCK(handle->httpsession->handle->sock));
-	REQUIRE(handle->httpsession->handle->sock->tid == isc_nm_tid());
-
 	if (inactive(sock) || handle->httpsession->closed) {
 		failed_send_cb(sock, req, ISC_R_CANCELED);
 		return;
 	}
+
+	INSIST(handle->httpsession->handle->sock->tid == isc_nm_tid());
+	INSIST(VALID_NMHANDLE(handle->httpsession->handle));
+	INSIST(VALID_NMSOCK(handle->httpsession->handle->sock));
 
 	memmove(sock->h2.buf, req->uvbuf.base, req->uvbuf.len);
 	sock->h2.bufsize = req->uvbuf.len;
