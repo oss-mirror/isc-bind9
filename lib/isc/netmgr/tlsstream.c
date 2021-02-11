@@ -779,6 +779,10 @@ isc_nm_tlsconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 	isc_nmsocket_t *nsock = NULL, *tsock = NULL;
 	isc__netievent_tlsconnect_t *ievent = NULL;
 	isc_result_t result = ISC_R_DEFAULT;
+#if defined(NETMGR_TRACE) && defined(NETMGR_TRACE_VERBOSE)
+	fprintf(stderr, "TLS: isc_nm_tlsconnect(): in net thread: %s\n",
+		isc__nm_in_netthread() ? "yes" : "no");
+#endif /* NETMGR_TRACE */
 
 	REQUIRE(VALID_NM(mgr));
 
@@ -790,6 +794,7 @@ isc_nm_tlsconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 	nsock->connect_cbarg = cbarg;
 	nsock->connect_timeout = timeout;
 	nsock->tlsstream.ctx = ctx;
+	nsock->tlsstream.connect_from_networker = isc__nm_in_netthread();
 
 	ievent = isc__nm_get_netievent_tlsconnect(mgr, nsock);
 	ievent->local = local->addr;
@@ -869,7 +874,6 @@ isc__nm_async_tlsconnect(isc__networker_t *worker, isc__netievent_t *ev0) {
 	tlssock->tlsstream.tls = isc_tls_create(tlssock->tlsstream.ctx);
 	if (tlssock->tlsstream.tls == NULL) {
 		result = ISC_R_TLSERROR;
-		update_result(tlssock, result);
 		goto error;
 	}
 
@@ -882,9 +886,13 @@ isc__nm_async_tlsconnect(isc__networker_t *worker, isc__netievent_t *ev0) {
 	tlssock->timer_initialized = true;
 	tlssock->tlsstream.state = TLS_INIT;
 
-	(void)isc_nm_tcpconnect(worker->mgr, (isc_nmiface_t *)&ievent->local,
-				(isc_nmiface_t *)&ievent->peer, tcp_connected,
-				tlssock, tlssock->connect_timeout, 0);
+	result = isc_nm_tcpconnect(worker->mgr, (isc_nmiface_t *)&ievent->local,
+				   (isc_nmiface_t *)&ievent->peer,
+				   tcp_connected, tlssock,
+				   tlssock->connect_timeout, 0);
+	if (tlssock->tlsstream.connect_from_networker) {
+		update_result(tlssock, result);
+	}
 	return;
 
 error:

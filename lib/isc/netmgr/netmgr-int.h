@@ -809,6 +809,7 @@ struct isc_nmsocket {
 		isc_tlsctx_t *ctx;
 		BIO *ssl_bio;
 		isc_nmsocket_t *tlslistener;
+		bool connect_from_networker;
 		enum {
 			TLS_INIT,
 			TLS_HANDSHAKE,
