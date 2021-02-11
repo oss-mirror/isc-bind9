@@ -74,18 +74,21 @@ inactive(isc_nmsocket_t *sock) {
 
 static void
 update_result(isc_nmsocket_t *sock, const isc_result_t result) {
-	if (!sock->tlsstream.server) {
-		LOCK(&sock->lock);
-		sock->result = result;
-		SIGNAL(&sock->cond);
-		while (!atomic_load(&sock->active)) {
-			WAIT(&sock->scond, &sock->lock);
+	if (!atomic_load(&sock->tlsstream.result_updated)) {
+		atomic_store(&sock->tlsstream.result_updated, true);
+		if (!sock->tlsstream.server) {
+			LOCK(&sock->lock);
+			sock->result = result;
+			SIGNAL(&sock->cond);
+			while (!atomic_load(&sock->active)) {
+				WAIT(&sock->scond, &sock->lock);
+			}
+			UNLOCK(&sock->lock);
+		} else {
+			LOCK(&sock->lock);
+			sock->result = result;
+			UNLOCK(&sock->lock);
 		}
-		UNLOCK(&sock->lock);
-	} else {
-		LOCK(&sock->lock);
-		sock->result = result;
-		UNLOCK(&sock->lock);
 	}
 }
 
