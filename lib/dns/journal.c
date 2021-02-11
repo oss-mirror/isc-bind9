@@ -497,6 +497,7 @@ journal_read_xhdr(dns_journal_t *j, journal_xhdr_t *xhdr) {
 		xhdr->count = 0;
 		xhdr->serial0 = decode_uint32(raw.serial0);
 		xhdr->serial1 = decode_uint32(raw.serial1);
+		TAINT_INSIST(xhdr->serial1 <= 0xffffffffU);
 		j->curxhdr = *xhdr;
 		return (ISC_R_SUCCESS);
 	}
@@ -511,6 +512,7 @@ journal_read_xhdr(dns_journal_t *j, journal_xhdr_t *xhdr) {
 		xhdr->count = decode_uint32(raw.count);
 		xhdr->serial0 = decode_uint32(raw.serial0);
 		xhdr->serial1 = decode_uint32(raw.serial1);
+		TAINT_INSIST(xhdr->serial1 <= 0xffffffffU);
 		j->curxhdr = *xhdr;
 		return (ISC_R_SUCCESS);
 	}
