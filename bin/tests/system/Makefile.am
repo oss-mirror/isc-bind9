@@ -151,7 +151,6 @@ TESTS +=			\
 	views			\
 	wildcard		\
 	xferquota		\
-	xot			\
 	zonechecks
 
 # eddsa test is broken
@@ -177,7 +176,7 @@ TESTS +=		\
 	nsupdate	\
 	resolver	\
 	statistics	\
-	dot		\
+	doth		\
 	upforwd		\
 	zero
 

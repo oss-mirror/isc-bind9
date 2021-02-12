@@ -1435,12 +1435,12 @@ plus_option(char *option, bool is_batchfile, bool *need_clone,
 		case 't':
 			FULLCHECK4("https", "https-get", "https-post",
 				   "http-plain");
+			if (lookup->https_path != NULL) {
+				isc_mem_free(mctx, lookup->https_path);
+				lookup->https_path = NULL;
+			}
 			if (!state) {
 				lookup->https_mode = false;
-				if (lookup->https_path != NULL) {
-					isc_mem_free(mctx, lookup->https_path);
-					lookup->https_path = NULL;
-				}
 				break;
 			}
 			if (cmd[4] == '-') {
