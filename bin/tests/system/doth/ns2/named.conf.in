@@ -20,10 +20,6 @@ tls local {
 	cert-file "cert.pem";
 };
 
-http local {
-	endpoints { "/dns-query"; };
-};
-
 options {
 	query-source address 10.53.0.2;
 	notify-source 10.53.0.2;
@@ -34,9 +30,9 @@ options {
 	http-port @HTTPPORT@;
 	pid-file "named.pid";
 	listen-on { 10.53.0.2; };
-	listen-on tls local { 10.53.0.2; };             // DoT
-	listen-on tls local http local { 10.53.0.2; };  // DoH
-	listen-on http local { 10.53.0.2; };            // unencrypted DoH
+	listen-on tls local { 10.53.0.2; };               // DoT
+	listen-on tls local http default { 10.53.0.2; };  // DoH
+	listen-on http default { 10.53.0.2; };            // unencrypted DoH
 	listen-on-v6 { none; };
 	recursion no;
 	notify no;
