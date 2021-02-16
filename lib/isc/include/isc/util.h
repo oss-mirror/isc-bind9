@@ -305,6 +305,16 @@ mock_assert(const int result, const char *const expression,
 #endif /* UNIT_TESTING */
 
 /*
+ * TAINT_INSIST adds a INSIST to silence coverity warnings which fall foul
+ * of other static analysis tools which complain that it is redunant.
+ */
+#ifdef __COVERITY__
+#define TAINT_INSIST(x) INSIST(x)
+#else
+#define TAINT_INSIST(x) (void)0
+#endif
+
+/*
  * Errors
  */
 #include <isc/error.h> /* Contractual promise. */
