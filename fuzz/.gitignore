@@ -2,6 +2,7 @@
 /*.out/
 /dns_message_parse
 /dns_name_fromtext_target
+/dns_rdata_fromtext
 /dns_rdata_fromwire_text
 /isc_lex_getmastertoken
 /isc_lex_gettoken
