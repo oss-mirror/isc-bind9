@@ -180,6 +180,12 @@ stages:
 
 ### Job Templates
 
+.schedules-tags-web-triggering-rules: &schedules_tags_web_triggering_rules
+  only:
+    - schedules
+    - tags
+    - web
+
 .default-triggering-rules: &default_triggering_rules
   only:
     - merge_requests
@@ -341,10 +347,6 @@ stages:
     untracked: true
     expire_in: "1 day"
     when: on_failure
-  only:
-    - schedules
-    - tags
-    - web
 
 .unit_test_common: &unit_test_common
   <<: *default_triggering_rules
@@ -1211,9 +1213,22 @@ msvc:windows:amd64:
   variables:
     VSCONF: Release
 
+system:mini:msvc:windows:amd64:
+  <<: *windows_server_2016_amd64_image
+  <<: *windows_system_test_job
+  variables:
+    TESTDIRS: glue
+    VSCONF: Release
+  only:
+    - merge_requests
+  needs:
+    - job: msvc:windows:amd64
+      artifacts: true
+
 system:msvc:windows:amd64:
   <<: *windows_server_2016_amd64_image
   <<: *windows_system_test_job
+  <<: *schedules_tags_web_triggering_rules
   variables:
     VSCONF: Release
   needs:
@@ -1233,6 +1248,7 @@ msvc-debug:windows:amd64:
 system:msvc-debug:windows:amd64:
   <<: *windows_server_2016_amd64_image
   <<: *windows_system_test_job
+  <<: *schedules_tags_web_triggering_rules
   variables:
     VSCONF: Debug
   needs:

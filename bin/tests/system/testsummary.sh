@@ -75,7 +75,7 @@ if [ -n "${TSAN_REPORT_TESTS}" ]; then
 fi
 
 RESULTS_FOUND=`grep -c 'R:[a-z0-9_-][a-z0-9_-]*:[A-Z][A-Z]*' systests.output`
-TESTS_RUN=`echo "${SUBDIRS}" | wc -w`
+TESTS_RUN=`echo "${TESTDIRS:-$SUBDIRS}" | wc -w`
 if [ "${RESULTS_FOUND}" -ne "${TESTS_RUN}" ]; then
 	echofail "I:Found ${RESULTS_FOUND} test results, but ${TESTS_RUN} tests were run"
 	status=1
