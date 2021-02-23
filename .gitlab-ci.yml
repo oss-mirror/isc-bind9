@@ -1244,6 +1244,18 @@ msvc:windows:amd64:
   variables:
     VSCONF: Release
 
+system:mini:msvc:windows:amd64:
+  <<: *windows_server_2016_amd64_image
+  <<: *windows_system_test_job
+  variables:
+    CUSTOM_TEST_SET: "glue"
+    VSCONF: Release
+  only:
+    - merge_requests
+  needs:
+    - job: msvc:windows:amd64
+      artifacts: true
+
 system:msvc:windows:amd64:
   <<: *windows_server_2016_amd64_image
   <<: *windows_system_test_job

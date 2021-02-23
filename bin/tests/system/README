@@ -645,7 +645,9 @@ do so.
 
 * conf.sh.win32 This is the Windows equivalent of conf.sh.in.  The name of the
 test should be added to the PARALLELDIRS or SEQUENTIALDIRS variables as
-appropriate.
+appropriate. When the CUSTOM_TEST_SET variable is set, tests in
+PARALLELDIRS and SEQUENTIALDIRS are not taken into account and tests
+defined in the CUSTOM_TEST_SET variable are run in parallel instead.
 
 * Makefile.in The name of the test should be added to one of the the PARALLEL
 or SEQUENTIAL variables.

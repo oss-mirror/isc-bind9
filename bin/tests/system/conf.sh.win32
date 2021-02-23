@@ -85,6 +85,12 @@ PARALLELDIRS="$PARALLEL_COMMON $PARALLEL_WINDOWS"
 
 SUBDIRS="$SEQUENTIALDIRS $PARALLELDIRS"
 
+if [ -n "${CUSTOM_TEST_SET:-}" ]; then
+	PARALLELDIRS="${CUSTOM_TEST_SET}"
+	SEQUENTIALDIRS=
+	SUBDIRS="${CUSTOM_TEST_SET}"
+fi
+
 # Things that are different on Windows
 KILL="/bin/kill -f"
 DIFF="diff --strip-trailing-cr"
