@@ -22,12 +22,9 @@
 
 bool debug = false;
 
-static isc_mem_t *mctx = NULL;
-
 int
 LLVMFuzzerInitialize(int *argc __attribute__((unused)),
 		     char ***argv __attribute__((unused))) {
-	isc_mem_create(&mctx);
 	return (0);
 }
 
