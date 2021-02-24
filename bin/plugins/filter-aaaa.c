@@ -516,9 +516,6 @@ client_state_create(const query_ctx_t *qctx, filter_instance_t *inst) {
 	isc_result_t result;
 
 	client_state = isc_mempool_get(inst->datapool);
-	if (client_state == NULL) {
-		return;
-	}
 
 	client_state->mode = NONE;
 	client_state->flags = 0;
