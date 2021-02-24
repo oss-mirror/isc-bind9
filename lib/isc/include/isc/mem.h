@@ -382,7 +382,6 @@ isc_mempool_create(isc_mem_t *mctx, size_t size, isc_mempool_t **mpctxp);
  *\li	mpctxp != NULL and *mpctxp == NULL
  *
  * Defaults:
- *\li	maxalloc = UINT_MAX
  *\li	freemax = 1
  *\li	fillcount = 1
  *
@@ -442,12 +441,10 @@ isc_mempool_associatelock(isc_mempool_t *mpctx, isc_mutex_t *lock);
 /*
  * The following functions get/set various parameters.  Note that due to
  * the unlocked nature of pools these are potentially random values
- *unless the imposed externally provided locking protocols are followed.
+ * unless the imposed externally provided locking protocols are followed.
  *
  * Also note that the quota limits will not always take immediate
- *effect. For instance, setting "maxalloc" to a number smaller than the
- *currently allocated count is permitted.  New allocations will be
- *refused until the count drops below this threshold.
+ * effect.
  *
  * All functions require (in addition to other requirements):
  *	mpctx is a valid memory pool
@@ -469,21 +466,6 @@ unsigned int
 isc_mempool_getfreecount(isc_mempool_t *mpctx);
 /*%<
  * Returns current size of the free list.
- */
-
-unsigned int
-isc_mempool_getmaxalloc(isc_mempool_t *mpctx);
-/*!<
- * Returns the maximum allowed number of allocations.
- */
-
-void
-isc_mempool_setmaxalloc(isc_mempool_t *mpctx, unsigned int limit);
-/*%<
- * Sets the maximum allowed number of allocations.
- *
- * Additional requirements:
- *\li	limit > 0
  */
 
 unsigned int
