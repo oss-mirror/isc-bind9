@@ -1009,9 +1009,6 @@ getquestions(isc_buffer_t *source, dns_message_t *msg, dns_decompress_t *dctx,
 
 	for (count = 0; count < msg->counts[DNS_SECTION_QUESTION]; count++) {
 		name = isc_mempool_get(msg->namepool);
-		if (name == NULL) {
-			return (ISC_R_NOMEMORY);
-		}
 		free_name = true;
 
 		offsets = newoffsets(msg);
@@ -1108,10 +1105,6 @@ getquestions(isc_buffer_t *source, dns_message_t *msg, dns_decompress_t *dctx,
 			goto cleanup;
 		}
 		rdataset = isc_mempool_get(msg->rdspool);
-		if (rdataset == NULL) {
-			result = ISC_R_NOMEMORY;
-			goto cleanup;
-		}
 
 		/*
 		 * Convert rdatalist to rdataset, and attach the latter to
@@ -1260,9 +1253,6 @@ getsection(isc_buffer_t *source, dns_message_t *msg, dns_decompress_t *dctx,
 		istsig = false;
 
 		name = isc_mempool_get(msg->namepool);
-		if (name == NULL) {
-			return (ISC_R_NOMEMORY);
-		}
 		free_name = true;
 
 		offsets = newoffsets(msg);
@@ -1564,10 +1554,6 @@ getsection(isc_buffer_t *source, dns_message_t *msg, dns_decompress_t *dctx,
 
 		if (result == ISC_R_NOTFOUND) {
 			rdataset = isc_mempool_get(msg->rdspool);
-			if (rdataset == NULL) {
-				result = ISC_R_NOMEMORY;
-				goto cleanup;
-			}
 			free_rdataset = true;
 
 			rdatalist = newrdatalist(msg);
@@ -2577,9 +2563,6 @@ dns_message_gettempname(dns_message_t *msg, dns_name_t **item) {
 	REQUIRE(item != NULL && *item == NULL);
 
 	*item = isc_mempool_get(msg->namepool);
-	if (*item == NULL) {
-		return (ISC_R_NOMEMORY);
-	}
 	dns_name_init(*item, NULL);
 
 	return (ISC_R_SUCCESS);
@@ -2617,9 +2600,6 @@ dns_message_gettemprdataset(dns_message_t *msg, dns_rdataset_t **item) {
 	REQUIRE(item != NULL && *item == NULL);
 
 	*item = isc_mempool_get(msg->rdspool);
-	if (*item == NULL) {
-		return (ISC_R_NOMEMORY);
-	}
 
 	dns_rdataset_init(*item);
 

@@ -2386,9 +2386,6 @@ setup_lookup(dig_lookup_t *lookup) {
 	}
 
 	lookup->sendspace = isc_mempool_get(commctx);
-	if (lookup->sendspace == NULL) {
-		fatal("memory allocation failure");
-	}
 
 	result = dns_compress_init(&cctx, -1, mctx);
 	check_result(result, "dns_compress_init");
