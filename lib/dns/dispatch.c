@@ -1817,19 +1817,16 @@ dns_dispatchmgr_create(isc_mem_t *mctx, dns_dispatchmgr_t **mgrp) {
 	isc_mempool_create(mgr->mctx, sizeof(dns_dispatch_t), &mgr->dpool);
 
 	isc_mempool_setname(mgr->depool, "dispmgr_depool");
-	isc_mempool_setmaxalloc(mgr->depool, 32768);
 	isc_mempool_setfreemax(mgr->depool, 32768);
 	isc_mempool_associatelock(mgr->depool, &mgr->depool_lock);
 	isc_mempool_setfillcount(mgr->depool, 32);
 
 	isc_mempool_setname(mgr->rpool, "dispmgr_rpool");
-	isc_mempool_setmaxalloc(mgr->rpool, 32768);
 	isc_mempool_setfreemax(mgr->rpool, 32768);
 	isc_mempool_associatelock(mgr->rpool, &mgr->rpool_lock);
 	isc_mempool_setfillcount(mgr->rpool, 32);
 
 	isc_mempool_setname(mgr->dpool, "dispmgr_dpool");
-	isc_mempool_setmaxalloc(mgr->dpool, 32768);
 	isc_mempool_setfreemax(mgr->dpool, 32768);
 	isc_mempool_associatelock(mgr->dpool, &mgr->dpool_lock);
 	isc_mempool_setfillcount(mgr->dpool, 32);
@@ -1996,14 +1993,12 @@ dns_dispatchmgr_setudp(dns_dispatchmgr_t *mgr, unsigned int buffersize,
 		 * complexity.
 		 */
 		if (maxbuffers > mgr->maxbuffers) {
-			isc_mempool_setmaxalloc(mgr->bpool, maxbuffers);
 			isc_mempool_setfreemax(mgr->bpool, maxbuffers);
 			mgr->maxbuffers = maxbuffers;
 		}
 	} else {
 		isc_mempool_create(mgr->mctx, buffersize, &mgr->bpool);
 		isc_mempool_setname(mgr->bpool, "dispmgr_bpool");
-		isc_mempool_setmaxalloc(mgr->bpool, maxbuffers);
 		isc_mempool_setfreemax(mgr->bpool, maxbuffers);
 		isc_mempool_associatelock(mgr->bpool, &mgr->bpool_lock);
 		isc_mempool_setfillcount(mgr->bpool, 32);
@@ -2012,8 +2007,6 @@ dns_dispatchmgr_setudp(dns_dispatchmgr_t *mgr, unsigned int buffersize,
 	/* Create or adjust socket pool */
 	if (mgr->spool != NULL) {
 		if (maxrequests < DNS_DISPATCH_POOLSOCKS * 2) {
-			isc_mempool_setmaxalloc(mgr->spool,
-						DNS_DISPATCH_POOLSOCKS * 2);
 			isc_mempool_setfreemax(mgr->spool,
 					       DNS_DISPATCH_POOLSOCKS * 2);
 		}
@@ -2023,7 +2016,6 @@ dns_dispatchmgr_setudp(dns_dispatchmgr_t *mgr, unsigned int buffersize,
 	isc_mempool_create(mgr->mctx, sizeof(dispsocket_t), &mgr->spool);
 
 	isc_mempool_setname(mgr->spool, "dispmgr_spool");
-	isc_mempool_setmaxalloc(mgr->spool, maxrequests);
 	isc_mempool_setfreemax(mgr->spool, maxrequests);
 	isc_mempool_associatelock(mgr->spool, &mgr->spool_lock);
 	isc_mempool_setfillcount(mgr->spool, 32);
@@ -2923,7 +2915,6 @@ dispatch_createudp(dns_dispatchmgr_t *mgr, isc_socketmgr_t *sockmgr,
 	isc_mutex_init(&disp->sepool_lock);
 
 	isc_mempool_setname(disp->sepool, "disp_sepool");
-	isc_mempool_setmaxalloc(disp->sepool, 32768);
 	isc_mempool_setfreemax(disp->sepool, 32768);
 	isc_mempool_associatelock(disp->sepool, &disp->sepool_lock);
 	isc_mempool_setfillcount(disp->sepool, 16);
