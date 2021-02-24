@@ -1735,9 +1735,6 @@ new_adbname(dns_adb_t *adb, const dns_name_t *dnsname) {
 	dns_adbname_t *name;
 
 	name = isc_mempool_get(adb->nmp);
-	if (name == NULL) {
-		return (NULL);
-	}
 
 	dns_name_init(&name->name, NULL);
 	dns_name_dup(dnsname, adb->mctx, &name->name);
@@ -1807,9 +1804,6 @@ new_adbnamehook(dns_adb_t *adb, dns_adbentry_t *entry) {
 	dns_adbnamehook_t *nh;
 
 	nh = isc_mempool_get(adb->nhmp);
-	if (nh == NULL) {
-		return (NULL);
-	}
 
 	nh->magic = DNS_ADBNAMEHOOK_MAGIC;
 	nh->entry = entry;
@@ -1839,9 +1833,6 @@ new_adblameinfo(dns_adb_t *adb, const dns_name_t *qname,
 	dns_adblameinfo_t *li;
 
 	li = isc_mempool_get(adb->limp);
-	if (li == NULL) {
-		return (NULL);
-	}
 
 	dns_name_init(&li->qname, NULL);
 	dns_name_dup(qname, adb->mctx, &li->qname);
@@ -1875,9 +1866,6 @@ new_adbentry(dns_adb_t *adb) {
 	dns_adbentry_t *e;
 
 	e = isc_mempool_get(adb->emp);
-	if (e == NULL) {
-		return (NULL);
-	}
 
 	e->magic = DNS_ADBENTRY_MAGIC;
 	e->lock_bucket = DNS_ADB_INVALIDBUCKET;
@@ -1956,9 +1944,6 @@ new_adbfind(dns_adb_t *adb) {
 	dns_adbfind_t *h;
 
 	h = isc_mempool_get(adb->ahmp);
-	if (h == NULL) {
-		return (NULL);
-	}
 
 	/*
 	 * Public members.
@@ -1994,9 +1979,6 @@ new_adbfetch(dns_adb_t *adb) {
 	dns_adbfetch_t *f;
 
 	f = isc_mempool_get(adb->afmp);
-	if (f == NULL) {
-		return (NULL);
-	}
 
 	f->magic = 0;
 	f->fetch = NULL;
@@ -2056,9 +2038,6 @@ new_adbaddrinfo(dns_adb_t *adb, dns_adbentry_t *entry, in_port_t port) {
 	dns_adbaddrinfo_t *ai;
 
 	ai = isc_mempool_get(adb->aimp);
-	if (ai == NULL) {
-		return (NULL);
-	}
 
 	ai->magic = DNS_ADBADDRINFO_MAGIC;
 	ai->sockaddr = entry->sockaddr;
