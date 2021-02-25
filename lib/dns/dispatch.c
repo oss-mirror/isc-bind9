@@ -1619,7 +1619,7 @@ static bool
 destroy_mgr_ok(dns_dispatchmgr_t *mgr) {
 	mgr_log(mgr, LVL(90),
 		"destroy_mgr_ok: shuttingdown=%d, listnonempty=%d, "
-		"depool=%d, rpool=%d, dpool=%d",
+		"depool=%zu, rpool=%zu, dpool=%zu",
 		MGR_IS_SHUTTINGDOWN(mgr), !ISC_LIST_EMPTY(mgr->list),
 		isc_mempool_getallocated(mgr->depool),
 		isc_mempool_getallocated(mgr->rpool),
