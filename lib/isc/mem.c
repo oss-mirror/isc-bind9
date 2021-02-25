@@ -172,7 +172,6 @@ struct isc_mempool {
 	size_t size;		 /*%< size of each item on this pool */
 	atomic_size_t allocated; /*%< # of items currently given out */
 	atomic_size_t freecount; /*%< # of items on reserved list */
-	atomic_size_t freemax;	 /*%< # of items allowed on free list */
 	/*%< Stats only. */
 	atomic_size_t gets; /*%< # of requests to this pool */
 			    /*%< Debugging only. */
@@ -874,16 +873,15 @@ isc_mem_stats(isc_mem_t *ctx, FILE *out) {
 	pool = ISC_LIST_HEAD(ctx->pools);
 	if (pool != NULL) {
 		fprintf(out, "[Pool statistics]\n");
-		fprintf(out, "%15s %10s %10s %10s %10s %10s %1s\n", "name",
-			"size", "allocated", "freecount", "freemax",
+		fprintf(out, "%15s %10s %10s %10s %10s %1s\n", "name",
+			"size", "allocated", "freecount",
 			"gets", "L");
 	}
 	while (pool != NULL) {
-		fprintf(out, "%15s %10zu %10zu %10zu %10zu %10zu %s\n",
+		fprintf(out, "%15s %10zu %10zu %10zu %10zu %s\n",
 			pool->name, pool->size,
 			atomic_load_relaxed(&pool->allocated),
 			atomic_load_relaxed(&pool->freecount),
-			atomic_load_relaxed(&pool->freemax),
 			atomic_load_relaxed(&pool->gets),
 			(pool->lock == NULL ? "N" : "Y"));
 		pool = ISC_LIST_NEXT(pool, link);
@@ -1203,7 +1201,6 @@ isc_mempool_create(isc_mem_t *mctx, size_t size, isc_mempool_t **mpctxp) {
 
 	atomic_init(&mpctx->allocated, 0);
 	atomic_init(&mpctx->freecount, 0);
-	atomic_init(&mpctx->freemax, 1);
 
 	*mpctxp = (isc_mempool_t *)mpctx;
 
@@ -1320,29 +1317,27 @@ isc__mempool_get(isc_mempool_t *mpctx FLARG) {
 	REQUIRE(VALID_MEMPOOL(mpctx));
 
 	element *item;
-	unsigned int i;
 
 	MPCTXLOCK(mpctx);
 	if (ISC_UNLIKELY(mpctx->items == NULL)) {
 		isc_mem_t *mctx = mpctx->mctx;
 		item = mem_get(mctx, mpctx->size);
 		mem_getstats(mctx, mpctx->size);
-		item->next = NULL;
 	} else {
 		item = mpctx->items;
+		mpctx->items = item->next;
 	}
+	MPCTXUNLOCK(mpctx);
+
 	REQUIRE(item != NULL);
 
-	mpctx->items = item->next;
+	item->next = NULL;
 
 	INSIST(atomic_fetch_sub_release(&mpctx->freecount, 1) > 0);
 	atomic_fetch_add_relaxed(&mpctx->gets, 1);
 	atomic_fetch_add_release(&mpctx->allocated, 1);
 
 	ADD_TRACE(mpctx->mctx, item, mpctx->size, file, line);
-
-out:
-	MPCTXUNLOCK(mpctx);
 
 	return (item);
 }
@@ -1356,16 +1351,17 @@ isc__mempool_put(isc_mempool_t *mpctx, void *mem FLARG) {
 	isc_mem_t *mctx = mpctx->mctx;
 	element *item;
 	size_t freecount = atomic_load_acquire(&mpctx->freecount);
-	size_t freemax = atomic_load_acquire(&mpctx->freemax);
+	size_t allocated = atomic_fetch_sub_release(&mpctx->allocated, 1);
 
-	INSIST(atomic_fetch_sub_release(&mpctx->allocated, 1) > 0);
+	INSIST(allocated > 0);
 
 	DELETE_TRACE(mctx, mem, mpctx->size, file, line);
 
 	/*
-	 * If our free list is full, return this to the mctx directly.
+	 * If the number of freeitems is more than number of allocated items,
+	 * return the item to the allocator.
 	 */
-	if (freecount >= freemax) {
+	if (freecount >= allocated) {
 		mem_putstats(mctx, mem, mpctx->size);
 		mem_put(mctx, mem, mpctx->size);
 		return;
@@ -1389,20 +1385,6 @@ isc__mempool_put(isc_mempool_t *mpctx, void *mem FLARG) {
 /*
  * Quotas
  */
-
-void
-isc_mempool_setfreemax(isc_mempool_t *mpctx, unsigned int limit) {
-	REQUIRE(VALID_MEMPOOL(mpctx));
-
-	atomic_store_release(&mpctx->freemax, limit);
-}
-
-unsigned int
-isc_mempool_getfreemax(isc_mempool_t *mpctx) {
-	REQUIRE(VALID_MEMPOOL(mpctx));
-
-	return (atomic_load_acquire(&mpctx->freemax));
-}
 
 unsigned int
 isc_mempool_getfreecount(isc_mempool_t *mpctx) {

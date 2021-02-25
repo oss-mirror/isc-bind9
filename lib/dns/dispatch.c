@@ -1808,15 +1808,12 @@ dns_dispatchmgr_create(isc_mem_t *mctx, dns_dispatchmgr_t **mgrp) {
 	isc_mempool_create(mgr->mctx, sizeof(dns_dispatch_t), &mgr->dpool);
 
 	isc_mempool_setname(mgr->depool, "dispmgr_depool");
-	isc_mempool_setfreemax(mgr->depool, 32768);
 	isc_mempool_associatelock(mgr->depool, &mgr->depool_lock);
 
 	isc_mempool_setname(mgr->rpool, "dispmgr_rpool");
-	isc_mempool_setfreemax(mgr->rpool, 32768);
 	isc_mempool_associatelock(mgr->rpool, &mgr->rpool_lock);
 
 	isc_mempool_setname(mgr->dpool, "dispmgr_dpool");
-	isc_mempool_setfreemax(mgr->dpool, 32768);
 	isc_mempool_associatelock(mgr->dpool, &mgr->dpool_lock);
 
 	mgr->buffers = 0;
@@ -1951,6 +1948,8 @@ dns_dispatchmgr_setudp(dns_dispatchmgr_t *mgr, unsigned int buffersize,
 	REQUIRE(buckets < 2097169); /* next prime > 65536 * 32 */
 	REQUIRE(increment > buckets);
 
+	UNUSED(maxrequests);
+
 	/*
 	 * Keep some number of items around.  This should be a config
 	 * option.  For now, keep 8, but later keep at least two even
@@ -1981,29 +1980,22 @@ dns_dispatchmgr_setudp(dns_dispatchmgr_t *mgr, unsigned int buffersize,
 		 * complexity.
 		 */
 		if (maxbuffers > mgr->maxbuffers) {
-			isc_mempool_setfreemax(mgr->bpool, maxbuffers);
 			mgr->maxbuffers = maxbuffers;
 		}
 	} else {
 		isc_mempool_create(mgr->mctx, buffersize, &mgr->bpool);
 		isc_mempool_setname(mgr->bpool, "dispmgr_bpool");
-		isc_mempool_setfreemax(mgr->bpool, maxbuffers);
 		isc_mempool_associatelock(mgr->bpool, &mgr->bpool_lock);
 	}
 
 	/* Create or adjust socket pool */
 	if (mgr->spool != NULL) {
-		if (maxrequests < DNS_DISPATCH_POOLSOCKS * 2) {
-			isc_mempool_setfreemax(mgr->spool,
-					       DNS_DISPATCH_POOLSOCKS * 2);
-		}
 		UNLOCK(&mgr->buffer_lock);
 		return (ISC_R_SUCCESS);
 	}
 	isc_mempool_create(mgr->mctx, sizeof(dispsocket_t), &mgr->spool);
 
 	isc_mempool_setname(mgr->spool, "dispmgr_spool");
-	isc_mempool_setfreemax(mgr->spool, maxrequests);
 	isc_mempool_associatelock(mgr->spool, &mgr->spool_lock);
 
 	result = qid_allocate(mgr, buckets, increment, &mgr->qid, true);
@@ -2868,7 +2860,6 @@ dispatch_createudp(dns_dispatchmgr_t *mgr, isc_socketmgr_t *sockmgr,
 		isc_mempool_create(mgr->mctx, sizeof(dispportentry_t),
 				   &disp->portpool);
 		isc_mempool_setname(disp->portpool, "disp_portpool");
-		isc_mempool_setfreemax(disp->portpool, 128);
 	}
 	disp->socket = sock;
 	disp->local = *localaddr;
@@ -2901,7 +2892,6 @@ dispatch_createudp(dns_dispatchmgr_t *mgr, isc_socketmgr_t *sockmgr,
 	isc_mutex_init(&disp->sepool_lock);
 
 	isc_mempool_setname(disp->sepool, "disp_sepool");
-	isc_mempool_setfreemax(disp->sepool, 32768);
 	isc_mempool_associatelock(disp->sepool, &disp->sepool_lock);
 
 	attributes &= ~DNS_DISPATCHATTR_TCP;
