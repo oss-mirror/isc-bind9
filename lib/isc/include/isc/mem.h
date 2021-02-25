@@ -445,13 +445,13 @@ isc_mempool_associatelock(isc_mempool_t *mpctx, isc_mutex_t *lock);
  *	mpctx is a valid memory pool
  */
 
-unsigned int
+size_t
 isc_mempool_getfreecount(isc_mempool_t *mpctx);
 /*%<
  * Returns current size of the free list.
  */
 
-unsigned int
+size_t
 isc_mempool_getallocated(isc_mempool_t *mpctx);
 /*%<
  * Returns the number of items allocated from this pool.
