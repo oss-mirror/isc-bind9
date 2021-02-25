@@ -750,12 +750,10 @@ dns_message_create(isc_mem_t *mctx, unsigned int intent, dns_message_t **msgp) {
 	ISC_LIST_INIT(m->freerdatalist);
 
 	isc_mempool_create(m->mctx, sizeof(dns_name_t), &m->namepool);
-	isc_mempool_setfillcount(m->namepool, NAME_COUNT);
 	isc_mempool_setfreemax(m->namepool, NAME_COUNT);
 	isc_mempool_setname(m->namepool, "msg:names");
 
 	isc_mempool_create(m->mctx, sizeof(dns_rdataset_t), &m->rdspool);
-	isc_mempool_setfillcount(m->rdspool, RDATASET_COUNT);
 	isc_mempool_setfreemax(m->rdspool, RDATASET_COUNT);
 	isc_mempool_setname(m->rdspool, "msg:rdataset");
 
