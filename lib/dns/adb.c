@@ -3497,7 +3497,7 @@ dump_adb(dns_adb_t *adb, FILE *f, bool debug, isc_stdtime_t now) {
 	fprintf(f, "; [plain success/timeout]\n;\n");
 	if (debug) {
 		LOCK(&adb->reflock);
-		fprintf(f, "; addr %p, erefcnt %u, irefcnt %u, finds out %u\n",
+		fprintf(f, "; addr %p, erefcnt %u, irefcnt %u, finds out %zu\n",
 			adb, adb->erefcnt, adb->irefcnt,
 			isc_mempool_getallocated(adb->nhmp));
 		UNLOCK(&adb->reflock);
