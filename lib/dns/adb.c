@@ -2716,7 +2716,6 @@ dns_adb_create(isc_mem_t *mem, dns_view_t *view, isc_timermgr_t *timermgr,
 	do {                                                  \
 		isc_mempool_create(mem, sizeof(t), &(p));     \
 		isc_mempool_setfreemax((p), FREE_ITEMS);      \
-		isc_mempool_setfillcount((p), FILL_COUNT);    \
 		isc_mempool_setname((p), n);                  \
 		isc_mempool_associatelock((p), &adb->mplock); \
 	} while (0)

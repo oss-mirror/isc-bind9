@@ -361,16 +361,10 @@ plugin_register(const char *parameters, const void *cfg, const char *cfg_file,
 	isc_mutex_init(&inst->hlock);
 
 	/*
-	 * Fill the mempool with 1K filter_aaaa state objects at
-	 * a time; ideally after a single allocation, the mempool will
-	 * have enough to handle all the simultaneous queries the system
-	 * requires and it won't be necessary to allocate more.
-	 *
 	 * We don't set any limit on the number of free state objects
 	 * so that they'll always be returned to the pool and not
 	 * freed until the pool is destroyed on shutdown.
 	 */
-	isc_mempool_setfillcount(inst->datapool, 1024);
 	isc_mempool_setfreemax(inst->datapool, UINT_MAX);
 	isc_mutex_init(&inst->plock);
 	isc_mempool_associatelock(inst->datapool, &inst->plock);

@@ -1380,7 +1380,6 @@ setup_libs(void) {
 	 * systems.
 	 */
 	isc_mempool_setfreemax(commctx, 6);
-	isc_mempool_setfillcount(commctx, 2);
 
 	isc_mutex_init(&lookup_lock);
 }

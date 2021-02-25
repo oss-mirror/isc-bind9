@@ -59,11 +59,9 @@ _teardown(void **state) {
 }
 
 #define MP1_FREEMAX  10
-#define MP1_FILLCNT  10
 #define MP1_MAXALLOC 30
 
 #define MP2_FREEMAX 25
-#define MP2_FILLCNT 25
 
 /* general memory system tests */
 static void
@@ -81,7 +79,6 @@ isc_mem_test(void **state) {
 	isc_mempool_create(test_mctx, 31, &mp2);
 
 	isc_mempool_setfreemax(mp1, MP1_FREEMAX);
-	isc_mempool_setfillcount(mp1, MP1_FILLCNT);
 
 	/*
 	 * Allocate MP1_MAXALLOC items from the pool.  This is our max.
@@ -114,7 +111,6 @@ isc_mem_test(void **state) {
 	 */
 
 	isc_mempool_setfreemax(mp2, 25);
-	isc_mempool_setfillcount(mp2, 25);
 
 	for (j = 0; j < 500000; j++) {
 		for (i = 0; i < 50; i++) {
@@ -457,7 +453,6 @@ isc_mempool_benchmark(void **state) {
 	isc_mempool_associatelock(mp, &mplock);
 
 	isc_mempool_setfreemax(mp, 32768);
-	isc_mempool_setfillcount(mp, ISC_MAX(NUM_ITEMS / nthreads, 1));
 
 	UNUSED(state);
 
