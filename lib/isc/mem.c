@@ -1243,12 +1243,10 @@ isc_mempool_destroy(isc_mempool_t **mpctxp) {
 	isc_mem_t *mctx;
 	element *item;
 
-	
+
 	mpctx = *mpctxp;
 	*mpctxp = NULL;
 	mpctx->magic = 0;
-
-	fprintf(stderr, "%s(%p)\n", __func__, mpctx);
 
 	if (atomic_load_acquire(&mpctx->allocated) > 0) {
 		UNEXPECTED_ERROR(__FILE__, __LINE__,
