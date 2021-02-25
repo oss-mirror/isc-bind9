@@ -383,7 +383,6 @@ isc_mempool_create(isc_mem_t *mctx, size_t size, isc_mempool_t **mpctxp);
  *
  * Defaults:
  *\li	freemax = 1
- *\li	fillcount = 1
  *
  * Returns:
  *\li	#ISC_R_NOMEMORY		-- not enough memory to create pool
@@ -472,22 +471,6 @@ unsigned int
 isc_mempool_getallocated(isc_mempool_t *mpctx);
 /*%<
  * Returns the number of items allocated from this pool.
- */
-
-unsigned int
-isc_mempool_getfillcount(isc_mempool_t *mpctx);
-/*%<
- * Returns the number of items allocated as a block from the parent
- * memory context when the free list is empty.
- */
-
-void
-isc_mempool_setfillcount(isc_mempool_t *mpctx, unsigned int limit);
-/*%<
- * Sets the fillcount.
- *
- * Additional requirements:
- *\li	limit > 0
  */
 
 /*
