@@ -1428,11 +1428,6 @@ setup_libs(void) {
 
 	isc_mempool_create(mctx, COMMSIZE, &commctx);
 	isc_mempool_setname(commctx, "COMMPOOL");
-	/*
-	 * 6 and 2 set as reasonable parameters for 3 or 4 nameserver
-	 * systems.
-	 */
-	isc_mempool_setfreemax(commctx, 6);
 
 	isc_mutex_init(&lookup_lock);
 }
