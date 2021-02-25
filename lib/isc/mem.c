@@ -1243,9 +1243,12 @@ isc_mempool_destroy(isc_mempool_t **mpctxp) {
 	isc_mem_t *mctx;
 	element *item;
 
+	
 	mpctx = *mpctxp;
 	*mpctxp = NULL;
 	mpctx->magic = 0;
+
+	fprintf(stderr, "%s(%p)\n", __func__, mpctx);
 
 	if (atomic_load_acquire(&mpctx->allocated) > 0) {
 		UNEXPECTED_ERROR(__FILE__, __LINE__,
@@ -1322,6 +1325,7 @@ isc__mempool_get(isc_mempool_t *mpctx FLARG) {
 	unsigned int i;
 
 	REQUIRE(VALID_MEMPOOL(mpctx));
+	REQUIRE(isc_tid_v < mpctx->max_threads);
 
 	element *item;
 
@@ -1354,6 +1358,7 @@ isc__mempool_put(isc_mempool_t *mpctx, void *mem FLARG) {
 
 	REQUIRE(VALID_MEMPOOL(mpctx));
 	REQUIRE(mem != NULL);
+	REQUIRE(isc_tid_v < mpctx->max_threads);
 
 	isc_mem_t *mctx = mpctx->mctx;
 	element *item;
@@ -1364,19 +1369,6 @@ isc__mempool_put(isc_mempool_t *mpctx, void *mem FLARG) {
 
 	DELETE_TRACE(mctx, mem, mpctx->size, file, line);
 
-	/*
-	 * If the number of freeitems is more than number of allocated items,
-	 * return the item to the allocator.
-	 */
-	if (freecount >= allocated) {
-		mem_putstats(mctx, mem, mpctx->size);
-		mem_put(mctx, mem, mpctx->size);
-		return;
-	}
-
-	/*
-	 * Otherwise, attach it to our free list and bump the counter.
-	 */
 	item = (element *)mem;
 	item->next = mpctx->items[isc_tid_v];
 	mpctx->items[isc_tid_v] = item;
