@@ -94,7 +94,7 @@ isc_mem_test(void **state) {
 
 #if !__SANITIZE_ADDRESS__
 	rval = isc_mempool_getfreecount(mp1);
-	assert_int_equal(rval, 10);
+	assert_int_equal(rval, 11);
 #endif /* !__SANITIZE_ADDRESS__ */
 
 	rval = isc_mempool_getallocated(mp1);
