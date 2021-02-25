@@ -360,12 +360,6 @@ plugin_register(const char *parameters, const void *cfg, const char *cfg_file,
 	CHECK(isc_ht_init(&inst->ht, mctx, 16));
 	isc_mutex_init(&inst->hlock);
 
-	/*
-	 * We don't set any limit on the number of free state objects
-	 * so that they'll always be returned to the pool and not
-	 * freed until the pool is destroyed on shutdown.
-	 */
-	isc_mempool_setfreemax(inst->datapool, UINT_MAX);
 	isc_mutex_init(&inst->plock);
 	isc_mempool_associatelock(inst->datapool, &inst->plock);
 

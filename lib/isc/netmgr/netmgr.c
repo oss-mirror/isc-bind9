@@ -247,14 +247,12 @@ isc_nm_start(isc_mem_t *mctx, uint32_t workers) {
 	isc_mutex_init(&mgr->reqlock);
 	isc_mempool_create(mgr->mctx, sizeof(isc__nm_uvreq_t), &mgr->reqpool);
 	isc_mempool_setname(mgr->reqpool, "nm_reqpool");
-	isc_mempool_setfreemax(mgr->reqpool, 4096);
 	isc_mempool_associatelock(mgr->reqpool, &mgr->reqlock);
 
 	isc_mutex_init(&mgr->evlock);
 	isc_mempool_create(mgr->mctx, sizeof(isc__netievent_storage_t),
 			   &mgr->evpool);
 	isc_mempool_setname(mgr->evpool, "nm_evpool");
-	isc_mempool_setfreemax(mgr->evpool, 4096);
 	isc_mempool_associatelock(mgr->evpool, &mgr->evlock);
 
 	mgr->workers = isc_mem_get(mctx, workers * sizeof(isc__networker_t));

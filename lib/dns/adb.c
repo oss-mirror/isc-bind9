@@ -77,9 +77,6 @@
 #define ADB_STALE_MARGIN 1800
 #endif /* ifndef ADB_STALE_MARGIN */
 
-#define FREE_ITEMS 64 /*%< free count for memory pools */
-#define FILL_COUNT 16 /*%< fill count for memory pools */
-
 #define DNS_ADB_INVALIDBUCKET (-1) /*%< invalid bucket address */
 
 #define DNS_ADB_MINADBSIZE (1024U * 1024U) /*%< 1 Megabyte */
@@ -2715,7 +2712,6 @@ dns_adb_create(isc_mem_t *mem, dns_view_t *view, isc_timermgr_t *timermgr,
 #define MPINIT(t, p, n)                                       \
 	do {                                                  \
 		isc_mempool_create(mem, sizeof(t), &(p));     \
-		isc_mempool_setfreemax((p), FREE_ITEMS);      \
 		isc_mempool_setname((p), n);                  \
 		isc_mempool_associatelock((p), &adb->mplock); \
 	} while (0)
