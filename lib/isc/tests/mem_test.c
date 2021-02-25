@@ -355,7 +355,7 @@ isc_mem_traceflag_test(void **state) {
 
 #define ITERS	  512
 #define NUM_ITEMS 1024 /* 768 */
-#define ITEM_SIZE 65534
+#define ITEM_SIZE 256
 
 static atomic_size_t mem_size;
 
