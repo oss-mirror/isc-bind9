@@ -285,8 +285,11 @@ build_querystring(query_list_t *querylist) {
 		 */
 		if (tseg->direct) {
 			length += tseg->strlen;
-		} else { /* calculate string length for dynamic segments. */
+		} else if (*(char **)tseg->cmd != NULL) {
+			/* calculate string length for dynamic segments. */
 			length += strlen(*(char **)tseg->cmd);
+		} else {
+			return (NULL);
 		}
 		/* get the next segment */
 		tseg = DLZ_LIST_NEXT(tseg, link);
@@ -304,7 +307,7 @@ build_querystring(query_list_t *querylist) {
 		if (tseg->direct) {
 			/* query segments */
 			strcat(qs, tseg->cmd);
-		} else {
+		} else if (*(char **)tseg->cmd != NULL) {
 			/* dynamic segments */
 			strcat(qs, *(char **)tseg->cmd);
 		}

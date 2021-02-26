@@ -283,8 +283,11 @@ sdlzh_build_querystring(isc_mem_t *mctx, query_list_t *querylist) {
 		 */
 		if (tseg->direct) {
 			length += tseg->strlen;
-		} else { /* calculate string length for dynamic segments. */
+		} else if (*(char **)tseg->sql != NULL) {
+			/* calculate string length for dynamic segments. */
 			length += strlen(*(char **)tseg->sql);
+		} else {
+			return (NULL);
 		}
 		/* get the next segment */
 		tseg = ISC_LIST_NEXT(tseg, link);
@@ -300,7 +303,7 @@ sdlzh_build_querystring(isc_mem_t *mctx, query_list_t *querylist) {
 		if (tseg->direct) {
 			/* query segments */
 			strcat(qs, tseg->sql);
-		} else {
+		} else if (*(char **)tseg->sql != NULL) {
 			/* dynamic segments */
 			strcat(qs, *(char **)tseg->sql);
 		}
