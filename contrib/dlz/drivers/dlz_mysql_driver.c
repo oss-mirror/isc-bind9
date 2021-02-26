@@ -129,7 +129,7 @@ mysql_get_resultset(const char *zone, const char *record, const char *client,
 	int qres = 0;
 
 	if (query != COUNTZONE) {
-		REQUIRE(*rs == NULL);
+		REQUIRE(rs != NULL && *rs == NULL);
 	} else {
 		REQUIRE(rs == NULL);
 	}
@@ -244,15 +244,11 @@ mysql_get_resultset(const char *zone, const char *record, const char *client,
 	 * was a client string passed?  If so, make it safe for use in
 	 * queries.
 	 */
-	if (client != NULL) {
-		dbi->client = mysqldrv_escape_string((MYSQL *)dbi->dbconn,
-						     client);
-		if (dbi->client == NULL) {
-			result = ISC_R_NOMEMORY;
-			goto cleanup;
-		}
-	} else { /* no string passed, set the string pointer to NULL */
-		dbi->client = NULL;
+	dbi->client = mysqldrv_escape_string((MYSQL *)dbi->dbconn,
+					     client != NULL ? client : "");
+	if (dbi->client == NULL) {
+		result = ISC_R_NOMEMORY;
+		goto cleanup;
 	}
 
 	/*

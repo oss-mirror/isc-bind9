@@ -593,14 +593,10 @@ ldap_get_results(const char *zone, const char *record, const char *client,
 		dbi->record = NULL;
 	}
 
-	if (client != NULL) {
-		dbi->client = strdup(client);
-		if (dbi->client == NULL) {
-			result = ISC_R_NOMEMORY;
-			goto cleanup;
-		}
-	} else {
-		dbi->client = NULL;
+	dbi->client = strdup(client != NULL ? client : "");
+	if (dbi->client == NULL) {
+		result = ISC_R_NOMEMORY;
+		goto cleanup;
 	}
 
 	/* what type of query are we going to run? */

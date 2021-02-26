@@ -305,11 +305,10 @@ mysql_get_resultset(const char *zone, const char *record, const char *client,
 		goto cleanup;
 	}
 
+	if (dbi->zone != NULL) {
+		free(dbi->zone);
+	}
 	if (zone != NULL) {
-		if (dbi->zone != NULL) {
-			free(dbi->zone);
-		}
-
 		dbi->zone = mysqldrv_escape_string((MYSQL *)dbi->dbconn, zone);
 		if (dbi->zone == NULL) {
 			result = ISC_R_NOMEMORY;
@@ -319,11 +318,10 @@ mysql_get_resultset(const char *zone, const char *record, const char *client,
 		dbi->zone = NULL;
 	}
 
+	if (dbi->record != NULL) {
+		free(dbi->record);
+	}
 	if (record != NULL) {
-		if (dbi->record != NULL) {
-			free(dbi->record);
-		}
-
 		dbi->record = mysqldrv_escape_string((MYSQL *)dbi->dbconn,
 						     record);
 		if (dbi->record == NULL) {
@@ -334,19 +332,14 @@ mysql_get_resultset(const char *zone, const char *record, const char *client,
 		dbi->record = NULL;
 	}
 
-	if (client != NULL) {
-		if (dbi->client != NULL) {
-			free(dbi->client);
-		}
-
-		dbi->client = mysqldrv_escape_string((MYSQL *)dbi->dbconn,
-						     client);
-		if (dbi->client == NULL) {
-			result = ISC_R_NOMEMORY;
-			goto cleanup;
-		}
-	} else {
-		dbi->client = NULL;
+	if (dbi->client != NULL) {
+		free(dbi->client);
+	}
+	dbi->client = mysqldrv_escape_string((MYSQL *)dbi->dbconn,
+					     client != NULL ? client : "");
+	if (dbi->client == NULL) {
+		result = ISC_R_NOMEMORY;
+		goto cleanup;
 	}
 
 	/*

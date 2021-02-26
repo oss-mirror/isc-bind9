@@ -522,14 +522,10 @@ odbc_get_resultset(const char *zone, const char *record, const char *client,
 	 * was a client string passed?  If so, make it safe for use in
 	 * queries.
 	 */
-	if (client != NULL) {
-		dbi->client = odbc_escape_string(client);
-		if (dbi->client == NULL) {
-			result = ISC_R_NOMEMORY;
-			goto cleanup;
-		}
-	} else { /* no string passed, set the string pointer to NULL */
-		dbi->client = NULL;
+	dbi->client = odbc_escape_string(client != NULL ? client : "");
+	if (dbi->client == NULL) {
+		result = ISC_R_NOMEMORY;
+		goto cleanup;
 	}
 
 	/*

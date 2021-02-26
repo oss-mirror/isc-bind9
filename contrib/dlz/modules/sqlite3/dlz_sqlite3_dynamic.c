@@ -333,11 +333,10 @@ sqlite3_get_resultset(const char *zone, const char *record, const char *client,
 		goto cleanup;
 	}
 
+	if (dbi->zone != NULL) {
+		free(dbi->zone);
+	}
 	if (zone != NULL) {
-		if (dbi->zone != NULL) {
-			free(dbi->zone);
-		}
-
 		dbi->zone = escape_string(zone);
 		if (dbi->zone == NULL) {
 			result = ISC_R_NOMEMORY;
@@ -347,11 +346,10 @@ sqlite3_get_resultset(const char *zone, const char *record, const char *client,
 		dbi->zone = NULL;
 	}
 
+	if (dbi->record != NULL) {
+		free(dbi->record);
+	}
 	if (record != NULL) {
-		if (dbi->record != NULL) {
-			free(dbi->record);
-		}
-
 		dbi->record = escape_string(record);
 		if (dbi->record == NULL) {
 			result = ISC_R_NOMEMORY;
@@ -361,18 +359,13 @@ sqlite3_get_resultset(const char *zone, const char *record, const char *client,
 		dbi->record = NULL;
 	}
 
-	if (client != NULL) {
-		if (dbi->client != NULL) {
-			free(dbi->client);
-		}
-
-		dbi->client = escape_string(client);
-		if (dbi->client == NULL) {
-			result = ISC_R_NOMEMORY;
-			goto cleanup;
-		}
-	} else {
-		dbi->client = NULL;
+	if (dbi->client != NULL) {
+		free(dbi->client);
+	}
+	dbi->client = escape_string(client != NULL : "");
+	if (dbi->client == NULL) {
+		result = ISC_R_NOMEMORY;
+		goto cleanup;
 	}
 
 	/*

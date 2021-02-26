@@ -580,11 +580,8 @@ ldap_get_results(const char *zone, const char *record, const char *client,
 	} else {
 		dbi->record = NULL;
 	}
-	if (client != NULL) {
-		dbi->client = isc_mem_strdup(named_g_mctx, client);
-	} else {
-		dbi->client = NULL;
-	}
+	dbi->client = isc_mem_strdup(named_g_mctx,
+				     client != NULL ? client : "");
 
 	/* what type of query are we going to run? */
 	switch (query) {
