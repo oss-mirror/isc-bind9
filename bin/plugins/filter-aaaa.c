@@ -81,7 +81,6 @@ typedef struct filter_instance {
 	 * Memory pool for use with persistent data.
 	 */
 	isc_mempool_t *datapool;
-	isc_mutex_t plock;
 
 	/*
 	 * Hash table associating a client object with its persistent data.
@@ -360,9 +359,6 @@ plugin_register(const char *parameters, const void *cfg, const char *cfg_file,
 	CHECK(isc_ht_init(&inst->ht, mctx, 16));
 	isc_mutex_init(&inst->hlock);
 
-	isc_mutex_init(&inst->plock);
-	isc_mempool_associatelock(inst->datapool, &inst->plock);
-
 	/*
 	 * Set hook points in the view's hooktable.
 	 */
@@ -420,7 +416,6 @@ plugin_destroy(void **instp) {
 	}
 	if (inst->datapool != NULL) {
 		isc_mempool_destroy(&inst->datapool);
-		isc_mutex_destroy(&inst->plock);
 	}
 	if (inst->aaaa_acl != NULL) {
 		dns_acl_detach(&inst->aaaa_acl);

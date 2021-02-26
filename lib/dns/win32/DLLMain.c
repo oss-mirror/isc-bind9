@@ -12,6 +12,8 @@
 #include <signal.h>
 #include <windows.h>
 
+#include "lib_p.h"
+
 /*
  * Called when we enter the DLL
  */
@@ -23,6 +25,7 @@ __declspec(dllexport) BOOL WINAPI
 	 * initialization or a call to LoadLibrary.
 	 */
 	case DLL_PROCESS_ATTACH:
+		dns__initialize();
 		break;
 
 	/* The attached process creates a new thread.  */
@@ -38,6 +41,7 @@ __declspec(dllexport) BOOL WINAPI
 	 * process termination or a call to FreeLibrary.
 	 */
 	case DLL_PROCESS_DETACH:
+		dns__shutdown();
 		break;
 
 	default:

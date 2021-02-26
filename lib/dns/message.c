@@ -32,6 +32,7 @@
 #include <dns/masterdump.h>
 #include <dns/message.h>
 #include <dns/opcode.h>
+#include <dns/lib.h>
 #include <dns/rcode.h>
 #include <dns/rdata.h>
 #include <dns/rdatalist.h>
@@ -41,6 +42,11 @@
 #include <dns/tsig.h>
 #include <dns/ttl.h>
 #include <dns/view.h>
+
+#include "message_p.h"
+
+static isc_mempool_t *dns__message_namepool = NULL;
+static isc_mempool_t *dns__message_rdspool = NULL;
 
 #ifdef SKAN_MSG_DEBUG
 static void
@@ -669,9 +675,6 @@ msgreset(dns_message_t *msg, bool everything) {
 	if (!everything) {
 		msginit(msg);
 	}
-
-	ENSURE(isc_mempool_getallocated(msg->namepool) == 0);
-	ENSURE(isc_mempool_getallocated(msg->rdspool) == 0);
 }
 
 static unsigned int
@@ -741,19 +744,13 @@ dns_message_create(isc_mem_t *mctx, unsigned int intent, dns_message_t **msgp) {
 
 	ISC_LIST_INIT(m->scratchpad);
 	ISC_LIST_INIT(m->cleanup);
-	m->namepool = NULL;
-	m->rdspool = NULL;
+	m->namepool = dns__message_namepool;
+	m->rdspool = dns__message_rdspool;
 	ISC_LIST_INIT(m->rdatas);
 	ISC_LIST_INIT(m->rdatalists);
 	ISC_LIST_INIT(m->offsets);
 	ISC_LIST_INIT(m->freerdata);
 	ISC_LIST_INIT(m->freerdatalist);
-
-	isc_mempool_create(m->mctx, sizeof(dns_name_t), &m->namepool);
-	isc_mempool_setname(m->namepool, "msg:names");
-
-	isc_mempool_create(m->mctx, sizeof(dns_rdataset_t), &m->rdspool);
-	isc_mempool_setname(m->rdspool, "msg:rdataset");
 
 	dynbuf = NULL;
 	isc_buffer_allocate(mctx, &dynbuf, SCRATCHPAD_SIZE);
@@ -782,8 +779,6 @@ dns__message_destroy(dns_message_t *msg) {
 	REQUIRE(DNS_MESSAGE_VALID(msg));
 
 	msgreset(msg, true);
-	isc_mempool_destroy(&msg->namepool);
-	isc_mempool_destroy(&msg->rdspool);
 	isc_refcount_destroy(&msg->refcount);
 	msg->magic = 0;
 	isc_mem_putanddetach(&msg->mctx, msg, sizeof(dns_message_t));
@@ -4754,4 +4749,19 @@ dns_message_clonebuffer(dns_message_t *msg) {
 				msg->query.base, msg->query.length);
 		msg->free_query = 1;
 	}
+}
+
+void
+dns__message_initialize(void) {
+	isc_mempool_create(dns_g_mctx, sizeof(dns_name_t), &dns__message_namepool);
+	isc_mempool_setname(dns__message_namepool, "dns_message:dns_name_t");
+
+	isc_mempool_create(dns_g_mctx, sizeof(dns_rdataset_t), &dns__message_rdspool);
+	isc_mempool_setname(dns__message_rdspool, "dns_message:dns_rdataset_t");
+}
+
+void
+dns__message_shutdown(void) {
+	isc_mempool_destroy(&dns__message_namepool);
+	isc_mempool_destroy(&dns__message_rdspool);
 }

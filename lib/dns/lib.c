@@ -18,7 +18,6 @@
 #include <isc/mem.h>
 #include <isc/mutex.h>
 #include <isc/once.h>
-#include <isc/refcount.h>
 #include <isc/util.h>
 
 #include <dns/db.h>
@@ -27,78 +26,34 @@
 
 #include <dst/dst.h>
 
+#include "dispatch_p.h"
+#include "lib_p.h"
+#include "message_p.h"
+
 /***
  *** Globals
  ***/
 
 LIBDNS_EXTERNAL_DATA unsigned int dns_pps = 0U;
+LIBDNS_EXTERNAL_DATA isc_mem_t *dns_g_mctx = NULL;
 
 /***
  *** Functions
  ***/
 
-static isc_once_t init_once = ISC_ONCE_INIT;
-static isc_mem_t *dns_g_mctx = NULL;
-static bool initialize_done = false;
-static isc_refcount_t references;
-
-static void
-initialize(void) {
-	isc_result_t result;
-
-	REQUIRE(!initialize_done);
-
-	isc_refcount_init(&references, 0);
-
+void
+dns__initialize(void) {
 	isc_mem_create(&dns_g_mctx);
+
+	dns__message_initialize();
+	dns__dispatch_initialize();
+
 	dns_result_register();
-
-	result = dst_lib_init(dns_g_mctx, NULL);
-	if (result != ISC_R_SUCCESS) {
-		goto cleanup_mctx;
-	}
-
-	initialize_done = true;
-	return;
-
-cleanup_mctx:
-	if (dns_g_mctx != NULL) {
-		isc_mem_detach(&dns_g_mctx);
-	}
-}
-
-isc_result_t
-dns_lib_init(void) {
-	isc_result_t result;
-
-	/*
-	 * Since this routine is expected to be used by a normal application,
-	 * it should be better to return an error, instead of an emergency
-	 * abort, on any failure.
-	 */
-	result = isc_once_do(&init_once, initialize);
-	if (result != ISC_R_SUCCESS) {
-		return (result);
-	}
-
-	if (!initialize_done) {
-		return (ISC_R_FAILURE);
-	}
-
-	isc_refcount_increment0(&references);
-
-	return (ISC_R_SUCCESS);
 }
 
 void
-dns_lib_shutdown(void) {
-	if (isc_refcount_decrement(&references) == 1) {
-		dst_lib_destroy();
-
-		isc_refcount_destroy(&references);
-
-		if (dns_g_mctx != NULL) {
-			isc_mem_detach(&dns_g_mctx);
-		}
-	}
+dns__shutdown(void) {
+	dns__dispatch_shutdown();
+	dns__message_shutdown();
+	isc_mem_detach(&dns_g_mctx);
 }

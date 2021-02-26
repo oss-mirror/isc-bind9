@@ -481,8 +481,6 @@ dns_keytable_forall
 dns_keytable_issecuredomain
 dns_keytable_marksecure
 dns_keytable_totext
-dns_lib_init
-dns_lib_shutdown
 dns_loadctx_attach
 dns_loadctx_cancel
 dns_loadctx_detach

@@ -244,16 +244,12 @@ isc_nm_start(isc_mem_t *mctx, uint32_t workers) {
 	atomic_init(&mgr->keepalive, 30000);
 	atomic_init(&mgr->advertised, 30000);
 
-	isc_mutex_init(&mgr->reqlock);
 	isc_mempool_create(mgr->mctx, sizeof(isc__nm_uvreq_t), &mgr->reqpool);
 	isc_mempool_setname(mgr->reqpool, "nm_reqpool");
-	isc_mempool_associatelock(mgr->reqpool, &mgr->reqlock);
 
-	isc_mutex_init(&mgr->evlock);
 	isc_mempool_create(mgr->mctx, sizeof(isc__netievent_storage_t),
 			   &mgr->evpool);
 	isc_mempool_setname(mgr->evpool, "nm_evpool");
-	isc_mempool_associatelock(mgr->evpool, &mgr->evlock);
 
 	mgr->workers = isc_mem_get(mctx, workers * sizeof(isc__networker_t));
 	for (size_t i = 0; i < workers; i++) {
@@ -364,10 +360,7 @@ nm_destroy(isc_nm_t **mgr0) {
 	isc_mutex_destroy(&mgr->lock);
 
 	isc_mempool_destroy(&mgr->evpool);
-	isc_mutex_destroy(&mgr->evlock);
-
 	isc_mempool_destroy(&mgr->reqpool);
-	isc_mutex_destroy(&mgr->reqlock);
 
 	isc_mem_put(mgr->mctx, mgr->workers,
 		    mgr->nworkers * sizeof(isc__networker_t));

@@ -15,6 +15,7 @@
 /*! \file dns/lib.h */
 
 #include <isc/lang.h>
+#include <isc/mem.h>
 #include <isc/types.h>
 
 ISC_LANG_BEGINDECLS
@@ -24,19 +25,10 @@ ISC_LANG_BEGINDECLS
  */
 LIBDNS_EXTERNAL_DATA extern unsigned int dns_pps;
 
-isc_result_t
-dns_lib_init(void);
-/*%<
- * A set of initialization procedures used in the DNS library.  This function
- * is provided for an application that is not aware of the underlying ISC or
- * DNS libraries much.
+/*%
+ * Memory: global library memory context
  */
-
-void
-dns_lib_shutdown(void);
-/*%<
- * Free temporary resources allocated in dns_lib_init().
- */
+LIBDNS_EXTERNAL_DATA extern isc_mem_t *dns_g_mctx;
 
 ISC_LANG_ENDDECLS
 

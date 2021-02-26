@@ -109,7 +109,6 @@ struct dns_adb {
 	unsigned int irefcnt;
 	unsigned int erefcnt;
 
-	isc_mutex_t mplock;
 	isc_mempool_t *nmp;  /*%< dns_adbname_t */
 	isc_mempool_t *nhmp; /*%< dns_adbnamehook_t */
 	isc_mempool_t *limp; /*%< dns_adblameinfo_t */
@@ -2548,7 +2547,6 @@ destroy(dns_adb_t *adb) {
 
 	isc_mutex_destroy(&adb->reflock);
 	isc_mutex_destroy(&adb->lock);
-	isc_mutex_destroy(&adb->mplock);
 	isc_mutex_destroy(&adb->overmemlock);
 	isc_mutex_destroy(&adb->entriescntlock);
 	isc_mutex_destroy(&adb->namescntlock);
@@ -2646,7 +2644,6 @@ dns_adb_create(isc_mem_t *mem, dns_view_t *view, isc_timermgr_t *timermgr,
 	isc_mem_attach(mem, &adb->mctx);
 
 	isc_mutex_init(&adb->lock);
-	isc_mutex_init(&adb->mplock);
 	isc_mutex_init(&adb->reflock);
 	isc_mutex_init(&adb->overmemlock);
 	isc_mutex_init(&adb->entriescntlock);
@@ -2713,7 +2710,6 @@ dns_adb_create(isc_mem_t *mem, dns_view_t *view, isc_timermgr_t *timermgr,
 	do {                                                  \
 		isc_mempool_create(mem, sizeof(t), &(p));     \
 		isc_mempool_setname((p), n);                  \
-		isc_mempool_associatelock((p), &adb->mplock); \
 	} while (0)
 
 	MPINIT(dns_adbname_t, adb->nmp, "adbname");
@@ -2827,7 +2823,6 @@ fail1: /* clean up only allocated memory */
 	isc_mutex_destroy(&adb->entriescntlock);
 	isc_mutex_destroy(&adb->overmemlock);
 	isc_mutex_destroy(&adb->reflock);
-	isc_mutex_destroy(&adb->mplock);
 	isc_mutex_destroy(&adb->lock);
 	if (adb->excl != NULL) {
 		isc_task_detach(&adb->excl);

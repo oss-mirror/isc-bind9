@@ -49,14 +49,8 @@
 
 #define MCTXLOCK(m)   LOCK(&m->lock)
 #define MCTXUNLOCK(m) UNLOCK(&m->lock)
-#define MPCTXLOCK(mp)           \
-	if (mp->lock != NULL) { \
-		LOCK(mp->lock); \
-	}
-#define MPCTXUNLOCK(mp)           \
-	if (mp->lock != NULL) {   \
-		UNLOCK(mp->lock); \
-	}
+#define MPCTXLOCK(mp) LOCK(&mp->lock);
+#define MPCTXUNLOCK(mp) UNLOCK(&mp->lock);
 
 #ifndef ISC_MEM_DEBUGGING
 #define ISC_MEM_DEBUGGING 0
@@ -166,7 +160,7 @@ struct isc_mem {
 struct isc_mempool {
 	/* always unlocked */
 	unsigned int magic;
-	isc_mutex_t *lock; /*%< optional lock */
+	isc_mutex_t lock;
 	isc_mem_t *mctx;   /*%< our memory context */
 	/*%< locked via the memory context's lock */
 	ISC_LINK(isc_mempool_t) link; /*%< next pool in this mem context */
@@ -877,17 +871,15 @@ isc_mem_stats(isc_mem_t *ctx, FILE *out) {
 	pool = ISC_LIST_HEAD(ctx->pools);
 	if (pool != NULL) {
 		fprintf(out, "[Pool statistics]\n");
-		fprintf(out, "%15s %10s %10s %10s %10s %1s\n", "name",
-			"size", "allocated", "freecount",
-			"gets", "L");
+		fprintf(out, "%15s %10s %10s %10s %10s\n", "name",
+			"size", "allocated", "freecount", "gets");
 	}
 	while (pool != NULL) {
-		fprintf(out, "%15s %10zu %10zu %10zu %10zu %s\n",
+		fprintf(out, "%15s %10zu %10zu %10zu %10zu\n",
 			pool->name, pool->size,
 			isc_mempool_getallocated(pool),
 			isc_mempool_getfreecount(pool),
-			atomic_load_relaxed(&pool->gets),
-			(pool->lock == NULL ? "N" : "Y"));
+			isc_mempool_getgets(pool));
 		pool = ISC_LIST_NEXT(pool, link);
 	}
 
@@ -1184,6 +1176,8 @@ isc_mempool_create(isc_mem_t *mctx, size_t size, isc_mempool_t **mpctxp) {
 
 	isc_mempool_t *mpctx;
 
+	fprintf(stderr, "%s(..., %zu, ...)\n", __func__, size);
+
 	/*
 	 * Mempools are stored as a linked list of element.
 	 */
@@ -1203,6 +1197,8 @@ isc_mempool_create(isc_mem_t *mctx, size_t size, isc_mempool_t **mpctxp) {
 		.size = size,
 		.max_threads = MEM_MAX_THREADS,
 	};
+
+	isc_mutex_init(&mpctx->lock);
 
 	atomic_init(&mpctx->allocated, 0);
 
@@ -1275,6 +1271,8 @@ isc_mempool_destroy(isc_mempool_t **mpctxp) {
 	isc_mem_put(mctx, mpctx->freecount, mpctx->max_threads * sizeof(mpctx->freecount[0]));
 	isc_mem_put(mctx, mpctx->items, mpctx->max_threads * sizeof(mpctx->items[0]));
 
+	isc_mutex_destroy(&mpctx->lock);
+
 	/*
 	 * Remove our linked list entry from the memory context.
 	 */
@@ -1284,15 +1282,6 @@ isc_mempool_destroy(isc_mempool_t **mpctxp) {
 	MCTXUNLOCK(mctx);
 
 	isc_mem_put(mpctx->mctx, mpctx, sizeof(isc_mempool_t));
-}
-
-void
-isc_mempool_associatelock(isc_mempool_t *mpctx, isc_mutex_t *lock) {
-	REQUIRE(VALID_MEMPOOL(mpctx));
-	REQUIRE(lock != NULL);
-	REQUIRE(mpctx->lock == NULL);
-
-	mpctx->lock = lock;
 }
 
 #if __SANITIZE_ADDRESS__
@@ -1390,6 +1379,13 @@ isc_mempool_getallocated(isc_mempool_t *mpctx) {
 	REQUIRE(VALID_MEMPOOL(mpctx));
 
 	return (atomic_load_relaxed(&mpctx->allocated));
+}
+
+size_t
+isc_mempool_getgets(isc_mempool_t *mpctx) {
+	REQUIRE(VALID_MEMPOOL(mpctx));
+
+	return (atomic_load_relaxed(&mpctx->gets));
 }
 
 /*

@@ -249,6 +249,9 @@ libdns_la_SOURCES =			\
 	zt.c				\
 	client.c			\
 	rdatalist_p.h			\
+	dispatch_p.h			\
+	lib_p.h				\
+	message_p.h			\
 	tsig_p.h			\
 	zone_p.h
 

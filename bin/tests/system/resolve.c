@@ -355,9 +355,9 @@ main(int argc, char *argv[]) {
 	}
 
 	isc_lib_register();
-	result = dns_lib_init();
+	result = dst_lib_init(dns_g_mctx, NULL);
 	if (result != ISC_R_SUCCESS) {
-		fprintf(stderr, "dns_lib_init failed: %u\n", result);
+		fprintf(stderr, "dst_lib_init failed: %u\n", result);
 		exit(1);
 	}
 
@@ -489,7 +489,7 @@ cleanup:
 	if (keynamestr != NULL) {
 		isc_mem_destroy(&keymctx);
 	}
-	dns_lib_shutdown();
+	dst_lib_destroy();
 
 	return (0);
 }

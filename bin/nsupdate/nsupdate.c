@@ -98,7 +98,7 @@
 
 #define MAXCMD	     (128 * 1024)
 #define MAXWIRE	     (64 * 1024)
-#define PACKETSIZE   ((64 * 1024) - 1)
+#define PACKETSIZE   4096
 #define INITTEXT     (2 * 1024)
 #define MAXTEXT	     (128 * 1024)
 #define FIND_TIMEOUT 5
