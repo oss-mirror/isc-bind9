@@ -56,10 +56,13 @@ static void
 tables(void **state) {
 	const char *str;
 	isc_result_t result;
+	size_t i;
 
 	UNUSED(state);
 
-	for (result = 0; result < ISC_R_NRESULTS; result++) {
+	for (i = 0; i < ISC_R_NRESULTS; i++) {
+		result = ISC_RESULTCODE_ISC(i);
+
 		str = isc_result_toid(result);
 		assert_non_null(str);
 		assert_string_not_equal(str, "(result code text not "
@@ -70,6 +73,8 @@ tables(void **state) {
 		assert_string_not_equal(str, "(result code text not "
 					     "available)");
 	}
+
+	result = ISC_RESULTCODE_ISC(i);
 
 	str = isc_result_toid(result);
 	assert_non_null(str);
@@ -79,9 +84,9 @@ tables(void **state) {
 	assert_non_null(str);
 	assert_string_equal(str, "(result code text not available)");
 
-	for (result = ISC_RESULTCLASS_PK11;
-	     result < (ISC_RESULTCLASS_PK11 + PK11_R_NRESULTS); result++)
-	{
+	for (i = 0; i < PK11_R_NRESULTS; i++) {
+		result = ISC_RESULTCODE_PK11(i);
+
 		str = isc_result_toid(result);
 		assert_non_null(str);
 		assert_string_not_equal(str, "(result code text not "
@@ -92,6 +97,8 @@ tables(void **state) {
 		assert_string_not_equal(str, "(result code text not "
 					     "available)");
 	}
+
+	result = ISC_RESULTCODE_PK11(i);
 
 	str = isc_result_toid(result);
 	assert_non_null(str);

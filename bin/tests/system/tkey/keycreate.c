@@ -93,7 +93,7 @@ recvquery(isc_task_t *task, isc_event_t *event) {
 	CHECK("dns_request_getresponse", result);
 
 	if (response->rcode != dns_rcode_noerror) {
-		result = ISC_RESULTCLASS_DNSRCODE + response->rcode;
+		result = ISC_RESULTCODE_DNSRCODE(response->rcode);
 		fprintf(stderr, "I:response rcode: %s\n",
 			isc_result_totext(result));
 		exit(-1);

@@ -30,12 +30,13 @@ static void
 tables(void **state) {
 	const char *str;
 	isc_result_t result;
+	size_t i;
 
 	UNUSED(state);
 
-	for (result = ISC_RESULTCLASS_ISCCC;
-	     result < (ISC_RESULTCLASS_ISCCC + ISCCC_R_NRESULTS); result++)
-	{
+	for (i = 0; i < ISCCC_R_NRESULTS; i++) {
+		result = ISC_RESULTCODE_ISCCC(i);
+
 		str = isc_result_toid(result);
 		assert_non_null(str);
 		assert_string_not_equal(str, "(result code text not "
@@ -46,6 +47,8 @@ tables(void **state) {
 		assert_string_not_equal(str, "(result code text not "
 					     "available)");
 	}
+
+	result = ISC_RESULTCODE_ISCCC(i);
 
 	str = isc_result_toid(result);
 	assert_non_null(str);
