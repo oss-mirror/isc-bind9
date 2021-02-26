@@ -355,7 +355,8 @@ isc_mem_traceflag_test(void **state) {
 
 #define ITERS	  512
 #define NUM_ITEMS 1024 /* 768 */
-#define ITEM_SIZE 256
+#define ITEM_SIZE 1024
+#define MP_ITEM_SIZE 256
 
 static atomic_size_t mem_size;
 
@@ -441,7 +442,7 @@ isc_mempool_benchmark(void **state) {
 
 	isc_mutex_init(&mplock);
 
-	isc_mempool_create(test_mctx, ITEM_SIZE, &mp);
+	isc_mempool_create(test_mctx, MP_ITEM_SIZE, &mp);
 
 	isc_mempool_associatelock(mp, &mplock);
 
