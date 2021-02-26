@@ -1360,17 +1360,26 @@ isc__mempool_put(isc_mempool_t *mpctx, void *mem FLARG) {
 
 	isc_mem_t *mctx = mpctx->mctx;
 	element *item;
-	size_t freecount = atomic_load_relaxed(&mpctx->freecount[isc_tid_v]);
 	size_t allocated = atomic_fetch_sub_relaxed(&mpctx->allocated, 1);
+	(void)atomic_fetch_add_relaxed(&mpctx->freecount[isc_tid_v], 1);
+	/* size_t freecount = atomic_fetch_add_relaxed(&mpctx->freecount[isc_tid_v], 1); */
+	/* size_t freemax = ISC_MAX(allocated, 8); */
 
 	INSIST(allocated > 0);
+
+	/* while (freecount > freemax) { */
+	/* 	item = mpctx->items[isc_tid_v]; */
+	/* 	mpctx->items[isc_tid_v] = item->next; */
+	/* 	freecount = atomic_fetch_sub_relaxed(&mpctx->freecount[isc_tid_v], 1); */
+	/* 	mem_putstats(mctx, item, mpctx->size); */
+	/* 	mem_put(mctx, item, mpctx->size); */
+	/* } */
 
 	DELETE_TRACE(mctx, mem, mpctx->size, file, line);
 
 	item = (element *)mem;
 	item->next = mpctx->items[isc_tid_v];
 	mpctx->items[isc_tid_v] = item;
-	atomic_fetch_add_relaxed(&mpctx->freecount[isc_tid_v], 1);
 }
 
 #endif /* __SANITIZE_ADDRESS__ */
