@@ -1279,7 +1279,7 @@ isc_mempool_destroy(isc_mempool_t **mpctxp) {
 	 * Return all the pages back to the allocator
 	 */
 	size_t aligned_size = ISC_ALIGN(mpctx->size, ALIGNMENT_SIZE);
-	size_t alloc_size = ISC_MAX(pagesize, aligned_size * 8);
+	size_t alloc_size = ISC_MAX(pagesize, aligned_size * 8 + CACHE_LINE_SIZE);
 
 	for (size_t i = 0; i < mpctx->max_threads; i++) {
 		while (mpctx->pages[i] != NULL) {
@@ -1337,11 +1337,14 @@ isc__mempool_get(isc_mempool_t *mpctx FLARG) {
 	REQUIRE(VALID_MEMPOOL(mpctx));
 	REQUIRE(isc_tid_v < mpctx->max_threads);
 
+	STATIC_ASSERT(CACHE_LINE_SIZE >= sizeof(struct element),
+		      "struct element larger than CACHE_LINE_SIZE");
+
 	if (ISC_UNLIKELY(mpctx->items[isc_tid_v] == NULL)) {
 		size_t aligned_size = ISC_ALIGN(mpctx->size, ALIGNMENT_SIZE);
-		size_t alloc_size = ISC_MAX(pagesize, aligned_size * 8);
+		size_t alloc_size = ISC_MAX(pagesize, aligned_size * 8 + CACHE_LINE_SIZE);
 		element *page = mem_get(mpctx->mctx, alloc_size, pagesize);
-		uint8_t *iter = (uint8_t *)page + ISC_ALIGN(sizeof(*page), CACHE_LINE_SIZE);
+		uint8_t *iter = (uint8_t *)page + CACHE_LINE_SIZE;
 		mem_getstats(mpctx->mctx, alloc_size);
 
 		page->next = mpctx->pages[isc_tid_v];
