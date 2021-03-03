@@ -330,7 +330,7 @@ unlock:
 #endif /* ISC_MEM_TRACKLINES */
 
 static void *
-default_memalloc(size_t size, size_t alignment);
+default_memalloc(size_t size);
 static void
 default_memfree(void *ptr);
 
@@ -338,10 +338,10 @@ default_memfree(void *ptr);
  * Perform a malloc, doing memory filling and overrun detection as necessary.
  */
 static inline void *
-mem_get(isc_mem_t *ctx, size_t size, size_t alignment) {
+mem_get(isc_mem_t *ctx, size_t size) {
 	char *ret;
 
-	ret = default_memalloc(size, alignment);
+	ret = default_memalloc(size);
 
 	if (ISC_UNLIKELY((ctx->flags & ISC_MEMFLAG_FILL) != 0)) {
 		if (ISC_LIKELY(ret != NULL)) {
@@ -406,10 +406,10 @@ mem_putstats(isc_mem_t *ctx, void *ptr, size_t size) {
  */
 
 static void *
-default_memalloc(size_t size, size_t alignment) {
+default_memalloc(size_t size) {
 	void *ptr;
 
-	ptr = aligned_alloc(alignment, size);
+	ptr = malloc(size);
 
 	/*
 	 * If the space cannot be allocated, a null pointer is returned. If the
@@ -483,7 +483,7 @@ mem_create(isc_mem_t **ctxp, unsigned int flags) {
 	STATIC_ASSERT(ALIGNMENT_SIZE >= sizeof(size_info),
 		      "alignment size too small");
 
-	ctx = default_memalloc(sizeof(*ctx), ALIGNMENT_SIZE);
+	ctx = default_memalloc(sizeof(*ctx));
 
 	*ctx = (isc_mem_t){
 		.magic = MEM_MAGIC,
@@ -507,7 +507,7 @@ mem_create(isc_mem_t **ctxp, unsigned int flags) {
 		unsigned int i;
 
 		ctx->debuglist = default_memalloc(
-			(DEBUG_TABLE_COUNT * sizeof(debuglist_t)), ALIGNMENT_SIZE);
+			(DEBUG_TABLE_COUNT * sizeof(debuglist_t)));
 		for (i = 0; i < DEBUG_TABLE_COUNT; i++) {
 			ISC_LIST_INIT(ctx->debuglist[i]);
 		}
@@ -748,7 +748,7 @@ isc__mem_get(isc_mem_t *ctx, size_t size FLARG) {
 		return (isc__mem_allocate(ctx, size FLARG_PASS));
 	}
 
-	ptr = mem_get(ctx, size, ALIGNMENT_SIZE);
+	ptr = mem_get(ctx, size);
 	mem_getstats(ctx, size);
 
 	ADD_TRACE(ctx, ptr, size, file, line);
@@ -917,7 +917,7 @@ mem_allocateunlocked(isc_mem_t *ctx, size_t size) {
 		size += ALIGNMENT_SIZE;
 	}
 
-	si = mem_get(ctx, size, ALIGNMENT_SIZE);
+	si = mem_get(ctx, size);
 
 	if (ISC_UNLIKELY((isc_mem_debugging & ISC_MEM_DEBUGCTX) != 0)) {
 		si->ctx = ctx;
@@ -1343,7 +1343,7 @@ isc__mempool_get(isc_mempool_t *mpctx FLARG) {
 	if (ISC_UNLIKELY(mpctx->items[isc_tid_v] == NULL)) {
 		size_t aligned_size = ISC_ALIGN(mpctx->size, ALIGNMENT_SIZE);
 		size_t alloc_size = ISC_MAX(pagesize, aligned_size * 8 + CACHE_LINE_SIZE);
-		element *page = mem_get(mpctx->mctx, alloc_size, pagesize);
+		element *page = mem_get(mpctx->mctx, alloc_size);
 		uint8_t *iter = (uint8_t *)page + CACHE_LINE_SIZE;
 		mem_getstats(mpctx->mctx, alloc_size);
 
