@@ -67,6 +67,7 @@ LIBISC_EXTERNAL_DATA unsigned int isc_mem_defaultflags = ISC_MEMFLAG_DEFAULT;
 #define DEBUG_TABLE_COUNT 512U
 #define STATS_BUCKETS	  512U
 #define STATS_BUCKET_SIZE 32U
+#define MEMPOOL_PREALLOC  8 /* the number of large-sized items to preallocate */
 
 /*
  * Types.
@@ -173,7 +174,8 @@ struct isc_mempool {
 			    /*%< Debugging only. */
 	char name[16];	    /*%< printed name in stats reports */
 	size_t max_threads;
-	element **items;   /*%< low water item list */
+	element **items;   /*%< list of free items */
+	element **pages;   /*%< list of allocated "pages" */
 };
 
 /*
@@ -1176,8 +1178,6 @@ isc_mempool_create(isc_mem_t *mctx, size_t size, isc_mempool_t **mpctxp) {
 
 	isc_mempool_t *mpctx;
 
-	fprintf(stderr, "%s(..., %zu, ...)\n", __func__, size);
-
 	/*
 	 * Mempools are stored as a linked list of element.
 	 */
@@ -1204,10 +1204,12 @@ isc_mempool_create(isc_mem_t *mctx, size_t size, isc_mempool_t **mpctxp) {
 
 	mpctx->freecount = isc_mem_get(mctx, mpctx->max_threads * sizeof(mpctx->freecount[0]));
 	mpctx->items = isc_mem_get(mctx, mpctx->max_threads * sizeof(mpctx->items[0]));
+	mpctx->pages = isc_mem_get(mctx, mpctx->max_threads * sizeof(mpctx->pages[0]));
 
 	for (size_t i = 0; i < mpctx->max_threads; i++) {
 		atomic_init(&mpctx->freecount[i], 0);
 		mpctx->items[i] = NULL;
+		mpctx->pages[i] = NULL;
 	}
 
 	*mpctxp = (isc_mempool_t *)mpctx;
@@ -1237,8 +1239,6 @@ isc_mempool_destroy(isc_mempool_t **mpctxp) {
 
 	isc_mempool_t *mpctx;
 	isc_mem_t *mctx;
-	element *item;
-
 
 	mpctx = *mpctxp;
 	*mpctxp = NULL;
@@ -1260,16 +1260,21 @@ isc_mempool_destroy(isc_mempool_t **mpctxp) {
 	for (size_t i = 0; i < mpctx->max_threads; i++) {
 		while (mpctx->items[i] != NULL) {
 			INSIST(atomic_fetch_sub_release(&mpctx->freecount[i], 1) > 0);
-			item = mpctx->items[i];
+			element *item = mpctx->items[i];
 			mpctx->items[i] = item->next;
+		}
+		while (mpctx->pages[i] != NULL) {
+			element *page = mpctx->pages[i];
+			mpctx->pages[i] = page->next;
 
-			mem_putstats(mctx, item, mpctx->size);
-			mem_put(mctx, item, mpctx->size);
+			mem_putstats(mctx, page, mpctx->size);
+			mem_put(mctx, page, mpctx->size);
 		}
 	}
 
 	isc_mem_put(mctx, mpctx->freecount, mpctx->max_threads * sizeof(mpctx->freecount[0]));
 	isc_mem_put(mctx, mpctx->items, mpctx->max_threads * sizeof(mpctx->items[0]));
+	isc_mem_put(mctx, mpctx->pages, mpctx->max_threads * sizeof(mpctx->pages[0]));
 
 	isc_mutex_destroy(&mpctx->lock);
 
@@ -1314,18 +1319,27 @@ isc__mempool_get(isc_mempool_t *mpctx FLARG) {
 	REQUIRE(isc_tid_v < mpctx->max_threads);
 
 	if (ISC_UNLIKELY(mpctx->items[isc_tid_v] == NULL)) {
-		isc_mem_t *mctx = mpctx->mctx;
-		item = mem_get(mctx, mpctx->size);
-		mem_getstats(mctx, mpctx->size);
-	} else {
-		item = mpctx->items[isc_tid_v];
-		mpctx->items[isc_tid_v] = item->next;
-		INSIST(atomic_fetch_sub_relaxed(&mpctx->freecount[isc_tid_v], 1) > 0);
+		size_t aligned_size = ISC_ALIGN(mpctx->size, ALIGNMENT_SIZE);
+		size_t alloc_size = ISC_MAX(4096, aligned_size * 8);
+		uint8_t *page = mem_get(mpctx->mctx, mpctx->size);
+		uint8_t *iter = page;
+		mem_getstats(mpctx->mctx, mpctx->size);
+
+		while (iter < page + alloc_size) {
+			item->next = mpctx->items[isc_tid_v];
+			mpctx->items[isc_tid_v] = item;
+			(void)atomic_fetch_add_relaxed(&mpctx->freecount[isc_tid_v], 1);
+
+			iter += alloc_size;
+		}
 	}
 
-	REQUIRE(item != NULL);
+	INSIST(atomic_fetch_sub_relaxed(&mpctx->freecount[isc_tid_v], 1) > 0);
 
-	item->next = NULL;
+	item = mpctx->items[isc_tid_v];
+	mpctx->items[isc_tid_v] = item->next;
+
+	INSIST(item != NULL);
 
 	atomic_fetch_add_relaxed(&mpctx->gets, 1);
 	atomic_fetch_add_relaxed(&mpctx->allocated, 1);
