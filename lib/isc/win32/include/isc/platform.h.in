@@ -50,6 +50,14 @@ typedef uint32_t socklen_t;
 #define PATH_MAX _MAX_PATH
 #endif
 
+#define HAVE_GETPAGESIZE
+static inline size_t
+getpagesize(void) {
+	SYSTEM_INFO SystemInfo;
+	GetNativeSystemInfo(&SystemInfo);
+	return (SystemInfo.dwPageSize);
+}
+
 /***
  *** Network.
  ***/

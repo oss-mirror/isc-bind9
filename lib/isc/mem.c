@@ -18,6 +18,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include <isc/align.h>
 #include <isc/bind9.h>
@@ -67,7 +68,10 @@ LIBISC_EXTERNAL_DATA unsigned int isc_mem_defaultflags = ISC_MEMFLAG_DEFAULT;
 #define DEBUG_TABLE_COUNT 512U
 #define STATS_BUCKETS	  512U
 #define STATS_BUCKET_SIZE 32U
+#define CACHE_LINE_SIZE   64
 #define MEMPOOL_PREALLOC  8 /* the number of large-sized items to preallocate */
+
+static size_t pagesize = 4096;
 
 /*
  * Types.
@@ -326,7 +330,7 @@ unlock:
 #endif /* ISC_MEM_TRACKLINES */
 
 static void *
-default_memalloc(size_t size);
+default_memalloc(size_t size, size_t alignment);
 static void
 default_memfree(void *ptr);
 
@@ -334,10 +338,10 @@ default_memfree(void *ptr);
  * Perform a malloc, doing memory filling and overrun detection as necessary.
  */
 static inline void *
-mem_get(isc_mem_t *ctx, size_t size) {
+mem_get(isc_mem_t *ctx, size_t size, size_t alignment) {
 	char *ret;
 
-	ret = default_memalloc(size);
+	ret = default_memalloc(size, alignment);
 
 	if (ISC_UNLIKELY((ctx->flags & ISC_MEMFLAG_FILL) != 0)) {
 		if (ISC_LIKELY(ret != NULL)) {
@@ -402,10 +406,10 @@ mem_putstats(isc_mem_t *ctx, void *ptr, size_t size) {
  */
 
 static void *
-default_memalloc(size_t size) {
+default_memalloc(size_t size, size_t alignment) {
 	void *ptr;
 
-	ptr = malloc(size);
+	ptr = aligned_alloc(alignment, size);
 
 	/*
 	 * If the space cannot be allocated, a null pointer is returned. If the
@@ -442,6 +446,13 @@ mem_initialize(void) {
 	isc_mutex_init(&contextslock);
 	ISC_LIST_INIT(contexts);
 	totallost = 0;
+#if HAVE_SYSCONF
+	long r = sysconf(_SC_PAGESIZE);
+	RUNTIME_CHECK(r != -1);
+	pagesize = (size_t)r;
+#elif HAVE_GETPAGESIZE
+	pagesize = getpagesize();
+#endif
 }
 
 void
@@ -472,7 +483,7 @@ mem_create(isc_mem_t **ctxp, unsigned int flags) {
 	STATIC_ASSERT(ALIGNMENT_SIZE >= sizeof(size_info),
 		      "alignment size too small");
 
-	ctx = default_memalloc(sizeof(*ctx));
+	ctx = default_memalloc(sizeof(*ctx), ALIGNMENT_SIZE);
 
 	*ctx = (isc_mem_t){
 		.magic = MEM_MAGIC,
@@ -496,7 +507,7 @@ mem_create(isc_mem_t **ctxp, unsigned int flags) {
 		unsigned int i;
 
 		ctx->debuglist = default_memalloc(
-			(DEBUG_TABLE_COUNT * sizeof(debuglist_t)));
+			(DEBUG_TABLE_COUNT * sizeof(debuglist_t)), ALIGNMENT_SIZE);
 		for (i = 0; i < DEBUG_TABLE_COUNT; i++) {
 			ISC_LIST_INIT(ctx->debuglist[i]);
 		}
@@ -737,7 +748,7 @@ isc__mem_get(isc_mem_t *ctx, size_t size FLARG) {
 		return (isc__mem_allocate(ctx, size FLARG_PASS));
 	}
 
-	ptr = mem_get(ctx, size);
+	ptr = mem_get(ctx, size, ALIGNMENT_SIZE);
 	mem_getstats(ctx, size);
 
 	ADD_TRACE(ctx, ptr, size, file, line);
@@ -906,7 +917,7 @@ mem_allocateunlocked(isc_mem_t *ctx, size_t size) {
 		size += ALIGNMENT_SIZE;
 	}
 
-	si = mem_get(ctx, size);
+	si = mem_get(ctx, size, ALIGNMENT_SIZE);
 
 	if (ISC_UNLIKELY((isc_mem_debugging & ISC_MEM_DEBUGCTX) != 0)) {
 		si->ctx = ctx;
@@ -1263,12 +1274,20 @@ isc_mempool_destroy(isc_mempool_t **mpctxp) {
 			element *item = mpctx->items[i];
 			mpctx->items[i] = item->next;
 		}
+	}
+	/*
+	 * Return all the pages back to the allocator
+	 */
+	size_t aligned_size = ISC_ALIGN(mpctx->size, ALIGNMENT_SIZE);
+	size_t alloc_size = ISC_MAX(pagesize, aligned_size * 8);
+
+	for (size_t i = 0; i < mpctx->max_threads; i++) {
 		while (mpctx->pages[i] != NULL) {
 			element *page = mpctx->pages[i];
 			mpctx->pages[i] = page->next;
 
-			mem_putstats(mctx, page, mpctx->size);
-			mem_put(mctx, page, mpctx->size);
+			mem_putstats(mctx, page, alloc_size);
+			mem_put(mctx, page, alloc_size);
 		}
 	}
 
@@ -1320,14 +1339,17 @@ isc__mempool_get(isc_mempool_t *mpctx FLARG) {
 
 	if (ISC_UNLIKELY(mpctx->items[isc_tid_v] == NULL)) {
 		size_t aligned_size = ISC_ALIGN(mpctx->size, ALIGNMENT_SIZE);
-		size_t alloc_size = ISC_MAX(4096, aligned_size * 8);
-		uint8_t *page = mem_get(mpctx->mctx, mpctx->size);
-		uint8_t *iter = page;
-		mem_getstats(mpctx->mctx, mpctx->size);
+		size_t alloc_size = ISC_MAX(pagesize, aligned_size * 8);
+		element *page = mem_get(mpctx->mctx, alloc_size, pagesize);
+		uint8_t *iter = (uint8_t *)page + ISC_ALIGN(sizeof(*page), CACHE_LINE_SIZE);
+		mem_getstats(mpctx->mctx, alloc_size);
 
-		while (iter < page + alloc_size) {
-			item->next = mpctx->items[isc_tid_v];
-			mpctx->items[isc_tid_v] = item;
+		page->next = mpctx->pages[isc_tid_v];
+		mpctx->pages[isc_tid_v] = page;
+
+		while (iter < (uint8_t *)page + alloc_size) {
+			((element *)iter)->next = mpctx->items[isc_tid_v];
+			mpctx->items[isc_tid_v] = (element *)iter;
 			(void)atomic_fetch_add_relaxed(&mpctx->freecount[isc_tid_v], 1);
 
 			iter += alloc_size;

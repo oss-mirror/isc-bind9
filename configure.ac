@@ -380,6 +380,11 @@ AC_CHECK_FUNCS([sysctlbyname])
 AC_CHECK_FUNCS(mmap)
 
 #
+# Check for the existence of getpagesize to get the platform pagesize instead of compiled in default
+#
+AC_CHECK_FUNCS([getpagesize])
+
+#
 # Older versions of HP/UX don't define seteuid() and setegid()
 #
 AC_CHECK_FUNCS([seteuid setresuid])
