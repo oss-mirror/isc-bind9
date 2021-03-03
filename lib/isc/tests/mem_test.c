@@ -444,8 +444,6 @@ isc_mempool_benchmark(void **state) {
 
 	isc_mempool_create(test_mctx, MP_ITEM_SIZE, &mp);
 
-	isc_mempool_associatelock(mp, &mplock);
-
 	UNUSED(state);
 
 	result = isc_time_now(&ts1);
