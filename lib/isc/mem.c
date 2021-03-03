@@ -1320,12 +1320,9 @@ isc__mempool_put(isc_mempool_t *mpctx, void *mem FLARG) {
 void *
 isc__mempool_get(isc_mempool_t *mpctx FLARG) {
 	element *item = NULL;
-	unsigned int i;
 
 	REQUIRE(VALID_MEMPOOL(mpctx));
 	REQUIRE(isc_tid_v < mpctx->max_threads);
-
-	element *item;
 
 	if (ISC_UNLIKELY(mpctx->items[isc_tid_v] == NULL)) {
 		isc_mem_t *mctx = mpctx->mctx;
@@ -1358,13 +1355,12 @@ isc__mempool_put(isc_mempool_t *mpctx, void *mem FLARG) {
 	REQUIRE(mem != NULL);
 	REQUIRE(isc_tid_v < mpctx->max_threads);
 
-	element *item;
 	size_t allocated = atomic_fetch_sub_relaxed(&mpctx->allocated, 1);
 	(void)atomic_fetch_add_relaxed(&mpctx->freecount[isc_tid_v], 1);
 
 	INSIST(allocated > 0);
 
-	DELETE_TRACE(mctx, mem, mpctx->size, file, line);
+	DELETE_TRACE(mpctx->mctx, mem, mpctx->size, file, line);
 
 	item = (element *)mem;
 	item->next = mpctx->items[isc_tid_v];
