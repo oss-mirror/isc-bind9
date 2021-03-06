@@ -351,6 +351,7 @@ checkqueryacl(ns_client_t *client, dns_acl_t *queryacl, dns_name_t *zonename,
 			      NS_LOGMODULE_UPDATE, level,
 			      "update '%s/%s' denied due to allow-query",
 			      namebuf, classbuf);
+		ns_client_extendederror(client, DNS_EDE_PROHIBITED, NULL);
 	} else if (updateacl == NULL && ssutable == NULL) {
 		dns_name_format(zonename, namebuf, sizeof(namebuf));
 		dns_rdataclass_format(client->view->rdclass, classbuf,
@@ -360,6 +361,7 @@ checkqueryacl(ns_client_t *client, dns_acl_t *queryacl, dns_name_t *zonename,
 		ns_client_log(client, NS_LOGCATEGORY_UPDATE_SECURITY,
 			      NS_LOGMODULE_UPDATE, ISC_LOG_INFO,
 			      "update '%s/%s' denied", namebuf, classbuf);
+		ns_client_extendederror(client, DNS_EDE_PROHIBITED, NULL);
 	}
 	return (result);
 }
@@ -396,8 +398,12 @@ checkupdateacl(ns_client_t *client, dns_acl_t *acl, const char *message,
 		if (result == ISC_R_SUCCESS) {
 			level = ISC_LOG_DEBUG(3);
 			msg = "approved";
-		} else if (acl == NULL && !has_ssutable) {
-			level = ISC_LOG_INFO;
+		} else {
+			ns_client_extendederror(client, DNS_EDE_PROHIBITED,
+						NULL);
+			if (acl == NULL && !has_ssutable) {
+				level = ISC_LOG_INFO;
+			}
 		}
 	}
 
@@ -2054,6 +2060,9 @@ check_dnssec(ns_client_t *client, dns_zone_t *zone, dns_db_t *db,
 
 	/* Refuse to allow NSEC3 with NSEC-only keys */
 	if (nseconly && nsec3) {
+		ns_client_extendederror(
+			client, DNS_EDE_OTHER,
+			"NSEC only DNSKEYs and NSEC3 chains not allowed");
 		update_log(client, zone, ISC_LOG_ERROR,
 			   "NSEC only DNSKEYs and NSEC3 chains not allowed");
 		result = DNS_R_REFUSED;
@@ -2064,6 +2073,8 @@ check_dnssec(ns_client_t *client, dns_zone_t *zone, dns_db_t *db,
 	CHECK(get_iterations(db, ver, privatetype, &iterations));
 	CHECK(dns_nsec3_maxiterations(db, ver, client->mctx, &max));
 	if (max != 0 && iterations > max) {
+		ns_client_extendederror(client, DNS_EDE_OTHER,
+					"Too many NSEC3 iterations");
 		update_log(client, zone, ISC_LOG_ERROR,
 			   "too many NSEC3 iterations (%u) for "
 			   "weakest DNSKEY (%u)",
@@ -2757,6 +2768,8 @@ update_action(isc_task_t *task, isc_event_t *event) {
 	}
 
 	if (dns_zone_getupdatedisabled(zone)) {
+		ns_client_extendederror(client, DNS_EDE_NOTREADY,
+					"Dynamic update temporarily disabled");
 		FAILC(DNS_R_REFUSED, "dynamic update temporarily disabled "
 				     "because the zone is frozen.  Use "
 				     "'rndc thaw' to re-enable updates.");
@@ -2800,6 +2813,9 @@ update_action(isc_task_t *task, isc_event_t *event) {
 			}
 			result = dns_zone_checknames(zone, name, &rdata);
 			if (result != ISC_R_SUCCESS) {
+				ns_client_extendederror(
+					client, DNS_EDE_OTHER,
+					"Illegal hostname/mail domain");
 				FAIL(DNS_R_REFUSED);
 			}
 		} else if (update_class == dns_rdataclass_any) {
@@ -2826,15 +2842,21 @@ update_action(isc_task_t *task, isc_event_t *event) {
 		 * is forbidden from updating NSEC records."
 		 */
 		if (rdata.type == dns_rdatatype_nsec3) {
+			ns_client_extendederror(client, DNS_EDE_OTHER,
+						"NSEC3 updates not allowed");
 			FAILC(DNS_R_REFUSED, "explicit NSEC3 updates are not "
 					     "allowed "
 					     "in secure zones");
 		} else if (rdata.type == dns_rdatatype_nsec) {
+			ns_client_extendederror(client, DNS_EDE_OTHER,
+						"NSEC updates not allowed");
 			FAILC(DNS_R_REFUSED, "explicit NSEC updates are not "
 					     "allowed "
 					     "in secure zones");
 		} else if (rdata.type == dns_rdatatype_rrsig &&
 			   !dns_name_equal(name, zonename)) {
+			ns_client_extendederror(client, DNS_EDE_OTHER,
+						"RRSIG updates not allowed");
 			FAILC(DNS_R_REFUSED, "explicit RRSIG updates are "
 					     "currently "
 					     "not supported in secure zones "
@@ -2857,6 +2879,9 @@ update_action(isc_task_t *task, isc_event_t *event) {
 					    &netaddr, TCPCLIENT(client), env,
 					    rdata.type, tsigkey, &rules[rule]))
 				{
+					ns_client_extendederror(
+						client, DNS_EDE_OTHER,
+						"Rejected by secure update");
 					FAILC(DNS_R_REFUSED, "rejected by "
 							     "secure update");
 				}
@@ -2865,6 +2890,9 @@ update_action(isc_task_t *task, isc_event_t *event) {
 						  client->signer, &netaddr, env,
 						  TCPCLIENT(client), tsigkey))
 				{
+					ns_client_extendederror(
+						client, DNS_EDE_OTHER,
+						"Rejected by secure update");
 					FAILC(DNS_R_REFUSED, "rejected by "
 							     "secure update");
 				}
@@ -3234,6 +3262,8 @@ update_action(isc_task_t *task, isc_event_t *event) {
 		unsigned int errors = 0;
 		CHECK(dns_zone_nscheck(zone, db, ver, &errors));
 		if (errors != 0) {
+			ns_client_extendederror(client, DNS_EDE_OTHER,
+						"Sanity check failed");
 			update_log(client, zone, LOGLEVEL_PROTOCOL,
 				   "update rejected: post update name server "
 				   "sanity check failed");
@@ -3244,6 +3274,8 @@ update_action(isc_task_t *task, isc_event_t *event) {
 	if (!ISC_LIST_EMPTY(diff.tuples)) {
 		result = dns_zone_cdscheck(zone, db, ver);
 		if (result == DNS_R_BADCDS || result == DNS_R_BADCDNSKEY) {
+			ns_client_extendederror(client, DNS_EDE_OTHER,
+						"Bad CDS/CDNSKEY");
 			update_log(client, zone, LOGLEVEL_PROTOCOL,
 				   "update rejected: bad %s RRset",
 				   result == DNS_R_BADCDS ? "CDS" : "CDNSKEY");
@@ -3289,6 +3321,10 @@ update_action(isc_task_t *task, isc_event_t *event) {
 				   0, &had_dnskey));
 		if (!ALLOW_SECURE_TO_INSECURE(zone)) {
 			if (had_dnskey && !has_dnskey) {
+				ns_client_extendederror(
+					client, DNS_EDE_OTHER,
+					"Secure to insecure not allowed");
+
 				update_log(client, zone, LOGLEVEL_PROTOCOL,
 					   "update rejected: all DNSKEY "
 					   "records removed and "
