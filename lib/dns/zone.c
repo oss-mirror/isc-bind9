@@ -457,52 +457,52 @@ struct dns_zone {
 #define DNS_ZONE_SETFLAG(z, f) atomic_fetch_or(&(z)->flags, (f))
 #define DNS_ZONE_CLRFLAG(z, f) atomic_fetch_and(&(z)->flags, ~(f))
 typedef enum {
-	DNS_ZONEFLG_REFRESH = 0x00000001U,     /*%< refresh check in progress */
-	DNS_ZONEFLG_NEEDDUMP = 0x00000002U,    /*%< zone need consolidation */
-	DNS_ZONEFLG_USEVC = 0x00000004U,       /*%< use tcp for refresh query */
-	DNS_ZONEFLG_DUMPING = 0x00000008U,     /*%< a dump is in progress */
-	DNS_ZONEFLG_HASINCLUDE = 0x00000010U,  /*%< $INCLUDE in zone file */
-	DNS_ZONEFLG_LOADED = 0x00000020U,      /*%< database has loaded */
-	DNS_ZONEFLG_EXITING = 0x00000040U,     /*%< zone is being destroyed */
-	DNS_ZONEFLG_EXPIRED = 0x00000080U,     /*%< zone has expired */
-	DNS_ZONEFLG_NEEDREFRESH = 0x00000100U, /*%< refresh check needed */
-	DNS_ZONEFLG_UPTODATE = 0x00000200U,    /*%< zone contents are
-						* up-to-date */
-	DNS_ZONEFLG_NEEDNOTIFY = 0x00000400U,  /*%< need to send out notify
-						* messages */
-	DNS_ZONEFLG_DIFFONRELOAD = 0x00000800U, /*%< generate a journal diff on
-						 * reload */
-	DNS_ZONEFLG_NOMASTERS = 0x00001000U,	/*%< an attempt to refresh a
-						 * zone with no primaries
-						 * occurred */
-	DNS_ZONEFLG_LOADING = 0x00002000U,    /*%< load from disk in progress*/
-	DNS_ZONEFLG_HAVETIMERS = 0x00004000U, /*%< timer values have been set
-					       * from SOA (if not set, we
-					       * are still using
-					       * default timer values) */
-	DNS_ZONEFLG_FORCEXFER = 0x00008000U,  /*%< Force a zone xfer */
-	DNS_ZONEFLG_NOREFRESH = 0x00010000U,
-	DNS_ZONEFLG_DIALNOTIFY = 0x00020000U,
-	DNS_ZONEFLG_DIALREFRESH = 0x00040000U,
-	DNS_ZONEFLG_SHUTDOWN = 0x00080000U,
-	DNS_ZONEFLG_NOIXFR = 0x00100000U, /*%< IXFR failed, force AXFR */
-	DNS_ZONEFLG_FLUSH = 0x00200000U,
-	DNS_ZONEFLG_NOEDNS = 0x00400000U,
-	DNS_ZONEFLG_USEALTXFRSRC = 0x00800000U,
-	DNS_ZONEFLG_SOABEFOREAXFR = 0x01000000U,
-	DNS_ZONEFLG_NEEDCOMPACT = 0x02000000U,
-	DNS_ZONEFLG_REFRESHING = 0x04000000U, /*%< Refreshing keydata */
-	DNS_ZONEFLG_THAW = 0x08000000U,
-	DNS_ZONEFLG_LOADPENDING = 0x10000000U, /*%< Loading scheduled */
-	DNS_ZONEFLG_NODELAY = 0x20000000U,
-	DNS_ZONEFLG_SENDSECURE = 0x40000000U,
-	DNS_ZONEFLG_NEEDSTARTUPNOTIFY = 0x80000000U, /*%< need to send out
-						      * notify due to the zone
-						      * just being loaded for
-						      * the first time. */
-	DNS_ZONEFLG_FIXJOURNAL = 0x100000000U,	     /*%< journal file had
-						      * recoverable error,
-						      * needs rewriting */
+	DNS_ZONEFLG_REFRESH = 0x00000001ULL,  /*%< refresh check in progress */
+	DNS_ZONEFLG_NEEDDUMP = 0x00000002ULL, /*%< zone need consolidation */
+	DNS_ZONEFLG_USEVC = 0x00000004ULL,    /*%< use tcp for refresh query */
+	DNS_ZONEFLG_DUMPING = 0x00000008ULL,  /*%< a dump is in progress */
+	DNS_ZONEFLG_HASINCLUDE = 0x00000010ULL,	 /*%< $INCLUDE in zone file */
+	DNS_ZONEFLG_LOADED = 0x00000020ULL,	 /*%< database has loaded */
+	DNS_ZONEFLG_EXITING = 0x00000040ULL,	 /*%< zone is being destroyed */
+	DNS_ZONEFLG_EXPIRED = 0x00000080ULL,	 /*%< zone has expired */
+	DNS_ZONEFLG_NEEDREFRESH = 0x00000100ULL, /*%< refresh check needed */
+	DNS_ZONEFLG_UPTODATE = 0x00000200ULL,	 /*%< zone contents are
+						  * up-to-date */
+	DNS_ZONEFLG_NEEDNOTIFY = 0x00000400ULL,	 /*%< need to send out notify
+						  * messages */
+	DNS_ZONEFLG_DIFFONRELOAD = 0x00000800ULL, /*%< generate a journal diff
+						   * on reload */
+	DNS_ZONEFLG_NOMASTERS = 0x00001000ULL,	  /*%< an attempt to refresh a
+						   * zone with no primaries
+						   * occurred */
+	DNS_ZONEFLG_LOADING = 0x00002000ULL, /*%< load from disk in progress*/
+	DNS_ZONEFLG_HAVETIMERS = 0x00004000ULL, /*%< timer values have been set
+						 * from SOA (if not set, we
+						 * are still using
+						 * default timer values) */
+	DNS_ZONEFLG_FORCEXFER = 0x00008000ULL,	/*%< Force a zone xfer */
+	DNS_ZONEFLG_NOREFRESH = 0x00010000ULL,
+	DNS_ZONEFLG_DIALNOTIFY = 0x00020000ULL,
+	DNS_ZONEFLG_DIALREFRESH = 0x00040000ULL,
+	DNS_ZONEFLG_SHUTDOWN = 0x00080000ULL,
+	DNS_ZONEFLG_NOIXFR = 0x00100000ULL, /*%< IXFR failed, force AXFR */
+	DNS_ZONEFLG_FLUSH = 0x00200000ULL,
+	DNS_ZONEFLG_NOEDNS = 0x00400000ULL,
+	DNS_ZONEFLG_USEALTXFRSRC = 0x00800000ULL,
+	DNS_ZONEFLG_SOABEFOREAXFR = 0x01000000ULL,
+	DNS_ZONEFLG_NEEDCOMPACT = 0x02000000ULL,
+	DNS_ZONEFLG_REFRESHING = 0x04000000ULL, /*%< Refreshing keydata */
+	DNS_ZONEFLG_THAW = 0x08000000ULL,
+	DNS_ZONEFLG_LOADPENDING = 0x10000000ULL, /*%< Loading scheduled */
+	DNS_ZONEFLG_NODELAY = 0x20000000ULL,
+	DNS_ZONEFLG_SENDSECURE = 0x40000000ULL,
+	DNS_ZONEFLG_NEEDSTARTUPNOTIFY = 0x80000000ULL, /*%< need to send out
+							* notify due to the zone
+							* just being loaded for
+							* the first time. */
+	DNS_ZONEFLG_FIXJOURNAL = 0x100000000ULL,       /*%< journal file had
+							* recoverable error,
+							* needs rewriting */
 	DNS_ZONEFLG___MAX = UINT64_MAX, /* trick to make the ENUM 64-bit wide */
 } dns_zoneflg_t;
 
