@@ -160,6 +160,10 @@ ns_notify_start(ns_client_t *client, isc_nmhandle_t *handle) {
 				   tsigbuf);
 			result = dns_zone_notifyreceive(zone, from, to,
 							request);
+			if (result == DNS_R_REFUSED) {
+				ns_client_extendederror(
+					client, DNS_EDE_PROHIBITED, NULL);
+			}
 			goto done;
 		}
 	}
