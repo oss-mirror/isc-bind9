@@ -251,8 +251,6 @@ main(int argc, char *argv[]) {
 		have_src = true;
 	}
 
-	dns_result_register();
-
 	isc_sockaddr_any(&bind_any);
 
 	result = ISC_R_FAILURE;

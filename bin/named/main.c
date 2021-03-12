@@ -1517,13 +1517,6 @@ main(int argc, char *argv[]) {
 
 	named_os_init(program_name);
 
-	dns_result_register();
-	dst_result_register();
-	isccc_result_register();
-#if USE_PKCS11
-	pk11_result_register();
-#endif /* if USE_PKCS11 */
-
 	parse_command_line(argc, argv);
 
 #ifdef ENABLE_AFL

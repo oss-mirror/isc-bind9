@@ -529,8 +529,6 @@ main(int argc, char **argv) {
 			      ISC_R_SUCCESS);
 	}
 
-	dns_result_register();
-
 	origin = argv[isc_commandline_index++];
 
 	if (isc_commandline_index == argc) {

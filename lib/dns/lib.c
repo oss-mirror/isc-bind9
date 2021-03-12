@@ -51,7 +51,6 @@ initialize(void) {
 	isc_refcount_init(&references, 0);
 
 	isc_mem_create(&dns_g_mctx);
-	dns_result_register();
 
 	result = dst_lib_init(dns_g_mctx, NULL);
 	if (result != ISC_R_SUCCESS) {

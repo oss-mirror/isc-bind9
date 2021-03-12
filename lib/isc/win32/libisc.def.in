@@ -545,8 +545,6 @@ isc_region_compare
 isc_resource_getcurlimit
 isc_resource_getlimit
 isc_resource_setlimit
-isc_result_register
-isc_result_registerids
 isc_result_toid
 isc_result_totext
 isc_rwlock_destroy
@@ -744,7 +742,6 @@ pk11_mem_get
 pk11_mem_put
 pk11_numbits
 pk11_parse_uri
-pk11_result_register
 pk11_result_totext
 pk11_return_session
 pk11_set_lib_name

@@ -2096,8 +2096,6 @@ main(int argc, char *argv[]) {
 
 	RUNCHECK(isc_app_start());
 
-	dns_result_register();
-
 	if (isc_net_probeipv4() == ISC_R_SUCCESS) {
 		have_ipv4 = true;
 	}

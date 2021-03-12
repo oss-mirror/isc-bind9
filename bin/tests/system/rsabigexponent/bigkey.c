@@ -103,8 +103,6 @@ main(int argc, char **argv) {
 		exit(1);
 	}
 
-	dns_result_register();
-
 	isc_mem_create(&mctx);
 	CHECK(dst_lib_init(mctx, NULL), "dst_lib_init()");
 	isc_log_create(mctx, &log_, &logconfig);

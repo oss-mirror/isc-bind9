@@ -101,11 +101,6 @@ main(int argc, char **argv) {
 	int len = 0;
 	int ch;
 
-#if USE_PKCS11
-	pk11_result_register();
-#endif /* if USE_PKCS11 */
-	dns_result_register();
-
 	result = isc_file_progname(*argv, program, sizeof(program));
 	if (result != ISC_R_SUCCESS) {
 		memmove(program, "tsig-keygen", 11);

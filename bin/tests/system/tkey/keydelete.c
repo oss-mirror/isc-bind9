@@ -166,8 +166,6 @@ main(int argc, char **argv) {
 	port = atoi(argv[2]);
 	keyname = argv[3];
 
-	dns_result_register();
-
 	mctx = NULL;
 	isc_mem_create(&mctx);
 
