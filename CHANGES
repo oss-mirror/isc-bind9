@@ -1,3 +1,6 @@
+5609.	[cleanup]	Refactor the result-code API to be statically linked,
+			removing the need for locking. [GL #719]
+
 5608.	[bug]		Dig now honors +retry=0 and +tries=1 when queries
 			are sent over TCP (+tcp) and the remote server closes
 			the connection prematurely. [GL #2490]
