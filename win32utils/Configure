@@ -2670,7 +2670,7 @@ if ($verbose) {
 
 sub makeresultfiles {
     open OUT, '>', "$resultcfile" or die $!;
-    for (glob "..\\lib\\*\\result_*.c") {
+    for (glob "..\\lib\\*\\result_*.c.in") {
         open FH, '<', "$_" or next;
         while (<FH>) {print OUT "$_"};
         close FH;
@@ -2678,11 +2678,14 @@ sub makeresultfiles {
     close OUT;
 
     open OUT, '>', "$resulthfile" or die $!;
+	print OUT "enum isc_result {\n";
     for (glob "..\\lib\\*\\result_*.h.in") {
         open FH, '<', "$_" or next;
         while (<FH>) {print OUT "$_"};
         close FH;
     }
+	print OUT "ISC_R_DUMMY = ISC_RESULTCODE_ISC((uint32_t)-1) /* don't use this value. */\n";
+	print OUT "};\n";
     close OUT;
 }
 

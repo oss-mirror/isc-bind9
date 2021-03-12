@@ -12799,6 +12799,8 @@ named_server_freeze(named_server_t *server, bool freeze, isc_lex_t *lex,
 				      "Check the logs to see the result.";
 				result = ISC_R_SUCCESS;
 				break;
+			default:
+				msg = "Unexpected error.\n";
 			}
 		}
 	}
