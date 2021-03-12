@@ -14,7 +14,6 @@
 
 /*! \file dst/result.h */
 
-#include <isc/lang.h>
 #include <isc/resultclass.h>
 
 /*
