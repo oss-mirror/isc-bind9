@@ -12,6 +12,8 @@
 #ifndef ISC_RESULTCLASS_H
 #define ISC_RESULTCLASS_H 1
 
+#include <stdint.h>
+
 /*! \file isc/resultclass.h
  * \brief Registry of Predefined Result Type Classes
  *

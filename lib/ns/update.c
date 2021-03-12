@@ -107,22 +107,24 @@
  * The test against ISC_R_SUCCESS is there to keep the Solaris compiler
  * from complaining about "end-of-loop code not reached".
  */
-#define FAILC(code, msg)                                     \
-	do {                                                 \
-		const char *_what = "failed";                \
-		result = (code);                             \
-		switch (result) {                            \
-		case DNS_R_NXDOMAIN:                         \
-		case DNS_R_YXDOMAIN:                         \
-		case DNS_R_YXRRSET:                          \
-		case DNS_R_NXRRSET:                          \
-			_what = "unsuccessful";              \
-		}                                            \
-		update_log(client, zone, LOGLEVEL_PROTOCOL,  \
-			   "update %s: %s (%s)", _what, msg, \
-			   isc_result_totext(result));       \
-		if (result != ISC_R_SUCCESS)                 \
-			goto failure;                        \
+#define FAILC(code, msg)                                        \
+	do {                                                    \
+		const char *_what = "failed";                   \
+		result = (code);                                \
+		switch (result) {                               \
+		case DNS_R_NXDOMAIN:                            \
+		case DNS_R_YXDOMAIN:                            \
+		case DNS_R_YXRRSET:                             \
+		case DNS_R_NXRRSET:                             \
+			_what = "unsuccessful";                 \
+		default:                                        \
+			(void)0; /* Suppress -Werror=switch. */ \
+		}                                               \
+		update_log(client, zone, LOGLEVEL_PROTOCOL,     \
+			   "update %s: %s (%s)", _what, msg,    \
+			   isc_result_totext(result));          \
+		if (result != ISC_R_SUCCESS)                    \
+			goto failure;                           \
 	} while (0)
 #define PREREQFAILC(code, msg)                                            \
 	do {                                                              \
@@ -140,6 +142,8 @@
 		case DNS_R_YXRRSET:                                        \
 		case DNS_R_NXRRSET:                                        \
 			_what = "unsuccessful";                            \
+		default:                                                   \
+			(void)0; /* Suppress -Werror=switch. */            \
 		}                                                          \
 		if (isc_log_wouldlog(ns_lctx, LOGLEVEL_PROTOCOL)) {        \
 			char _nbuf[DNS_NAME_FORMATSIZE];                   \
@@ -167,6 +171,8 @@
 		case DNS_R_YXRRSET:                                           \
 		case DNS_R_NXRRSET:                                           \
 			_what = "unsuccessful";                               \
+		default:                                                      \
+			(void)0; /* Suppress -Werror=switch. */               \
 		}                                                             \
 		if (isc_log_wouldlog(ns_lctx, LOGLEVEL_PROTOCOL)) {           \
 			char _nbuf[DNS_NAME_FORMATSIZE];                      \

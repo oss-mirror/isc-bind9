@@ -115,6 +115,8 @@
 		case DNS_R_YXRRSET:                                            \
 		case DNS_R_NXRRSET:                                            \
 			_what = "unsuccessful";                                \
+		default:                                                       \
+			(void)0; /* Suppress -Werror=switch. */                \
 		}                                                              \
 		update_log(log, zone, LOGLEVEL_PROTOCOL, "update %s: %s (%s)", \
 			   _what, msg, isc_result_totext(result));             \
@@ -132,6 +134,8 @@
 		case DNS_R_YXRRSET:                                        \
 		case DNS_R_NXRRSET:                                        \
 			_what = "unsuccessful";                            \
+		default:                                                   \
+			(void)0; /* Suppress -Werror=switch. */            \
 		}                                                          \
 		if (isc_log_wouldlog(dns_lctx, LOGLEVEL_PROTOCOL)) {       \
 			char _nbuf[DNS_NAME_FORMATSIZE];                   \
@@ -154,6 +158,8 @@
 		case DNS_R_YXRRSET:                                           \
 		case DNS_R_NXRRSET:                                           \
 			_what = "unsuccessful";                               \
+		default:                                                      \
+			(void)0; /* Suppress -Werror=switch. */               \
 		}                                                             \
 		if (isc_log_wouldlog(dns_lctx, LOGLEVEL_PROTOCOL)) {          \
 			char _nbuf[DNS_NAME_FORMATSIZE];                      \

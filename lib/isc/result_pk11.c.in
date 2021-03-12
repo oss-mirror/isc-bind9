@@ -9,11 +9,6 @@
  * information regarding copyright ownership.
  */
 
-#include <stddef.h>
-
-#include <isc/once.h>
-#include <isc/util.h>
-
 static const char *pk11_result_descriptions[PK11_R_NRESULTS] = {
 	"PKCS#11 initialization failed", /*%< 0 */
 	"no PKCS#11 provider",		 /*%< 1 */

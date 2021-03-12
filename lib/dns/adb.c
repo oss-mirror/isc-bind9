@@ -3928,6 +3928,8 @@ dbfind_name(dns_adbname_t *adbname, isc_stdtime_t now, dns_rdatatype_t rdtype) {
 			adbname->fetch6_err = FIND_ERR_SUCCESS;
 		}
 		break;
+	default:
+		(void)0; /* Suppress -Werror=switch. */
 	}
 
 	if (dns_rdataset_isassociated(&rdataset)) {

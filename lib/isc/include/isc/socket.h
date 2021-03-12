@@ -56,6 +56,7 @@
 #include <isc/eventclass.h>
 #include <isc/lang.h>
 #include <isc/region.h>
+#include <isc/result.h>
 #include <isc/sockaddr.h>
 #include <isc/time.h>
 #include <isc/types.h>

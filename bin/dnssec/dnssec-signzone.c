@@ -451,10 +451,11 @@ expecttofindkey(dns_name_t *name) {
 	case DNS_R_CNAME:
 	case DNS_R_DNAME:
 		return (false);
+	default:
+		dns_name_format(name, namestr, sizeof(namestr));
+		fatal("failure looking for '%s DNSKEY' in database: %s",
+		      namestr, isc_result_totext(result));
 	}
-	dns_name_format(name, namestr, sizeof(namestr));
-	fatal("failure looking for '%s DNSKEY' in database: %s", namestr,
-	      isc_result_totext(result));
 	/* NOTREACHED */
 	return (false); /* removes a warning */
 }

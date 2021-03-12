@@ -233,7 +233,10 @@ result_ext.c: ${top_srcdir}/lib/*/result_*.c.in
 	cat ${top_srcdir}/lib/*/result_*.c.in > result_ext.c
 
 ${top_srcdir}/lib/isc/include/isc/result_ext.h: ${top_srcdir}/lib/*/result_*.h.in
-	cat ${top_srcdir}/lib/*/result_*.h.in > ${top_srcdir}/lib/isc/include/isc/result_ext.h
+	echo "enum isc_result {" > ${top_srcdir}/lib/isc/include/isc/result_ext.h
+	cat ${top_srcdir}/lib/*/result_*.h.in >> ${top_srcdir}/lib/isc/include/isc/result_ext.h
+	echo "ISC_R_DUMMY = ISC_RESULTCODE_ISC((uint32_t)-1) /* don't use this value. */" >> ${top_srcdir}/lib/isc/include/isc/result_ext.h
+	echo "};" >> ${top_srcdir}/lib/isc/include/isc/result_ext.h
 
 libisc_la_CPPFLAGS =		\
 	$(AM_CPPFLAGS)		\
