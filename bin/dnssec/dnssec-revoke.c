@@ -94,11 +94,6 @@ main(int argc, char **argv) {
 
 	isc_mem_create(&mctx);
 
-#if USE_PKCS11
-	pk11_result_register();
-#endif /* if USE_PKCS11 */
-	dns_result_register();
-
 	isc_commandline_errprint = false;
 
 	while ((ch = isc_commandline_parse(argc, argv, "E:fK:rRhv:V")) != -1) {

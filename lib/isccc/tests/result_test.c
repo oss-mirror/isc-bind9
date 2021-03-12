@@ -35,8 +35,6 @@ tables(void **state) {
 
 	UNUSED(state);
 
-	isccc_result_register();
-
 	for (result = ISC_RESULTCLASS_ISCCC;
 	     result < (ISC_RESULTCLASS_ISCCC + ISCCC_R_NRESULTS); result++)
 	{

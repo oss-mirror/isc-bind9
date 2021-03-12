@@ -66,8 +66,6 @@ main(int argc, char *argv[]) {
 
 	isc_mem_create(&mctx);
 
-	pk11_result_register();
-
 	/* Initialize the CRYPTOKI library */
 	if (lib_name != NULL) {
 		pk11_set_lib_name(lib_name);

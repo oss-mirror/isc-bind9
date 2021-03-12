@@ -1329,11 +1329,6 @@ setup_libs(void) {
 
 	debug("setup_libs()");
 
-#if USE_PKCS11
-	pk11_result_register();
-#endif /* if USE_PKCS11 */
-	dns_result_register();
-
 	result = isc_net_probeipv4();
 	if (result == ISC_R_SUCCESS) {
 		have_ipv4 = true;

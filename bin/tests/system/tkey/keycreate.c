@@ -222,8 +222,6 @@ main(int argc, char *argv[]) {
 		ownername_str = argv[4];
 	}
 
-	dns_result_register();
-
 	mctx = NULL;
 	isc_mem_debugging = ISC_MEM_DEBUGRECORD;
 	isc_mem_create(&mctx);

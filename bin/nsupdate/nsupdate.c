@@ -808,8 +808,6 @@ setup_system(void) {
 
 	ddebug("setup_system()");
 
-	dns_result_register();
-
 	isc_log_create(gmctx, &glctx, &logconfig);
 	isc_log_setcontext(glctx);
 	dns_log_init(glctx);

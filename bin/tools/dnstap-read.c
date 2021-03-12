@@ -360,8 +360,6 @@ main(int argc, char *argv[]) {
 
 	isc_mem_create(&mctx);
 
-	dns_result_register();
-
 	CHECKM(dns_dt_open(argv[0], dns_dtmode_file, mctx, &handle),
 	       "dns_dt_openfile");
 

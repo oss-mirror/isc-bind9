@@ -720,8 +720,6 @@ main(int argc, char **argv) {
 
 	RUNTIME_CHECK(setup_logging(mctx, stdout, &logc) == ISC_R_SUCCESS);
 
-	dns_result_register();
-
 	RUNTIME_CHECK(cfg_parser_create(mctx, logc, &parser) == ISC_R_SUCCESS);
 
 	if (nodeprecate) {

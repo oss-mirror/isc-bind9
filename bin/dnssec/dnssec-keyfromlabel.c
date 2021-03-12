@@ -170,11 +170,6 @@ main(int argc, char **argv) {
 
 	isc_mem_create(&mctx);
 
-#if USE_PKCS11
-	pk11_result_register();
-#endif /* if USE_PKCS11 */
-	dns_result_register();
-
 	isc_commandline_errprint = false;
 
 	isc_stdtime_get(&now);

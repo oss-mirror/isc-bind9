@@ -960,9 +960,7 @@ dns_resolver_shutdown
 dns_resolver_socketmgr
 dns_resolver_taskmgr
 dns_resolver_whenshutdown
-dns_result_register
 dns_result_torcode
-dns_result_totext
 dns_root_checkhints
 dns_rootns_create
 dns_rpz_add
@@ -1524,8 +1522,6 @@ dst_lib_destroy
 dst_lib_init
 dst_region_computeid
 dst_region_computerid
-dst_result_register
-dst_result_totext
 @IF NOLONGER
 ; Exported Data
 

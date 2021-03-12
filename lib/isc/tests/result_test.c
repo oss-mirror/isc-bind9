@@ -61,8 +61,6 @@ tables(void **state) {
 
 	UNUSED(state);
 
-	pk11_result_register();
-
 	for (result = 0; result < ISC_R_NRESULTS; result++) {
 		str = isc_result_toid(result);
 		assert_non_null(str);
