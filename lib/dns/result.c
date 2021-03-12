@@ -11,11 +11,7 @@
 
 /*! \file */
 
-#include <isc/once.h>
-#include <isc/util.h>
-
-#include <dns/lib.h>
-#include <dns/result.h>
+#include <isc/result.h>
 
 static const char *text[DNS_R_NRESULTS] = {
 	"label too long", /*%< 0 DNS_R_LABELTOOLONG */
@@ -340,57 +336,6 @@ static const char *rcode_ids[DNS_R_NRCODERESULTS] = {
 	"RNS_R_RCODE12", "DNS_R_RCODE13", "DNS_R_RCODE14",  "DNS_R_RCODE15",
 	"DNS_R_BADVERS",
 };
-
-#define DNS_RESULT_RESULTSET	  2
-#define DNS_RESULT_RCODERESULTSET 3
-
-static isc_once_t once = ISC_ONCE_INIT;
-
-static void
-initialize_action(void) {
-	isc_result_t result;
-
-	result = isc_result_register(ISC_RESULTCLASS_DNS, DNS_R_NRESULTS, text,
-				     DNS_RESULT_RESULTSET);
-	if (result == ISC_R_SUCCESS) {
-		result = isc_result_register(ISC_RESULTCLASS_DNSRCODE,
-					     DNS_R_NRCODERESULTS, rcode_text,
-					     DNS_RESULT_RCODERESULTSET);
-	}
-	if (result != ISC_R_SUCCESS) {
-		UNEXPECTED_ERROR(__FILE__, __LINE__,
-				 "isc_result_register() failed: %u", result);
-	}
-
-	result = isc_result_registerids(ISC_RESULTCLASS_DNS, DNS_R_NRESULTS,
-					ids, DNS_RESULT_RESULTSET);
-	if (result == ISC_R_SUCCESS) {
-		result = isc_result_registerids(ISC_RESULTCLASS_DNSRCODE,
-						DNS_R_NRCODERESULTS, rcode_ids,
-						DNS_RESULT_RCODERESULTSET);
-	}
-	if (result != ISC_R_SUCCESS) {
-		UNEXPECTED_ERROR(__FILE__, __LINE__,
-				 "isc_result_registerids() failed: %u", result);
-	}
-}
-
-static void
-initialize(void) {
-	RUNTIME_CHECK(isc_once_do(&once, initialize_action) == ISC_R_SUCCESS);
-}
-
-const char *
-dns_result_totext(isc_result_t result) {
-	initialize();
-
-	return (isc_result_totext(result));
-}
-
-void
-dns_result_register(void) {
-	initialize();
-}
 
 dns_rcode_t
 dns_result_torcode(isc_result_t result) {

@@ -28,11 +28,7 @@
 
 /*! \file isccc/result.h */
 
-#include <isc/lang.h>
-#include <isc/result.h>
 #include <isc/resultclass.h>
-
-#include <isccc/types.h>
 
 /*% Unknown Version */
 #define ISCCC_R_UNKNOWNVERSION (ISC_RESULTCLASS_ISCCC + 0)
@@ -48,18 +44,5 @@
 #define ISCCC_R_DUPLICATE (ISC_RESULTCLASS_ISCCC + 5)
 
 #define ISCCC_R_NRESULTS 6 /*%< Number of results */
-
-ISC_LANG_BEGINDECLS
-
-const char *
-isccc_result_totext(isc_result_t result);
-/*%
- * Convert a isccc_result_t into a string message describing the result.
- */
-
-void
-isccc_result_register(void);
-
-ISC_LANG_ENDDECLS
 
 #endif /* ISCCC_RESULT_H */
