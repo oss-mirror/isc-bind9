@@ -89,7 +89,7 @@ start_udp_child(isc_nm_t *mgr, isc_sockaddr_t *iface, isc_nmsocket_t *sock,
 	isc__nmsocket_init(csock, mgr, isc_nm_udpsocket, iface);
 	csock->parent = sock;
 	csock->iface = sock->iface;
-	csock->reading = true;
+	atomic_init(&csock->reading, true);
 	csock->recv_cb = sock->recv_cb;
 	csock->recv_cbarg = sock->recv_cbarg;
 	csock->extrahandlesize = sock->extrahandlesize;
@@ -344,7 +344,7 @@ udp_recv_cb(uv_udp_t *handle, ssize_t nrecv, const uv_buf_t *buf,
 
 	REQUIRE(VALID_NMSOCK(sock));
 	REQUIRE(sock->tid == isc_nm_tid());
-	REQUIRE(sock->reading);
+	REQUIRE(atomic_load(&sock->reading));
 
 #ifdef UV_UDP_MMSG_FREE
 	free_buf = ((flags & UV_UDP_MMSG_FREE) == UV_UDP_MMSG_FREE);
@@ -863,7 +863,7 @@ isc__nm_async_udpread(isc__networker_t *worker, isc__netievent_t *ev0) {
 	REQUIRE(sock->tid == isc_nm_tid());
 
 	if (isc__nmsocket_closing(sock)) {
-		sock->reading = true;
+		atomic_store(&sock->reading, true);
 		isc__nm_failed_read_cb(sock, ISC_R_CANCELED, false);
 		return;
 	}
@@ -887,7 +887,7 @@ isc__nm_udp_read(isc_nmhandle_t *handle, isc_nm_recv_cb_t cb, void *cbarg) {
 	sock->recv_cbarg = cbarg;
 	sock->recv_read = true;
 
-	if (!sock->reading && sock->tid == isc_nm_tid()) {
+	if (!atomic_load(&sock->reading) && sock->tid == isc_nm_tid()) {
 		isc__netievent_udpread_t ievent = { .sock = sock };
 		isc__nm_async_udpread(NULL, (isc__netievent_t *)&ievent);
 	} else {

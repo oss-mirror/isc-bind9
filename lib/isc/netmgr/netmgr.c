@@ -1915,7 +1915,7 @@ isc__nm_failed_send_cb(isc_nmsocket_t *sock, isc__nm_uvreq_t *req,
 
 void
 isc__nm_failed_accept_cb(isc_nmsocket_t *sock, isc_result_t eresult) {
-	REQUIRE(sock->accepting);
+	REQUIRE(atomic_load(&sock->accepting));
 	REQUIRE(sock->server);
 
 	/*
@@ -1929,7 +1929,7 @@ isc__nm_failed_accept_cb(isc_nmsocket_t *sock, isc_result_t eresult) {
 
 	isc__nmsocket_detach(&sock->server);
 
-	sock->accepting = false;
+	atomic_store(&sock->accepting, false);
 
 	switch (eresult) {
 	case ISC_R_NOTCONNECTED:
@@ -2024,7 +2024,7 @@ isc__nmsocket_readtimeout_cb(uv_timer_t *timer) {
 
 	REQUIRE(VALID_NMSOCK(sock));
 	REQUIRE(sock->tid == isc_nm_tid());
-	REQUIRE(sock->reading);
+	REQUIRE(atomic_load(&sock->reading));
 
 	if (atomic_load(&sock->client)) {
 		uv_timer_stop(timer);
@@ -2172,7 +2172,7 @@ void
 isc__nm_start_reading(isc_nmsocket_t *sock) {
 	int r;
 
-	if (sock->reading) {
+	if (atomic_load(&sock->reading)) {
 		return;
 	}
 
@@ -2198,14 +2198,14 @@ isc__nm_start_reading(isc_nmsocket_t *sock) {
 		ISC_UNREACHABLE();
 	}
 	RUNTIME_CHECK(r == 0);
-	sock->reading = true;
+	atomic_store(&sock->reading, true);
 }
 
 void
 isc__nm_stop_reading(isc_nmsocket_t *sock) {
 	int r;
 
-	if (!sock->reading) {
+	if (!atomic_load(&sock->reading)) {
 		return;
 	}
 
@@ -2223,7 +2223,7 @@ isc__nm_stop_reading(isc_nmsocket_t *sock) {
 		ISC_UNREACHABLE();
 	}
 	RUNTIME_CHECK(r == 0);
-	sock->reading = false;
+	atomic_store(&sock->reading, false);
 }
 
 bool
@@ -3451,7 +3451,7 @@ nmsocket_dump(isc_nmsocket_t *sock) {
 		atomic_load(&sock->closing) ? " closing" : "",
 		atomic_load(&sock->destroying) ? " destroying" : "",
 		atomic_load(&sock->connecting) ? " connecting" : "",
-		sock->accepting ? " accepting" : "");
+		atomic_load(&sock->accepting) ? " accepting" : "");
 	fprintf(stderr, "Created by:\n");
 	isc_backtrace_symbols_fd(sock->backtrace, sock->backtrace_size,
 				 STDERR_FILENO);

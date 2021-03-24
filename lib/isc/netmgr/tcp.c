@@ -86,7 +86,7 @@ stop_tcp_child(isc_nmsocket_t *sock);
 
 static void
 failed_accept_cb(isc_nmsocket_t *sock, isc_result_t eresult) {
-	REQUIRE(sock->accepting);
+	REQUIRE(atomic_load(&sock->accepting));
 	REQUIRE(sock->server);
 
 	/*
@@ -100,7 +100,7 @@ failed_accept_cb(isc_nmsocket_t *sock, isc_result_t eresult) {
 
 	isc__nmsocket_detach(&sock->server);
 
-	sock->accepting = false;
+	atomic_store(&sock->accepting, false);
 
 	switch (eresult) {
 	case ISC_R_NOTCONNECTED:
@@ -769,7 +769,7 @@ isc__nm_async_tcpstartread(isc__networker_t *worker, isc__netievent_t *ev0) {
 	UNUSED(worker);
 
 	if (isc__nmsocket_closing(sock)) {
-		sock->reading = true;
+		atomic_store(&sock->reading, true);
 		isc__nm_tcp_failed_read_cb(sock, ISC_R_CANCELED);
 		return;
 	}
@@ -832,7 +832,7 @@ isc__nm_tcp_resumeread(isc_nmhandle_t *handle) {
 	}
 
 	if (!isc__nmsocket_active(sock)) {
-		sock->reading = true;
+		atomic_store(&sock->reading, true);
 		isc__nm_tcp_failed_read_cb(sock, ISC_R_CANCELED);
 		return;
 	}
@@ -855,7 +855,7 @@ isc__nm_tcp_read_cb(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
 
 	REQUIRE(VALID_NMSOCK(sock));
 	REQUIRE(sock->tid == isc_nm_tid());
-	REQUIRE(sock->reading);
+	REQUIRE(atomic_load(&sock->reading));
 	REQUIRE(buf != NULL);
 
 	if (isc__nmsocket_closing(sock)) {
@@ -894,7 +894,7 @@ isc__nm_tcp_read_cb(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
 	isc__nm_readcb(sock, req, ISC_R_SUCCESS);
 
 	/* The readcb could have paused the reading */
-	if (sock->reading) {
+	if (atomic_load(&sock->reading)) {
 		/* The timer will be updated */
 		isc__nmsocket_timer_restart(sock);
 	}
@@ -972,7 +972,7 @@ accept_connection(isc_nmsocket_t *ssock, isc_quota_t *quota) {
 	csock->recv_cb = ssock->recv_cb;
 	csock->recv_cbarg = ssock->recv_cbarg;
 	csock->quota = quota;
-	csock->accepting = true;
+	atomic_init(&csock->accepting, true);
 
 	worker = &csock->mgr->workers[isc_nm_tid()];
 
@@ -1023,7 +1023,7 @@ accept_connection(isc_nmsocket_t *ssock, isc_quota_t *quota) {
 		goto failure;
 	}
 
-	csock->accepting = false;
+	atomic_store(&csock->accepting, false);
 
 	isc__nm_incstats(csock->mgr, csock->statsindex[STATID_ACCEPT]);
 
@@ -1353,7 +1353,7 @@ isc__nm_tcp_shutdown(isc_nmsocket_t *sock) {
 		return;
 	}
 
-	if (sock->accepting) {
+	if (atomic_load(&sock->accepting)) {
 		return;
 	}
 
