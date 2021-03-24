@@ -30,7 +30,29 @@ typedef enum {
 	isc_rwlocktype_write
 } isc_rwlocktype_t;
 
-#if USE_PTHREAD_RWLOCK
+#if USE_C_RW_WP
+#include <isc/align.h>
+
+#define ISC_RWLOCK_UNLOCKED false
+#define ISC_RWLOCK_LOCKED   true
+
+#define ISC_CACHE_LINE	      64 /* TODO: Move to platform.h */
+#define ISC_RWLOCK_HASH_RATIO 3
+#define ISC_RWLOCK_COUNTERS_RATIO \
+	(ISC_RWLOCK_HASH_RATIO * ISC_CACHE_LINE / sizeof(atomic_int_fast32_t))
+
+struct isc_rwlock {
+	unsigned int	    magic;
+	uint16_t	    hashbits;
+	uint16_t	    ncounters;
+#if RWLOCK_USE_ADAPTIVE_SPINNING
+	atomic_uint_fast32_t spins;
+#endif /* RWLOCK_USE_ADAPTIVE_SPINNING */
+	alignas(ISC_CACHE_LINE) atomic_int_fast32_t *readers_counters;
+	alignas(ISC_CACHE_LINE) atomic_bool writers_mutex;
+};
+
+#elif USE_PTHREAD_RWLOCK
 #include <pthread.h>
 
 struct isc_rwlock {
@@ -44,7 +66,7 @@ struct isc_rwlock {
 	/* Unlocked. */
 	unsigned int	    magic;
 	isc_mutex_t	    lock;
-	atomic_int_fast32_t spins;
+	atomic_uint_fast32_t spins;
 
 	/*
 	 * When some atomic instructions with hardware assistance are
