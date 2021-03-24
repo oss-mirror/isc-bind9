@@ -30,6 +30,7 @@ TESTS =			\
 	lex_test	\
 	md_test		\
 	mem_test	\
+	mutex_test	\
 	netaddr_test	\
 	netmgr_test	\
 	parse_test	\

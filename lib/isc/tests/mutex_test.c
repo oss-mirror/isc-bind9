@@ -99,8 +99,8 @@ isc_mutex_test(void **state) {
 
 static size_t shared_counter = 0;
 static size_t expected_counter = SIZE_MAX;
-static isc_mutex_t lock = ISC_MUTEX_INITIALIZER;
-static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+static isc_mutex_t lock;
+static pthread_mutex_t mutex;
 
 static isc_threadresult_t
 pthread_mutex_thread(isc_threadarg_t arg) {
@@ -143,6 +143,7 @@ isc_mutex_benchmark(void **state) {
 	isc_result_t result;
 	int dc;
 	size_t cont;
+	int r;
 
 	UNUSED(state);
 
@@ -151,6 +152,9 @@ isc_mutex_benchmark(void **state) {
 	expected_counter = ITERS * workers * LOOPS * ((MAX - MIN) / DC + 1);
 
 	/* PTHREAD MUTEX */
+
+	r = pthread_mutex_init(&mutex, NULL);
+	assert_int_not_equal(r, -1);
 
 	result = isc_time_now_hires(&ts1);
 	assert_int_equal(result, ISC_R_SUCCESS);
@@ -182,7 +186,12 @@ isc_mutex_benchmark(void **state) {
 	       shared_counter, workers, t / 1000000.0,
 	       shared_counter / (t / 1000000.0));
 
+	r = pthread_mutex_destroy(&mutex);
+	assert_int_not_equal(r, -1);
+
 	/* ISC MUTEX */
+
+	isc_mutex_init(&lock);
 
 	result = isc_time_now_hires(&ts1);
 	assert_int_equal(result, ISC_R_SUCCESS);
@@ -213,6 +222,8 @@ isc_mutex_benchmark(void **state) {
 	       "threads, %2.3f seconds, %2.3f calls/second\n",
 	       shared_counter, workers, t / 1000000.0,
 	       shared_counter / (t / 1000000.0));
+
+	isc_mutex_destroy(&mutex);
 
 	isc_mem_put(test_mctx, threads, sizeof(*threads) * workers);
 }
