@@ -138,7 +138,7 @@ isc_rwlock_destroy(isc_rwlock_t *rwl) {
 #endif /* ifndef RWLOCK_DEFAULT_WRITE_QUOTA */
 
 #ifndef RWLOCK_MAX_ADAPTIVE_COUNT
-#define RWLOCK_MAX_ADAPTIVE_COUNT 100
+#define RWLOCK_MAX_ADAPTIVE_COUNT 2000
 #endif /* ifndef RWLOCK_MAX_ADAPTIVE_COUNT */
 
 #if defined(_MSC_VER)
@@ -423,10 +423,11 @@ isc__rwlock_lock(isc_rwlock_t *rwl, isc_rwlocktype_t type) {
 
 isc_result_t
 isc_rwlock_lock(isc_rwlock_t *rwl, isc_rwlocktype_t type) {
-	int32_t cnt = 0;
-	int32_t spins = atomic_load_acquire(&rwl->spins) * 2 + 10;
-	int32_t max_cnt = ISC_MAX(spins, RWLOCK_MAX_ADAPTIVE_COUNT);
 	isc_result_t result = ISC_R_SUCCESS;
+	int32_t cnt = 0;
+	int32_t cachedspins = atomic_load_acquire(&rwl->spins);
+	int32_t spins = cachedspins * 2 + 10;
+	int32_t max_cnt = ISC_MIN(spins, RWLOCK_MAX_ADAPTIVE_COUNT);
 
 	do {
 		if (cnt++ >= max_cnt) {
@@ -436,7 +437,8 @@ isc_rwlock_lock(isc_rwlock_t *rwl, isc_rwlocktype_t type) {
 		isc_rwlock_pause();
 	} while (isc_rwlock_trylock(rwl, type) != ISC_R_SUCCESS);
 
-	atomic_fetch_add_release(&rwl->spins, (cnt - spins) / 8);
+	spins = ((cnt - cachedspins + 9) / 8) - 1;
+	atomic_fetch_add_release(&rwl->spins, spins);
 
 	return (result);
 }
