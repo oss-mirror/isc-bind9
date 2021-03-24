@@ -2907,7 +2907,7 @@ isc__nm_http_initsocket(isc_nmsocket_t *sock) {
 	if (sock->type == isc_nm_httplistener) {
 		ISC_LIST_INIT(sock->h2.handlers);
 		ISC_LIST_INIT(sock->h2.handler_cbargs);
-		isc_rwlock_init(&sock->h2.lock, 0, 1);
+		isc_rwlock_init(&sock->h2.lock);
 	}
 }
 

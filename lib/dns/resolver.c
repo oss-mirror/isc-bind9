@@ -10452,10 +10452,10 @@ dns_resolver_create(dns_view_t *view, isc_taskmgr_t *taskmgr,
 	}
 
 #if USE_ALGLOCK
-	isc_rwlock_init(&res->alglock, 0, 0);
+	isc_rwlock_init(&res->alglock);
 #endif /* if USE_ALGLOCK */
 #if USE_MBSLOCK
-	isc_rwlock_init(&res->mbslock, 0, 0);
+	isc_rwlock_init(&res->mbslock);
 #endif /* if USE_MBSLOCK */
 
 	res->magic = RES_MAGIC;

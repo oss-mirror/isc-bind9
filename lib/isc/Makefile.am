@@ -203,6 +203,7 @@ libisc_la_SOURCES =		\
 	resource.c		\
 	result.c		\
 	rwlock.c		\
+	rwlock_p.h		\
 	safe.c			\
 	serial.c		\
 	siphash.c		\

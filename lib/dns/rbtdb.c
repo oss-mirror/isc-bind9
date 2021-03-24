@@ -28,6 +28,7 @@
 #include <isc/mem.h>
 #include <isc/mutex.h>
 #include <isc/once.h>
+#include <isc/os.h>
 #include <isc/print.h>
 #include <isc/random.h>
 #include <isc/refcount.h>
@@ -128,7 +129,7 @@ typedef uint32_t rbtdb_rdatatype_t;
 	RBTDB_RDATATYPE_VALUE(dns_rdatatype_rrsig, dns_rdatatype_soa)
 #define RBTDB_RDATATYPE_NCACHEANY RBTDB_RDATATYPE_VALUE(0, dns_rdatatype_any)
 
-#define RBTDB_INITLOCK(l)    isc_rwlock_init((l), 0, 0)
+#define RBTDB_INITLOCK(l)    isc_rwlock_init_ex((l), ISC_RWLOCK_IMPL_RW_WP)
 #define RBTDB_DESTROYLOCK(l) isc_rwlock_destroy(l)
 #define RBTDB_LOCK(l, t)     RWLOCK((l), (t))
 #define RBTDB_UNLOCK(l, t)   RWUNLOCK((l), (t))
@@ -154,7 +155,7 @@ typedef uint32_t rbtdb_rdatatype_t;
  */
 typedef isc_rwlock_t nodelock_t;
 
-#define NODE_INITLOCK(l)    isc_rwlock_init((l), 0, 0)
+#define NODE_INITLOCK(l)    isc_rwlock_init_ex((l), ISC_RWLOCK_IMPL_RW_WP)
 #define NODE_DESTROYLOCK(l) isc_rwlock_destroy(l)
 #define NODE_LOCK(l, t)	    RWLOCK((l), (t))
 #define NODE_UNLOCK(l, t)   RWUNLOCK((l), (t))
@@ -1316,7 +1317,7 @@ allocate_version(isc_mem_t *mctx, rbtdb_serial_t serial,
 	version->serial = serial;
 
 	isc_refcount_init(&version->references, references);
-	isc_rwlock_init(&version->glue_rwlock, 0, 0);
+	isc_rwlock_init_ex(&version->glue_rwlock, ISC_RWLOCK_IMPL_RW_WP);
 
 	version->glue_table_bits = RBTDB_GLUE_TABLE_INIT_BITS;
 	version->glue_table_nodecount = 0U;
@@ -1366,7 +1367,7 @@ newversion(dns_db_t *db, dns_dbversion_t **versionp) {
 		version->salt_length = 0;
 		memset(version->salt, 0, sizeof(version->salt));
 	}
-	isc_rwlock_init(&version->rwlock, 0, 0);
+	isc_rwlock_init_ex(&version->rwlock, ISC_RWLOCK_IMPL_RW_WP);
 	RWLOCK(&rbtdb->current_version->rwlock, isc_rwlocktype_read);
 	version->records = rbtdb->current_version->records;
 	version->xfrsize = rbtdb->current_version->xfrsize;
@@ -6846,10 +6847,8 @@ addrdataset(dns_db_t *db, dns_dbnode_t *node, dns_dbversion_t *version,
 
 		if ((rdataset->attributes & DNS_RDATASETATTR_RESIGN) != 0) {
 			RDATASET_ATTR_SET(newheader, RDATASET_ATTR_RESIGN);
-			newheader->resign =
-				(isc_stdtime_t)(dns_time64_from32(
-							rdataset->resign) >>
-						1);
+			newheader->resign = (isc_stdtime_t)(
+				dns_time64_from32(rdataset->resign) >> 1);
 			newheader->resign_lsb = rdataset->resign & 0x1;
 		} else {
 			newheader->resign = 0;
@@ -7058,9 +7057,8 @@ subtractrdataset(dns_db_t *db, dns_dbnode_t *node, dns_dbversion_t *version,
 	newheader->node = rbtnode;
 	if ((rdataset->attributes & DNS_RDATASETATTR_RESIGN) != 0) {
 		RDATASET_ATTR_SET(newheader, RDATASET_ATTR_RESIGN);
-		newheader->resign =
-			(isc_stdtime_t)(dns_time64_from32(rdataset->resign) >>
-					1);
+		newheader->resign = (isc_stdtime_t)(
+			dns_time64_from32(rdataset->resign) >> 1);
 		newheader->resign_lsb = rdataset->resign & 0x1;
 	} else {
 		newheader->resign = 0;
@@ -7469,9 +7467,8 @@ loading_addrdataset(void *arg, const dns_name_t *name,
 
 	if ((rdataset->attributes & DNS_RDATASETATTR_RESIGN) != 0) {
 		RDATASET_ATTR_SET(newheader, RDATASET_ATTR_RESIGN);
-		newheader->resign =
-			(isc_stdtime_t)(dns_time64_from32(rdataset->resign) >>
-					1);
+		newheader->resign = (isc_stdtime_t)(
+			dns_time64_from32(rdataset->resign) >> 1);
 		newheader->resign_lsb = rdataset->resign & 0x1;
 	} else {
 		newheader->resign = 0;
@@ -8601,7 +8598,7 @@ dns_rbtdb_create(isc_mem_t *mctx, const dns_name_t *origin, dns_dbtype_t type,
 
 	RBTDB_INITLOCK(&rbtdb->lock);
 
-	isc_rwlock_init(&rbtdb->tree_lock, 0, 0);
+	isc_rwlock_init_ex(&rbtdb->tree_lock, ISC_RWLOCK_IMPL_RW_WP);
 
 	/*
 	 * Initialize node_lock_count in a generic way to support future
@@ -8793,7 +8790,8 @@ dns_rbtdb_create(isc_mem_t *mctx, const dns_name_t *origin, dns_dbtype_t type,
 	rbtdb->current_version->salt_length = 0;
 	memset(rbtdb->current_version->salt, 0,
 	       sizeof(rbtdb->current_version->salt));
-	isc_rwlock_init(&rbtdb->current_version->rwlock, 0, 0);
+	isc_rwlock_init_ex(&rbtdb->current_version->rwlock,
+			   ISC_RWLOCK_IMPL_RW_WP);
 	rbtdb->current_version->records = 0;
 	rbtdb->current_version->xfrsize = 0;
 	rbtdb->future_version = NULL;
