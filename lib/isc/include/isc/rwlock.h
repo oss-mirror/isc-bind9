@@ -42,12 +42,12 @@ typedef enum {
 	(ISC_RWLOCK_HASH_RATIO * ISC_CACHE_LINE / sizeof(atomic_int_fast32_t))
 
 struct isc_rwlock {
-	unsigned int	    magic;
-	uint16_t	    hashbits;
-	uint16_t	    ncounters;
-#if RWLOCK_USE_ADAPTIVE_SPINNING
+	unsigned int	     magic;
+	uint16_t	     hashbits;
+	uint16_t	     ncounters;
+	uint16_t	     write_quota;
 	atomic_uint_fast32_t spins;
-#endif /* RWLOCK_USE_ADAPTIVE_SPINNING */
+	atomic_uint_fast32_t write_granted;
 	alignas(ISC_CACHE_LINE) atomic_int_fast32_t *readers_counters;
 	alignas(ISC_CACHE_LINE) atomic_bool writers_mutex;
 };
@@ -64,8 +64,8 @@ struct isc_rwlock {
 
 struct isc_rwlock {
 	/* Unlocked. */
-	unsigned int	    magic;
-	isc_mutex_t	    lock;
+	unsigned int	     magic;
+	isc_mutex_t	     lock;
 	atomic_uint_fast32_t spins;
 
 	/*
