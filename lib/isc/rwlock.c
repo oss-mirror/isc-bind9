@@ -93,68 +93,9 @@ tid2idx(isc_rwlock_t *rwl) {
 	return (idx);
 }
 
-#ifndef RWLOCK_MAX_ADAPTIVE_COUNT
-#define RWLOCK_MAX_ADAPTIVE_COUNT 2000
-#endif /* ifndef RWLOCK_MAX_ADAPTIVE_COUNT */
-#ifndef RWLOCK_MAX_SPINNING_COUNT
-#define RWLOCK_MAX_SPINNING_COUNT 100000
-#endif /* ifndef RWLOCK_MAX_SPINNING_COUNT */
-
-/* #define YIELD() isc_thread_yield() */
-#define YIELD() usleep(0)
-
-/*
- * The adaptive spinning adds one atomic fetch and one FAA into hotpath,
- * so it's not used by default
- */
-#define isc__rwlock_adaptive_spin(rwl, cond, max_spins)                        \
-	{                                                                      \
-		uint32_t cnt = 0;                                              \
-		uint32_t update;                                               \
-		const uint32_t cachedspins = atomic_load_acquire(&rwl->spins); \
-		const uint32_t spins = cachedspins * 2 + 10;                   \
-		const uint32_t max_cnt = ISC_MIN(spins, max_spins);            \
-                                                                               \
-		while (cond) {                                                 \
-			if (ISC_LIKELY(cnt < max_cnt)) {                       \
-				cnt++;                                         \
-				isc_pause(1);                                  \
-			} else {                                               \
-				YIELD();                                       \
-			}                                                      \
-		}                                                              \
-		update = ((cnt - cachedspins + 9) / 8) - 1;                    \
-		atomic_fetch_add_release(&rwl->spins, update);                 \
-	}
-
-#define isc__rwlock_hybrid_spin(rwl, cond, max_spins)    \
-	{                                                \
-		uint32_t cnt = 0;                        \
-		const uint32_t max_cnt = max_spins;      \
-                                                         \
-		while (cond) {                           \
-			if (ISC_LIKELY(cnt < max_cnt)) { \
-				cnt++;                   \
-				isc_pause(1);            \
-			} else {                         \
-				YIELD();                 \
-			}                                \
-		}                                        \
-	}
-
-#define isc__rwlock_busy_spin(rwl, cond) \
-	{                                \
-		while (cond) {           \
-			isc_pause(1);    \
-		}                        \
-	}
-
-#define isc__rwlock_yield_spin(rwl, cond) \
-	{                                 \
-		while (cond) {            \
-			YIELD();          \
-		}                         \
-	}
+#ifndef RWLOCK_MAX_READER_PATIENCE
+#define RWLOCK_MAX_READER_PATIENCE 1000
+#endif /* ifndef RWLOCK_MAX_READER_PATIENCE */
 
 static inline void
 isc__rwlock_exclusive_unlock(isc_rwlock_t *rwl);
@@ -168,25 +109,31 @@ isc__rwlock_wait_for_running_readers(isc_rwlock_t *rwl);
 static inline void
 isc__rwlock_shared_lock(isc_rwlock_t *rwl) {
 	const size_t idx = tid2idx(rwl);
+	uint32_t cnt = 0;
+	bool barrier_raised = false;
 
 	while (true) {
 		(void)atomic_fetch_add_release(&rwl->readers_counters[idx], 1);
 		if (atomic_load_acquire(&rwl->writers_mutex) ==
 		    ISC_RWLOCK_UNLOCKED) {
 			/* Acquired lock in read-only mode */
-			atomic_store_release(&rwl->write_granted, 0);
 
-			return;
+			break;
 		}
 
 		/* Writer has acquired the lock, must reset to 0 and wait */
 		(void)atomic_fetch_sub_release(&rwl->readers_counters[idx], 1);
 
-		isc__rwlock_adaptive_spin(
-			rwl,
-			atomic_load_acquire(&rwl->writers_mutex) ==
-				ISC_RWLOCK_LOCKED,
-			RWLOCK_MAX_ADAPTIVE_COUNT);
+		while (atomic_load_acquire(&rwl->writers_mutex) != ISC_RWLOCK_UNLOCKED) {
+			isc_pause(1);
+			if (ISC_UNLIKELY(cnt++ >= RWLOCK_MAX_READER_PATIENCE && !barrier_raised)) {
+				(void)atomic_fetch_add_release(&rwl->writers_barrier, 1);
+				barrier_raised = true;
+			}
+		}
+	}
+	if (barrier_raised) {
+		(void)atomic_fetch_sub_release(&rwl->writers_barrier, 1);
 	}
 }
 
@@ -215,6 +162,11 @@ isc__rwlock_shared_unlock(isc_rwlock_t *rwl) {
 static inline isc_result_t
 isc__rwlock_shared_tryupgrade(isc_rwlock_t *rwl) {
 	const size_t idx = tid2idx(rwl);
+
+	/* Write Barriers has been raised */
+	if (atomic_load_acquire(&rwl->writers_barrier) > 0) {
+		return (ISC_R_LOCKBUSY);
+	}
 
 	/* Try to acquire the write-lock */
 	if (!atomic_compare_exchange_weak_acq_rel(
@@ -256,38 +208,37 @@ isc__rwlock_wait_for_running_readers(isc_rwlock_t *rwl) {
 	/* Write-lock was acquired, now wait for running Readers to finish */
 	for (size_t idx = 0; idx < rwl->ncounters;
 	     idx += ISC_RWLOCK_COUNTERS_RATIO) {
-		isc__rwlock_adaptive_spin(
-			rwl,
-			atomic_load_acquire(&rwl->readers_counters[idx]) > 0,
-			RWLOCK_MAX_ADAPTIVE_COUNT);
+		while (atomic_load_acquire(&rwl->readers_counters[idx]) > 0) {
+			isc_pause(1);
+		}
 	}
 }
 
 static inline void
 isc__rwlock_exclusive_lock(isc_rwlock_t *rwl) {
-	uint16_t write_granted = atomic_fetch_add_release(&rwl->write_granted,
-							  1);
-	uint16_t write_quota = rwl->write_quota;
-	/* Do busy_wait unless we are over write_quota */
-	uint16_t max_spins = (write_granted >= write_quota)
-				     ? 0
-				     : RWLOCK_MAX_ADAPTIVE_COUNT;
+	/* Write Barriers has been raised, wait */
+	while (atomic_load_acquire(&rwl->writers_barrier) > 0) {
+		isc_pause(1);
+	}
 
 	/* Try to acquire the write-lock */
-	isc__rwlock_adaptive_spin(rwl,
-				  !atomic_compare_exchange_weak_acq_rel(
+	while (!atomic_compare_exchange_weak_acq_rel(
 					  &rwl->writers_mutex,
 					  &(bool){ ISC_RWLOCK_UNLOCKED },
-					  ISC_RWLOCK_LOCKED),
-				  max_spins);
-
-	(void)atomic_fetch_add_release(&rwl->write_granted, 1);
+					  ISC_RWLOCK_LOCKED)) {
+		isc_pause(1);
+	}
 
 	isc__rwlock_wait_for_running_readers(rwl);
 }
 
 static isc_result_t
 isc__rwlock_exclusive_trylock(isc_rwlock_t *rwl) {
+	/* Write Barriers has been raised */
+	if (atomic_load_acquire(&rwl->writers_barrier) > 0) {
+		return (ISC_R_LOCKBUSY);
+	}
+
 	/* Try to acquire the write-lock */
 	if (!atomic_compare_exchange_weak_acq_rel(
 		    &rwl->writers_mutex, &(bool){ ISC_RWLOCK_UNLOCKED },
@@ -335,10 +286,10 @@ isc_rwlock_init(isc_rwlock_t *rwl, unsigned int read_quota,
 		UNEXPECTED_ERROR(__FILE__, __LINE__,
 				 "read quota is not supported");
 	}
-	if (write_quota == 0) {
-		write_quota = RWLOCK_DEFAULT_WRITE_QUOTA;
+	if (write_quota != 0) {
+		UNEXPECTED_ERROR(__FILE__, __LINE__,
+				 "write quota is not supported");
 	}
-	rwl->write_quota = write_quota;
 
 	while (ncpus > HASHSIZE(rwl->hashbits)) {
 		rwl->hashbits += 1;
@@ -346,6 +297,7 @@ isc_rwlock_init(isc_rwlock_t *rwl, unsigned int read_quota,
 	RUNTIME_CHECK(rwl->hashbits <= HASH_MAX_BITS);
 	rwl->ncounters = HASHSIZE(rwl->hashbits) * ISC_RWLOCK_COUNTERS_RATIO;
 	atomic_init(&rwl->writers_mutex, ISC_RWLOCK_UNLOCKED);
+	atomic_init(&rwl->writers_barrier, 0);
 	rwl->readers_counters =
 		malloc(rwl->ncounters * sizeof(rwl->readers_counters[0]));
 	for (size_t i = 0; i < rwl->ncounters; i++) {
