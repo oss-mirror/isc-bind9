@@ -126,13 +126,6 @@ isc_thread_setname(isc_thread_t thread, const char *name) {
 
 void
 isc_thread_yield(void) {
-#if defined(HAVE_SCHED_YIELD)
-	sched_yield();
-#elif defined(HAVE_PTHREAD_YIELD)
-	pthread_yield();
-#elif defined(HAVE_PTHREAD_YIELD_NP)
-	pthread_yield_np();
-#endif /* if defined(HAVE_SCHED_YIELD) */
 }
 
 #if defined(HAVE_CPUSET_SETAFFINITY) || defined(HAVE_PTHREAD_SETAFFINITY_NP)
