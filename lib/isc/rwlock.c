@@ -141,28 +141,7 @@ isc_rwlock_destroy(isc_rwlock_t *rwl) {
 #define RWLOCK_MAX_ADAPTIVE_COUNT 100
 #endif /* ifndef RWLOCK_MAX_ADAPTIVE_COUNT */
 
-#if defined(_MSC_VER)
-#include <intrin.h>
-#define isc_rwlock_pause() YieldProcessor()
-#elif defined(__x86_64__)
-#include <immintrin.h>
-#define isc_rwlock_pause() _mm_pause()
-#elif defined(__i386__)
-#define isc_rwlock_pause() __asm__ __volatile__("rep; nop")
-#elif defined(__ia64__)
-#define isc_rwlock_pause() __asm__ __volatile__("hint @pause")
-#elif defined(__arm__) && HAVE_ARM_YIELD
-#define isc_rwlock_pause() __asm__ __volatile__("yield")
-#elif defined(sun) && (defined(__sparc) || defined(__sparc__))
-#define isc_rwlock_pause() smt_pause()
-#elif (defined(__sparc) || defined(__sparc__)) && HAVE_SPARC_PAUSE
-#define isc_rwlock_pause() __asm__ __volatile__("pause")
-#elif defined(__ppc__) || defined(_ARCH_PPC) || defined(_ARCH_PWR) || \
-	defined(_ARCH_PWR2) || defined(_POWER)
-#define isc_rwlock_pause() __asm__ volatile("or 27,27,27")
-#else /* if defined(_MSC_VER) */
 #define isc_rwlock_pause()
-#endif /* if defined(_MSC_VER) */
 
 static isc_result_t
 isc__rwlock_lock(isc_rwlock_t *rwl, isc_rwlocktype_t type);
