@@ -45,11 +45,9 @@ struct isc_rwlock {
 	unsigned int	     magic;
 	uint16_t	     hashbits;
 	uint16_t	     ncounters;
-	uint16_t	     write_quota;
-	atomic_uint_fast32_t spins;
-	atomic_uint_fast32_t write_granted;
 	alignas(ISC_CACHE_LINE) atomic_int_fast32_t *readers_counters;
 	alignas(ISC_CACHE_LINE) atomic_bool writers_mutex;
+	alignas(ISC_CACHE_LINE) atomic_int_fast32_t writers_barrier;
 };
 
 #elif USE_PTHREAD_RWLOCK
