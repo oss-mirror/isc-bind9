@@ -125,10 +125,14 @@ isc__rwlock_shared_lock(isc_rwlock_t *rwl) {
 		(void)atomic_fetch_sub_release(&rwl->readers_counters[idx], 1);
 
 		while (atomic_load_acquire(&rwl->writers_mutex) != ISC_RWLOCK_UNLOCKED) {
-			isc_pause(1);
-			if (ISC_UNLIKELY(cnt++ >= RWLOCK_MAX_READER_PATIENCE && !barrier_raised)) {
-				(void)atomic_fetch_add_release(&rwl->writers_barrier, 1);
-				barrier_raised = true;
+			if (!barrier_raised) {
+				isc_pause(1);
+				if (ISC_UNLIKELY(cnt++ >= RWLOCK_MAX_READER_PATIENCE)) {
+						(void)atomic_fetch_add_release(&rwl->writers_barrier, 1);
+						barrier_raised = true;
+					}
+			} else {
+				isc_thread_yield();
 			}
 		}
 	}
