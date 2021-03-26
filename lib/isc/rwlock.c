@@ -98,7 +98,7 @@ tid2idx(isc_rwlock_t *rwl) {
 }
 
 #ifndef RWLOCK_MAX_READER_PATIENCE
-#define RWLOCK_MAX_READER_PATIENCE 10
+#define RWLOCK_MAX_READER_PATIENCE 100000
 #endif /* ifndef RWLOCK_MAX_READER_PATIENCE */
 
 static inline void
