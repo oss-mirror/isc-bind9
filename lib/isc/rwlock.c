@@ -12,8 +12,12 @@
 /*! \file */
 
 #include <inttypes.h>
+#include <linux/futex.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
+#include <sys/syscall.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #include <isc/atomic.h>
@@ -94,7 +98,7 @@ tid2idx(isc_rwlock_t *rwl) {
 }
 
 #ifndef RWLOCK_MAX_READER_PATIENCE
-#define RWLOCK_MAX_READER_PATIENCE 1000
+#define RWLOCK_MAX_READER_PATIENCE 10
 #endif /* ifndef RWLOCK_MAX_READER_PATIENCE */
 
 static inline void
@@ -106,6 +110,11 @@ isc__rwlock_check_for_running_readers(isc_rwlock_t *rwl);
 static inline void
 isc__rwlock_wait_for_running_readers(isc_rwlock_t *rwl);
 
+static int
+futex(uint32_t *uaddr, int futex_op, uint32_t val) {
+	return syscall(SYS_futex, uaddr, futex_op, val, NULL, NULL, 0);
+}
+
 static inline void
 isc__rwlock_shared_lock(isc_rwlock_t *rwl) {
 	const size_t idx = tid2idx(rwl);
@@ -114,7 +123,7 @@ isc__rwlock_shared_lock(isc_rwlock_t *rwl) {
 
 	while (true) {
 		(void)atomic_fetch_add_release(&rwl->readers_counters[idx], 1);
-		if (atomic_load_acquire(&rwl->writers_mutex) ==
+		if (atomic_load_acquire(&rwl->writers_futex) ==
 		    ISC_RWLOCK_UNLOCKED) {
 			/* Acquired lock in read-only mode */
 
@@ -124,16 +133,26 @@ isc__rwlock_shared_lock(isc_rwlock_t *rwl) {
 		/* Writer has acquired the lock, must reset to 0 and wait */
 		(void)atomic_fetch_sub_release(&rwl->readers_counters[idx], 1);
 
-		while (atomic_load_acquire(&rwl->writers_mutex) != ISC_RWLOCK_UNLOCKED) {
-			isc_pause(1);
-			if (ISC_UNLIKELY(cnt++ >= RWLOCK_MAX_READER_PATIENCE && !barrier_raised)) {
-				(void)atomic_fetch_add_release(&rwl->writers_barrier, 1);
+		long s = futex((uint32_t *)&rwl->writers_futex, FUTEX_WAIT,
+			       ISC_RWLOCK_LOCKED);
+		INSIST(s != -1 || errno == EAGAIN);
+
+		if (!barrier_raised) {
+			if (ISC_UNLIKELY(cnt++ >= RWLOCK_MAX_READER_PATIENCE)) {
+				(void)atomic_fetch_add_release(
+					&rwl->writers_barrier, 1);
 				barrier_raised = true;
 			}
 		}
 	}
 	if (barrier_raised) {
-		(void)atomic_fetch_sub_release(&rwl->writers_barrier, 1);
+		uint32_t old = atomic_fetch_sub_release(&rwl->writers_barrier,
+							1);
+		if (old == 1) {
+			long s = futex((uint32_t *)&rwl->writers_barrier,
+				       FUTEX_WAKE, INT_MAX);
+			INSIST(s != -1);
+		}
 	}
 }
 
@@ -142,7 +161,7 @@ isc__rwlock_shared_trylock(isc_rwlock_t *rwl) {
 	const size_t idx = tid2idx(rwl);
 
 	(void)atomic_fetch_add_release(&rwl->readers_counters[idx], 1);
-	if (atomic_load_acquire(&rwl->writers_mutex) == ISC_RWLOCK_LOCKED) {
+	if (atomic_load_acquire(&rwl->writers_futex) == ISC_RWLOCK_LOCKED) {
 		/* Writer has acquired the lock, must reset to 0 */
 		(void)atomic_fetch_sub_release(&rwl->readers_counters[idx], 1);
 
@@ -170,7 +189,7 @@ isc__rwlock_shared_tryupgrade(isc_rwlock_t *rwl) {
 
 	/* Try to acquire the write-lock */
 	if (!atomic_compare_exchange_weak_acq_rel(
-		    &rwl->writers_mutex, &(bool){ ISC_RWLOCK_UNLOCKED },
+		    &rwl->writers_futex, &(uint32_t){ ISC_RWLOCK_UNLOCKED },
 		    ISC_RWLOCK_LOCKED))
 	{
 		return (ISC_R_LOCKBUSY);
@@ -217,16 +236,29 @@ isc__rwlock_wait_for_running_readers(isc_rwlock_t *rwl) {
 static inline void
 isc__rwlock_exclusive_lock(isc_rwlock_t *rwl) {
 	/* Write Barriers has been raised, wait */
-	while (atomic_load_acquire(&rwl->writers_barrier) > 0) {
-		isc_pause(1);
+	while (true) {
+		uint32_t old = atomic_load_acquire(&rwl->writers_barrier);
+		if (old == 0) {
+			break;
+		}
+
+		long s = futex((uint32_t *)&rwl->writers_barrier, FUTEX_WAIT,
+			       old);
+		INSIST(s != -1 || errno == EAGAIN);
 	}
 
-	/* Try to acquire the write-lock */
-	while (!atomic_compare_exchange_weak_acq_rel(
-					  &rwl->writers_mutex,
-					  &(bool){ ISC_RWLOCK_UNLOCKED },
-					  ISC_RWLOCK_LOCKED)) {
-		isc_pause(1);
+	while (true) {
+		if (atomic_compare_exchange_weak_acq_rel(
+			    &rwl->writers_futex,
+			    &(uint32_t){ ISC_RWLOCK_UNLOCKED },
+			    ISC_RWLOCK_LOCKED))
+		{
+			break;
+		}
+
+		long s = futex((uint32_t *)&rwl->writers_futex, FUTEX_WAIT,
+			       ISC_RWLOCK_LOCKED);
+		INSIST(s != -1 || errno == EAGAIN);
 	}
 
 	isc__rwlock_wait_for_running_readers(rwl);
@@ -241,7 +273,7 @@ isc__rwlock_exclusive_trylock(isc_rwlock_t *rwl) {
 
 	/* Try to acquire the write-lock */
 	if (!atomic_compare_exchange_weak_acq_rel(
-		    &rwl->writers_mutex, &(bool){ ISC_RWLOCK_UNLOCKED },
+		    &rwl->writers_futex, &(uint32_t){ ISC_RWLOCK_UNLOCKED },
 		    ISC_RWLOCK_LOCKED))
 	{
 		return (ISC_R_LOCKBUSY);
@@ -260,8 +292,10 @@ isc__rwlock_exclusive_trylock(isc_rwlock_t *rwl) {
 static inline void
 isc__rwlock_exclusive_unlock(isc_rwlock_t *rwl) {
 	REQUIRE(atomic_compare_exchange_strong_acq_rel(
-		&rwl->writers_mutex, &(bool){ ISC_RWLOCK_LOCKED },
+		&rwl->writers_futex, &(uint32_t){ ISC_RWLOCK_LOCKED },
 		ISC_RWLOCK_UNLOCKED));
+	long s = futex((uint32_t *)&rwl->writers_futex, FUTEX_WAKE, INT_MAX);
+	INSIST(s != -1);
 }
 
 static inline void
@@ -296,7 +330,7 @@ isc_rwlock_init(isc_rwlock_t *rwl, unsigned int read_quota,
 	}
 	RUNTIME_CHECK(rwl->hashbits <= HASH_MAX_BITS);
 	rwl->ncounters = HASHSIZE(rwl->hashbits) * ISC_RWLOCK_COUNTERS_RATIO;
-	atomic_init(&rwl->writers_mutex, ISC_RWLOCK_UNLOCKED);
+	atomic_init(&rwl->writers_futex, ISC_RWLOCK_UNLOCKED);
 	atomic_init(&rwl->writers_barrier, 0);
 	rwl->readers_counters =
 		malloc(rwl->ncounters * sizeof(rwl->readers_counters[0]));
@@ -312,7 +346,7 @@ isc_rwlock_destroy(isc_rwlock_t *rwl) {
 	rwl->magic = 0;
 
 	/* Check whether write lock has been unlocked */
-	REQUIRE(atomic_load(&rwl->writers_mutex) == ISC_RWLOCK_UNLOCKED);
+	REQUIRE(atomic_load(&rwl->writers_futex) == ISC_RWLOCK_UNLOCKED);
 
 	/* Check whether all read locks has been unlocked */
 	for (size_t i = 0; i < rwl->ncounters; i++) {

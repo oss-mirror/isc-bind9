@@ -46,8 +46,8 @@ struct isc_rwlock {
 	uint16_t	     hashbits;
 	uint16_t	     ncounters;
 	alignas(ISC_CACHE_LINE) atomic_int_fast32_t *readers_counters;
-	alignas(ISC_CACHE_LINE) atomic_bool writers_mutex;
-	alignas(ISC_CACHE_LINE) atomic_int_fast32_t writers_barrier;
+	alignas(ISC_CACHE_LINE) _Atomic uint32_t writers_futex;
+	alignas(ISC_CACHE_LINE) _Atomic uint32_t writers_barrier;
 };
 
 #elif USE_PTHREAD_RWLOCK
