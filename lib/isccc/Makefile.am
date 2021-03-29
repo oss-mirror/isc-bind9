@@ -2,6 +2,10 @@ include $(top_srcdir)/Makefile.top
 
 lib_LTLIBRARIES = libisccc.la
 
+EXTRA_DIST = 			\
+	result_isccc.h.in		\
+	result_isccc.c.in
+
 libisccc_ladir = $(includedir)/isccc
 libisccc_la_HEADERS =			\
 	include/isccc/alist.h		\

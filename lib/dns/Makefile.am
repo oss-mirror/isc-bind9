@@ -26,6 +26,10 @@ EXTRA_DIST =		\
 	gen.c		\
 	gen-unix.h	\
 	gen-win32.h	\
+	result_dns.h.in		\
+	result_dns.c.in		\
+	result_dst.h.in		\
+	result_dst.c.in		\
 	rdata/*
 
 include/dns/enumtype.h: gen Makefile

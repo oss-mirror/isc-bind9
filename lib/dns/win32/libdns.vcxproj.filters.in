@@ -278,9 +278,6 @@
     <ClCompile Include="..\dst_parse.c">
       <Filter>Dst Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\dst_result.c">
-      <Filter>Dst Source Files</Filter>
-    </ClCompile>
 @IF GSSAPI
     <ClCompile Include="..\gssapi_link.c">
       <Filter>Dst Source Files</Filter>
