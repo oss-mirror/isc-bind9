@@ -71,6 +71,7 @@ libisc_la_HEADERS =			\
 	include/isc/region.h		\
 	include/isc/resource.h		\
 	include/isc/result.h		\
+	include/isc/result_ext.h		\
 	include/isc/resultclass.h	\
 	include/isc/rwlock.h		\
 	include/isc/safe.h		\
@@ -224,6 +225,15 @@ libisc_la_SOURCES =		\
 	mem_p.h			\
 	task_p.h		\
 	tls_p.h
+
+BUILT_SOURCES = result_ext.c ${top_srcdir}/lib/isc/include/isc/result_ext.h
+CLEANFILES = result_ext.c ${top_srcdir}/lib/isc/include/isc/result_ext.h
+
+result_ext.c: ${top_srcdir}/lib/*/result_*.c.in
+	cat ${top_srcdir}/lib/*/result_*.c.in > result_ext.c
+
+${top_srcdir}/lib/isc/include/isc/result_ext.h: ${top_srcdir}/lib/*/result_*.h.in
+	cat ${top_srcdir}/lib/*/result_*.h.in > ${top_srcdir}/lib/isc/include/isc/result_ext.h
 
 libisc_la_CPPFLAGS =		\
 	$(AM_CPPFLAGS)		\

@@ -24,6 +24,8 @@ use File::Spec;
 
 my $configfile = "../config.h";
 my $platformfile = "../lib/isc/win32/include/isc/platform.h";
+my $resultcfile = "..\\lib\\isc\\result_ext.c";
+my $resulthfile = "..\\lib\\isc\\include\\isc\\result_ext.h";
 my @confshlist = ("../bin/tests/system/conf.sh",
 		  "../bin/tests/system/run.sh",
 		  "../bin/tests/system/start.sh",
@@ -2666,6 +2668,24 @@ if ($verbose) {
     print "\n";
 }
 
+sub makeresultfiles {
+    open OUT, '>', "$resultcfile" or die $!;
+    for (glob "..\\lib\\*\\result_*.c") {
+        open FH, '<', "$_" or next;
+        while (<FH>) {print OUT "$_"};
+        close FH;
+    }
+    close OUT;
+
+    open OUT, '>', "$resulthfile" or die $!;
+    for (glob "..\\lib\\*\\result_*.h.in") {
+        open FH, '<', "$_" or next;
+        while (<FH>) {print OUT "$_"};
+        close FH;
+    }
+    close OUT;
+}
+
 # Setup
 if (($want_win32 eq "yes") || ($want_x64 eq "yes")) {
     setupconfigh();
@@ -2684,6 +2704,8 @@ if (($want_win32 eq "yes") || ($want_x64 eq "yes")) {
     }
 
     makeinstallfile();
+
+    makeresultfiles();
 
     makebindkeysh();
 
