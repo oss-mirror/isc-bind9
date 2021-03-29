@@ -203,6 +203,9 @@
     <ClInclude Include="..\include\isc\result.h">
       <Filter>Library Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\isc\result_ext.h">
+      <Filter>Library Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\include\isc\resultclass.h">
       <Filter>Library Header Files</Filter>
     </ClInclude>
@@ -631,9 +634,6 @@
     </ClCompile>
 @IF PKCS11
     <ClCompile Include="..\pk11.c">
-      <Filter>Library Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\pk11_result.c">
       <Filter>Library Source Files</Filter>
     </ClCompile>
 @END PKCS11
