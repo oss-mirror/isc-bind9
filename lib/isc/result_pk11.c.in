@@ -14,7 +14,7 @@
 #include <isc/once.h>
 #include <isc/util.h>
 
-static const char *text[PK11_R_NRESULTS] = {
+static const char *pk11_result_descriptions[PK11_R_NRESULTS] = {
 	"PKCS#11 initialization failed", /*%< 0 */
 	"no PKCS#11 provider",		 /*%< 1 */
 	"PKCS#11 no random service",	 /*%< 2 */
@@ -22,7 +22,7 @@ static const char *text[PK11_R_NRESULTS] = {
 	"PKCS#11 no AES service",	 /*%< 4 */
 };
 
-static const char *ids[PK11_R_NRESULTS] = {
+static const char *pk11_result_ids[PK11_R_NRESULTS] = {
 	"PK11_R_INITFAILED",	  "PK11_R_NOPROVIDER",
 	"PK11_R_NORANDOMSERVICE", "PK11_R_NODIGESTSERVICE",
 	"PK11_R_NOAESSERVICE",

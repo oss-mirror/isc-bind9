@@ -11,7 +11,7 @@
 
 #include <isc/result.h>
 
-static const char *text[DST_R_NRESULTS] = {
+static const char *dst_result_descriptions[DST_R_NRESULTS] = {
 	"algorithm is unsupported",		 /*%< 0 */
 	"crypto failure",			 /*%< 1 */
 	"built with no crypto support",		 /*%< 2 */
@@ -37,7 +37,7 @@ static const char *text[DST_R_NRESULTS] = {
 	"illegal operation for an external key", /*%< 22 */
 };
 
-static const char *ids[DST_R_NRESULTS] = {
+static const char *dst_result_ids[DST_R_NRESULTS] = {
 	"DST_R_UNSUPPORTEDALG",
 	"DST_R_CRYPTOFAILURE",
 	"DST_R_NOCRYPTO",

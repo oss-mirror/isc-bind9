@@ -18,7 +18,13 @@
 #include <isc/resultclass.h>
 #include <isc/util.h>
 
-static const char *description[ISC_R_NRESULTS] = {
+/*
+ * This file is generated at compile time from the result_*.c files
+ * found in sibling library source directories:
+ */
+#include "result_ext.c"
+
+static const char *isc_result_descriptions[ISC_R_NRESULTS] = {
 	"success",			    /*%< 0 */
 	"out of memory",		    /*%< 1 */
 	"timed out",			    /*%< 2 */
@@ -93,111 +99,120 @@ static const char *description[ISC_R_NRESULTS] = {
 	"ALPN for HTTP/2 failed"	    /*%< 71 */
 };
 
-static const char *identifier[ISC_R_NRESULTS] = { "ISC_R_SUCCESS",
-						  "ISC_R_NOMEMORY",
-						  "ISC_R_TIMEDOUT",
-						  "ISC_R_NOTHREADS",
-						  "ISC_R_ADDRNOTAVAIL",
-						  "ISC_R_ADDRINUSE",
-						  "ISC_R_NOPERM",
-						  "ISC_R_NOCONN",
-						  "ISC_R_NETUNREACH",
-						  "ISC_R_HOSTUNREACH",
-						  "ISC_R_NETDOWN",
-						  "ISC_R_HOSTDOWN",
-						  "ISC_R_CONNREFUSED",
-						  "ISC_R_NORESOURCES",
-						  "ISC_R_EOF",
-						  "ISC_R_BOUND",
-						  "ISC_R_RELOAD",
-						  "ISC_R_LOCKBUSY",
-						  "ISC_R_EXISTS",
-						  "ISC_R_NOSPACE",
-						  "ISC_R_CANCELED",
-						  "ISC_R_NOTBOUND",
-						  "ISC_R_SHUTTINGDOWN",
-						  "ISC_R_NOTFOUND",
-						  "ISC_R_UNEXPECTEDEND",
-						  "ISC_R_FAILURE",
-						  "ISC_R_IOERROR",
-						  "ISC_R_NOTIMPLEMENTED",
-						  "ISC_R_UNBALANCED",
-						  "ISC_R_NOMORE",
-						  "ISC_R_INVALIDFILE",
-						  "ISC_R_BADBASE64",
-						  "ISC_R_UNEXPECTEDTOKEN",
-						  "ISC_R_QUOTA",
-						  "ISC_R_UNEXPECTED",
-						  "ISC_R_ALREADYRUNNING",
-						  "ISC_R_IGNORE",
-						  "ISC_R_MASKNONCONTIG",
-						  "ISC_R_FILENOTFOUND",
-						  "ISC_R_FILEEXISTS",
-						  "ISC_R_NOTCONNECTED",
-						  "ISC_R_RANGE",
-						  "ISC_R_NOENTROPY",
-						  "ISC_R_MULTICAST",
-						  "ISC_R_NOTFILE",
-						  "ISC_R_NOTDIRECTORY",
-						  "ISC_R_QUEUEFULL",
-						  "ISC_R_FAMILYMISMATCH",
-						  "ISC_R_FAMILYNOSUPPORT",
-						  "ISC_R_BADHEX",
-						  "ISC_R_TOOMANYOPENFILES",
-						  "ISC_R_NOTBLOCKING",
-						  "ISC_R_UNBALANCEDQUOTES",
-						  "ISC_R_INPROGRESS",
-						  "ISC_R_CONNECTIONRESET",
-						  "ISC_R_SOFTQUOTA",
-						  "ISC_R_BADNUMBER",
-						  "ISC_R_DISABLED",
-						  "ISC_R_MAXSIZE",
-						  "ISC_R_BADADDRESSFORM",
-						  "ISC_R_BADBASE32",
-						  "ISC_R_UNSET",
-						  "ISC_R_MULTIPLE",
-						  "ISC_R_WOULDBLOCK",
-						  "ISC_R_COMPLETE",
-						  "ISC_R_CRYPTOFAILURE",
-						  "ISC_R_DISCQUOTA",
-						  "ISC_R_DISCFULL",
-						  "ISC_R_DEFAULT",
-						  "ISC_R_IPV4PREFIX",
-						  "ISC_R_TLSERROR",
-						  "ISC_R_HTTP2ALPNERROR" };
+static const char *isc_result_ids[ISC_R_NRESULTS] = { "ISC_R_SUCCESS",
+						      "ISC_R_NOMEMORY",
+						      "ISC_R_TIMEDOUT",
+						      "ISC_R_NOTHREADS",
+						      "ISC_R_ADDRNOTAVAIL",
+						      "ISC_R_ADDRINUSE",
+						      "ISC_R_NOPERM",
+						      "ISC_R_NOCONN",
+						      "ISC_R_NETUNREACH",
+						      "ISC_R_HOSTUNREACH",
+						      "ISC_R_NETDOWN",
+						      "ISC_R_HOSTDOWN",
+						      "ISC_R_CONNREFUSED",
+						      "ISC_R_NORESOURCES",
+						      "ISC_R_EOF",
+						      "ISC_R_BOUND",
+						      "ISC_R_RELOAD",
+						      "ISC_R_LOCKBUSY",
+						      "ISC_R_EXISTS",
+						      "ISC_R_NOSPACE",
+						      "ISC_R_CANCELED",
+						      "ISC_R_NOTBOUND",
+						      "ISC_R_SHUTTINGDOWN",
+						      "ISC_R_NOTFOUND",
+						      "ISC_R_UNEXPECTEDEND",
+						      "ISC_R_FAILURE",
+						      "ISC_R_IOERROR",
+						      "ISC_R_NOTIMPLEMENTED",
+						      "ISC_R_UNBALANCED",
+						      "ISC_R_NOMORE",
+						      "ISC_R_INVALIDFILE",
+						      "ISC_R_BADBASE64",
+						      "ISC_R_UNEXPECTEDTOKEN",
+						      "ISC_R_QUOTA",
+						      "ISC_R_UNEXPECTED",
+						      "ISC_R_ALREADYRUNNING",
+						      "ISC_R_IGNORE",
+						      "ISC_R_MASKNONCONTIG",
+						      "ISC_R_FILENOTFOUND",
+						      "ISC_R_FILEEXISTS",
+						      "ISC_R_NOTCONNECTED",
+						      "ISC_R_RANGE",
+						      "ISC_R_NOENTROPY",
+						      "ISC_R_MULTICAST",
+						      "ISC_R_NOTFILE",
+						      "ISC_R_NOTDIRECTORY",
+						      "ISC_R_QUEUEFULL",
+						      "ISC_R_FAMILYMISMATCH",
+						      "ISC_R_FAMILYNOSUPPORT",
+						      "ISC_R_BADHEX",
+						      "ISC_R_TOOMANYOPENFILES",
+						      "ISC_R_NOTBLOCKING",
+						      "ISC_R_UNBALANCEDQUOTES",
+						      "ISC_R_INPROGRESS",
+						      "ISC_R_CONNECTIONRESET",
+						      "ISC_R_SOFTQUOTA",
+						      "ISC_R_BADNUMBER",
+						      "ISC_R_DISABLED",
+						      "ISC_R_MAXSIZE",
+						      "ISC_R_BADADDRESSFORM",
+						      "ISC_R_BADBASE32",
+						      "ISC_R_UNSET",
+						      "ISC_R_MULTIPLE",
+						      "ISC_R_WOULDBLOCK",
+						      "ISC_R_COMPLETE",
+						      "ISC_R_CRYPTOFAILURE",
+						      "ISC_R_DISCQUOTA",
+						      "ISC_R_DISCFULL",
+						      "ISC_R_DEFAULT",
+						      "ISC_R_IPV4PREFIX",
+						      "ISC_R_TLSERROR",
+						      "ISC_R_HTTP2ALPNERROR" };
 
-static resulttable_list_t description_tables;
-static resulttable_list_t identifier_tables;
+static struct {
+	size_t nresults; /*%< total number of result codes in this class */
+	const char **description_table; /*%< brief description of the result */
+	const char **id_table;		/*%< result id, e.g. ISC_R_NOPERM */
+} const result_classes[ISC_RESULTCLASS_MAX + 1] = {
+	[ISC_RESULTCLASS_ISC] = { ISC_R_NRESULTS, isc_result_descriptions,
+				  isc_result_ids },
+	[ISC_RESULTCLASS_DNS] = { DNS_R_NRESULTS, dns_result_descriptions,
+				  dns_result_ids },
+	[ISC_RESULTCLASS_DST] = { DST_R_NRESULTS, dst_result_descriptions,
+				  dst_result_ids },
+	[ISC_RESULTCLASS_DNSRCODE] = { DNS_R_NRCODERESULTS,
+				       dns_rcode_descriptions, dns_rcode_ids },
+	[ISC_RESULTCLASS_ISCCC] = { ISCCC_R_NRESULTS, isccc_result_descriptions,
+				    isccc_result_ids },
+	[ISC_RESULTCLASS_PK11] = { PK11_R_NRESULTS, pk11_result_descriptions,
+				   pk11_result_ids }
+};
 
-static const char *
-isc_result_tomany_helper(resulttable_list_t *tables, isc_result_t result) {
-	resulttable *table;
-	const char *text;
-	int index;
+static inline const char *
+isc_result_from_table(isc_result_t result, bool description) {
+	uint32_t rclass = ISC_RESULT_CLASS(result);
+	uint32_t rindex = ISC_RESULT_VALUE(result);
 
-	text = NULL;
-	for (table = ISC_LIST_HEAD(*tables); table != NULL;
-	     table = ISC_LIST_NEXT(table, link))
-	{
-		if (result >= table->base && result <= table->last) {
-			index = (int)(result - table->base);
-			text = table->text[index];
-			break;
-		}
+	REQUIRE(rclass <= ISC_RESULTCLASS_MAX);
+
+	if (rindex < result_classes[rclass].nresults) {
+		return (description ? result_classes[rclass]
+					      .description_table[rindex]
+				    : result_classes[rclass].id_table[rindex]);
 	}
-	if (text == NULL) {
-		text = "(result code text not available)";
-	}
 
-	return (text);
+	return ("(result code text not available)");
 }
 
 const char *
 isc_result_totext(isc_result_t result) {
-	return (isc_result_tomany_helper(&description_tables, result));
+	return (isc_result_from_table(result, true));
 }
 
 const char *
 isc_result_toid(isc_result_t result) {
-	return (isc_result_tomany_helper(&identifier_tables, result));
+	return (isc_result_from_table(result, false));
 }

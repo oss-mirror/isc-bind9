@@ -13,8 +13,7 @@
 
 #include <isc/result.h>
 
-
-static const char *text[DNS_R_NRESULTS] = {
+static const char *dns_result_descriptions[DNS_R_NRESULTS] = {
 	"label too long", /*%< 0 DNS_R_LABELTOOLONG */
 	"bad escape",	  /*%< 1 DNS_R_BADESCAPE */
 	/*!
@@ -173,7 +172,7 @@ static const char *text[DNS_R_NRESULTS] = {
 	"NSEC3 resalt",			       /*%< 126 DNS_R_NSEC3RESALT */
 };
 
-static const char *ids[DNS_R_NRESULTS] = {
+static const char *dns_result_ids[DNS_R_NRESULTS] = {
 	"DNS_R_LABELTOOLONG",
 	"DNS_R_BADESCAPE",
 	/*!
@@ -307,7 +306,7 @@ static const char *ids[DNS_R_NRESULTS] = {
 	"DNS_R_NSEC3RESALT",
 };
 
-static const char *rcode_text[DNS_R_NRCODERESULTS] = {
+static const char *dns_rcode_descriptions[DNS_R_NRCODERESULTS] = {
 	"NOERROR",  /*%< 0 DNS_R_NOERROR */
 	"FORMERR",  /*%< 1 DNS_R_FORMERR */
 	"SERVFAIL", /*%< 2 DNS_R_SERVFAIL */
@@ -330,11 +329,10 @@ static const char *rcode_text[DNS_R_NRCODERESULTS] = {
 	"BADVERS",    /*%< 16 DNS_R_BADVERS */
 };
 
-static const char *rcode_ids[DNS_R_NRCODERESULTS] = {
+static const char *dns_rcode_ids[DNS_R_NRCODERESULTS] = {
 	"DNS_R_NOERROR", "DNS_R_FORMERR", "DNS_R_SERVFAIL", "DNS_R_NXDOMAIN",
 	"DNS_R_NOTIMP",	 "DNS_R_REFUSED", "DNS_R_YXDOMAIN", "DNS_R_YXRRSET",
 	"DNS_R_NXRRSET", "DNS_R_NOTAUTH", "DNS_R_NOTZONE",  "DNS_R_RCODE11",
 	"RNS_R_RCODE12", "DNS_R_RCODE13", "DNS_R_RCODE14",  "DNS_R_RCODE15",
 	"DNS_R_BADVERS",
 };
-

@@ -324,6 +324,7 @@ copy InstallFiles ..\Build\Release\
     <ClInclude Include="..\include\isc\region.h" />
     <ClInclude Include="..\include\isc\resource.h" />
     <ClInclude Include="..\include\isc\result.h" />
+    <ClInclude Include="..\include\isc\result_ext.h" />
     <ClInclude Include="..\include\isc\resultclass.h" />
     <ClInclude Include="..\include\isc\rwlock.h" />
     <ClInclude Include="..\include\isc\safe.h" />

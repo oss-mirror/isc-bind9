@@ -28,7 +28,9 @@
 #include <isc/result.h> /* Contractual promise. */
 
 #define DNS_RESULT_ISRCODE(result) \
-	(ISC_RESULTCLASS_INCLASS(ISC_RESULTCLASS_DNSRCODE, (result)))
+	(ISC_RESULT_INCLASS(ISC_RESULTCLASS_DNSRCODE, (result)))
+
+#define dns_result_totext isc_result_totext
 
 ISC_LANG_BEGINDECLS
 
