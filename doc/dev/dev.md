@@ -395,15 +395,11 @@ or the end of file was reached, but BIND's version uses result codes:
 
 Only functions which cannot fail (assuming the caller has provided valid
 arguments) should return data directly instead of a result code.  For
-example, `dns_name_issubdomain()` returns an `bool`, because it
-has no failure mode.
+example, `dns_name_issubdomain()` returns a `bool`, because it has no
+failure mode.
 
 A result code can be converted to a human-readable error message by
 calling `isc_result_totext(result)`.
-
-Many result codes have been defined and can be found in the source tree
-in header files called `result.h` (for example, the result codes defined
-for the ISC library are in `lib/isc/include/isc/result.h`.
 
 ISC library result codes (many of which are generically useful elsewhere)
 begin with `ISC_R`: examples include `ISC_R_SUCCESS`, `ISC_R_FAILURE`,
@@ -412,6 +408,13 @@ begin with `ISC_R`: examples include `ISC_R_SUCCESS`, `ISC_R_FAILURE`,
 DNS library result codes begin with `DNS_R`: `DNS_R_SERVFAIL`, `DNS_R_NXRRSET`,
 etc).  Other sets of result codes are defined for crypto functions (`DST_R`
 and `PKCS_R`).
+
+Many result codes have been defined and can be found in the source tree
+in files called `result_<module>.h.in` and `result_<module>.c.in`.
+For example, the DNS library result codes are defined in
+`lib/dns/result_dns.c.in` and `lib/dns/result_dns.h.in`. At compile
+time, these are concatenated into the files `lib/isc/result_ext.c`
+and `lib/isc/include/isc/result_ext.h`.
 
 For portability, ISC result codes are used instead of codes provided
 by the operating system; for example, `ISC_R_NOMEMORY` instead of

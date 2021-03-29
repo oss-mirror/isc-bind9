@@ -125,7 +125,7 @@ applied to domain names in the rdata.
 The functions to convert from text format has the following call formats and
 is declared as follows for class-generic functions.
 
-        static dns_result_t
+        static isc_result_t
         fromtext_typename(dns_rdataclass_t class, dns_rdatatype_t type,
                           isc_lex_t *lexer, dns_name_t *origin,
                           bool downcase, isc_buffer_t *target);
@@ -133,7 +133,7 @@ is declared as follows for class-generic functions.
 Class specific functions contain the class name in addition to the
 type name.
 
-        static dns_result_t
+        static isc_result_t
         fromtext_classname_typename(dns_rdataclass_t class,
                                     dns_rdatatype_t type,
                                     isc_lex_t *lexer,
@@ -167,11 +167,11 @@ security area and must be paranoid about its input.
 
 #### Converting from internal format to text format
 
-        static dns_result_t
+        static isc_result_t
         totext_typename(dns_rdata_t *rdata, dns_name_t *origin,
                         isc_buffer_t *target);
 
-        static dns_result_t
+        static isc_result_t
         totext_classname_typename(dns_rdata_t *rdata,
                         dns_name_t *origin, isc_buffer_t *target);
 
@@ -183,7 +183,7 @@ security area and must be paranoid about its input.
 
 #### Converting from wire format to internal format
 
-        static dns_result_t
+        static isc_result_t
         fromwire_typename(dns_rdataclass_t class,
                            dns_rdatatype_t type,
                            isc_buffer_t *source,
@@ -191,7 +191,7 @@ security area and must be paranoid about its input.
                            bool downcase,
                            isc_buffer_t *target);
 
-        static dns_result_t
+        static isc_result_t
         fromwire_classname_typename(dns_rdataclass_t class,
                                     dns_rdatatype_t type,
                                     isc_buffer_t *source,
@@ -226,12 +226,12 @@ will return `DNS_R_EXTRADATA`.
 
 #### Converting from internal format to wire format
 
-        static dns_result_t
+        static isc_result_t
         towire_typename(dns_rdata_t *rdata,
                         dns_compress_t *cctx,
                         isc_buffer_t *target);
 
-        static dns_result_t
+        static isc_result_t
         towire_classname_typename(dns_rdata_t *rdata,
                                   dns_compress_t *cctx,
                                   isc_buffer_t *target);
@@ -258,13 +258,13 @@ transfer the contents of the `rdata` to the target buffer.
 
 #### Converting from a structure to internal format
 
-        static dns_result_t
+        static isc_result_t
         fromstruct_typename(dns_rdataclass_t class,
                             dns_rdatatype_t type,
                             void *source,
                             isc_buffer_t *target);
 
-        static dns_result_t
+        static isc_result_t
         fromstruct_classname_typename(dns_rdataclass_t class,
                                       dns_rdatatype_t type,
                                       void *source,
@@ -279,10 +279,10 @@ transfer the contents of the `rdata` to the target buffer.
 
 #### Converting from internal format to a structure
 
-        static dns_result_t
+        static isc_result_t
         tostruct_typename(dns_rdata_t *rdata, void *target);
 
-        static dns_result_t
+        static isc_result_t
         tostruct_classname_typename(dns_rdata_t *rdata, void *target);
 
 |Parameter|Description |
@@ -318,7 +318,7 @@ The following static support functions are available to use.
 
 Returns the length of `name`.
 
-        static dns_result_t
+        static isc_result_t
         txt_totext(isc_region_t *source, isc_buffer_t *target);
 
 Extracts the octet-length-tagged text string at the start of
@@ -328,7 +328,7 @@ text string.
 
 Returns `DNS_R_NOSPACE` or `DNS_R_SUCCESS`.
 
-        static dns_result_t
+        static isc_result_t
         txt_fromtext(isc_textregion_t *source, isc_buffer_t *target);
 
 Take the text region `source` and convert it to a length-tagged
@@ -336,7 +336,7 @@ text string, writing it to `target`.
 
 Returns `DNS_R_NOSPACE`, `DNS_R_TEXTTOLONG` or `DNS_R_SUCCESS`.
 
-        static dns_result_t
+        static isc_result_t
         txt_fromwire(isc_buffer_t *source, isc_buffer_t *target);
 
 Read an octet-length-tagged text string from `source` and write it to `target`.
@@ -356,7 +356,7 @@ not equal to it.  If so, make `target` refer to the prefix of `name` and return
 
 Typical use:
 
-        static dns_result_t
+        static isc_result_t
         totext_typename(dns_rdata_t *rdata, dns_name_t *origin,
                         isc_buffer_t * target)
         {
@@ -372,7 +372,7 @@ Typical use:
                 return (dns_name_totext(&prefix, sub, target));
         }
 
-static dns_result_t
+static isc_result_t
 str_totext(char *source, isc_buffer_t *target);
 
 Adds the `NULL`-terminated string `source`, up to but not including `NULL`,
@@ -392,14 +392,14 @@ empty otherwise `false`.
 
 Make `buffer` refer to the memory in `region` and make it active.
 
-        static dns_result_t
+        static isc_result_t
         uint32_tobuffer(uint32_t value, isc_buffer_t *target);
 
 Write the 32 bit `value` in network order to `target`.
 
 Returns `DNS_R_NOSPACE` and `DNS_R_SUCCESS`.
 
-static dns_result_t
+static isc_result_t
 uint16_tobuffer(uint32_t value, isc_buffer_t *target);
 
 Write them 16 bit `value` in network order to `target`.
@@ -420,7 +420,7 @@ Returns the 16 bit at the start of `region` in host byte order.
 
 Requires `(region->length >= 2)`.
 
-        static dns_result_t
+        static isc_result_t
         gettoken(isc_lex_t *lexer, isc_token_t *token,
                  isc_tokentype_t expect, bool eol);
 
@@ -432,7 +432,7 @@ isc_tokentype_string), or isc_tokentype_eol and isc_tokentype_eof if `eol` is
 Returns `DNS_R_UNEXPECTED`, `DNS_R_UNEXPECTEDEND`, `DNS_R_UNEXPECTEDTOKEN` and
 `DNS_R_SUCCESS`.
 
-        static dns_result_t
+        static isc_result_t
         mem_tobuffer(isc_buffer_t *target, void *base, unsigned int length);
 
 Add the memory referred to by `base` to `target`.
@@ -454,7 +454,7 @@ Returns the hexadecimal value of `value`, or -1 if not a hexadecimal character.
 
 Returns the decimal value of `value`, or -1 if not a decimal character.
 
-        static dns_result_t
+        static isc_result_t
         base64_totext(isc_region_t *source, isc_buffer_t *target);
 
 Convert the region referred to by `source` to Base64 encoded text and put it
@@ -462,7 +462,7 @@ into `target`.
 
 Returns `DNS_R_NOSPACE` or `DNS_R_SUCCESS`.
 
-        static dns_result_t
+        static isc_result_t
         base64_tobuffer(isc_lex_t *lexer, isc_buffer_t *target, int length);
 
 Read a series of tokens from `lexer` that containing base64 data until one of
@@ -474,7 +474,7 @@ token, `length` octets would have been exceeded.
 Returns `DNS_R_BADBASE64`, `DNS_R_UNEXPECTED`, `DNS_R_UNEXPECTEDEND`,
 `DNS_R_UNEXPECTEDTOKEN` and `DNS_R_SUCCESS`.
 
-        static dns_result_t
+        static isc_result_t
         time_totext(unsigned long value, isc_buffer_t *target);`
 
 Convert the date represented by `value` into YYYYMMDDHHMMSS format
@@ -482,7 +482,7 @@ taking into account the active epochs. This code is Y2K and Y2038 compliant.
 
 Returns `DNS_R_NOSPACE` and `DNS_R_SUCCESS`.
 
-        static dns_result_t
+        static isc_result_t
         time_tobuffer(char *source, isc_buffer_t *target);
 
 Take the date in `source` and convert it to seconds since January 1, 1970
