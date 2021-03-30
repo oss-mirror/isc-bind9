@@ -25,8 +25,6 @@
 
 #include <dns/keyvalues.h>
 
-#include <dst/result.h>
-
 #include "dst_internal.h"
 #include "dst_parse.h"
 #include "dst_pkcs11.h"

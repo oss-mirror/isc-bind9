@@ -42,7 +42,6 @@
 #include <isccc/alist.h>
 #include <isccc/base64.h>
 #include <isccc/cc.h>
-#include <isccc/result.h>
 #include <isccc/sexpr.h>
 #include <isccc/symtab.h>
 #include <isccc/symtype.h>

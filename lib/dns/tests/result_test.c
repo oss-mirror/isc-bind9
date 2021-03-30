@@ -26,8 +26,6 @@
 #include <dns/lib.h>
 #include <dns/result.h>
 
-#include <dst/result.h>
-
 /*
  * Check ids array is populated.
  */

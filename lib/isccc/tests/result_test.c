@@ -23,8 +23,6 @@
 #include <isc/result.h>
 #include <isc/util.h>
 
-#include <isccc/result.h>
-
 /*
  * Check tables are populated.
  */

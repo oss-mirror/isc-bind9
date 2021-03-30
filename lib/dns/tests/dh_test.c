@@ -29,8 +29,6 @@
 
 #include <dns/name.h>
 
-#include <dst/result.h>
-
 #include "../dst_internal.h"
 #include "dnstest.h"
 

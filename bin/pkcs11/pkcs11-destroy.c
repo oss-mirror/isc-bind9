@@ -58,7 +58,6 @@
 #include <isc/types.h>
 
 #include <pk11/pk11.h>
-#include <pk11/result.h>
 
 #ifdef WIN32
 #define sleep(x) Sleep(x)

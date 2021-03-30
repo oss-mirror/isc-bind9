@@ -59,10 +59,6 @@
 #include <isccfg/kaspconf.h>
 #include <isccfg/namedconf.h>
 
-#if USE_PKCS11
-#include <pk11/result.h>
-#endif /* if USE_PKCS11 */
-
 #include "dnssectool.h"
 
 #define MAX_RSA 4096 /* should be long enough... */

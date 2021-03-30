@@ -33,7 +33,6 @@
 #include <isc/print.h>
 
 #include <isccc/alist.h>
-#include <isccc/result.h>
 #include <isccc/sexpr.h>
 #include <isccc/util.h>
 

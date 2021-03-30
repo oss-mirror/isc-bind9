@@ -69,7 +69,6 @@
 
 #include <pk11/constants.h>
 #include <pk11/pk11.h>
-#include <pk11/result.h>
 
 /* Define static key template values */
 static CK_BBOOL truevalue = TRUE;

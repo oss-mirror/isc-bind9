@@ -14,8 +14,6 @@
 #include <isc/once.h>
 #include <isc/util.h>
 
-#include <pk11/result.h>
-
 static const char *text[PK11_R_NRESULTS] = {
 	"PKCS#11 initialization failed", /*%< 0 */
 	"no PKCS#11 provider",		 /*%< 1 */

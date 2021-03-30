@@ -49,13 +49,6 @@
 #include <dns/result.h>
 #include <dns/view.h>
 
-#include <dst/result.h>
-
-#include <isccc/result.h>
-#if USE_PKCS11
-#include <pk11/result.h>
-#endif /* if USE_PKCS11 */
-
 #include <dlz/dlz_dlopen_driver.h>
 
 #ifdef HAVE_GPERFTOOLS_PROFILER

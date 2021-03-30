@@ -34,8 +34,6 @@
 
 #include <dns/log.h>
 
-#include <dst/result.h>
-
 #include "dst_internal.h"
 #include "dst_openssl.h"
 

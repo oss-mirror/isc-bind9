@@ -42,10 +42,6 @@
 
 #include <dst/dst.h>
 
-#if USE_PKCS11
-#include <pk11/result.h>
-#endif /* if USE_PKCS11 */
-
 #include "dnssectool.h"
 
 const char *program = "dnssec-dsfromkey";

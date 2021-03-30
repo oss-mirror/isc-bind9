@@ -29,7 +29,6 @@
 #include <isc/util.h>
 
 #include <dst/dst.h>
-#include <dst/result.h>
 
 #include "../dst_internal.h"
 #include "dnstest.h"

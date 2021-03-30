@@ -57,7 +57,6 @@
 #include <dns/types.h>
 
 #include <dst/gssapi.h>
-#include <dst/result.h>
 
 #include "dst_internal.h"
 

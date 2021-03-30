@@ -40,8 +40,6 @@
 
 #include <pk11/site.h>
 
-#include <dst/result.h>
-
 #include "dst_internal.h"
 #ifdef HAVE_FIPS_MODE
 #include "dst_openssl.h" /* FIPS_mode() prototype */
