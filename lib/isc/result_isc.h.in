@@ -1,0 +1,90 @@
+/*
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, you can obtain one at https://mozilla.org/MPL/2.0/.
+ *
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
+ */
+
+/*! \file result_isc.h.in */
+
+ISC_R_SUCCESS = ISC_RESULTCODE_ISC(0),  /*%< success */
+ISC_R_NOMEMORY = ISC_RESULTCODE_ISC(1),  /*%< out of memory */
+ISC_R_TIMEDOUT = ISC_RESULTCODE_ISC(2),  /*%< timed out */
+ISC_R_NOTHREADS = ISC_RESULTCODE_ISC(3),  /*%< no available threads */
+ISC_R_ADDRNOTAVAIL = ISC_RESULTCODE_ISC(4),  /*%< address not available */
+ISC_R_ADDRINUSE = ISC_RESULTCODE_ISC(5),  /*%< address in use */
+ISC_R_NOPERM = ISC_RESULTCODE_ISC(6),  /*%< permission denied */
+ISC_R_NOCONN = ISC_RESULTCODE_ISC(7),  /*%< no pending connections */
+ISC_R_NETUNREACH = ISC_RESULTCODE_ISC(8),  /*%< network unreachable */
+ISC_R_HOSTUNREACH = ISC_RESULTCODE_ISC(9),  /*%< host unreachable */
+ISC_R_NETDOWN = ISC_RESULTCODE_ISC(10), /*%< network down */
+ISC_R_HOSTDOWN = ISC_RESULTCODE_ISC(11), /*%< host down */
+ISC_R_CONNREFUSED = ISC_RESULTCODE_ISC(12), /*%< connection refused */
+ISC_R_NORESOURCES = ISC_RESULTCODE_ISC(13), /*%< not enough free resources */
+ISC_R_EOF = ISC_RESULTCODE_ISC(14), /*%< end of file */
+ISC_R_BOUND = ISC_RESULTCODE_ISC(15), /*%< socket already bound */
+ISC_R_RELOAD = ISC_RESULTCODE_ISC(16), /*%< reload */
+ISC_R_SUSPEND = ISC_R_RELOAD,		  /*%< alias of 'reload' */
+ISC_R_LOCKBUSY = ISC_RESULTCODE_ISC(17), /*%< lock busy */
+ISC_R_EXISTS = ISC_RESULTCODE_ISC(18), /*%< already exists */
+ISC_R_NOSPACE = ISC_RESULTCODE_ISC(19), /*%< ran out of space */
+ISC_R_CANCELED = ISC_RESULTCODE_ISC(20), /*%< operation canceled */
+ISC_R_NOTBOUND = ISC_RESULTCODE_ISC(21), /*%< socket is not bound */
+ISC_R_SHUTTINGDOWN = ISC_RESULTCODE_ISC(22), /*%< shutting down */
+ISC_R_NOTFOUND = ISC_RESULTCODE_ISC(23), /*%< not found */
+ISC_R_UNEXPECTEDEND = ISC_RESULTCODE_ISC(24), /*%< unexpected end of input */
+ISC_R_FAILURE = ISC_RESULTCODE_ISC(25), /*%< generic failure */
+ISC_R_IOERROR = ISC_RESULTCODE_ISC(26), /*%< I/O error */
+ISC_R_NOTIMPLEMENTED = ISC_RESULTCODE_ISC(27), /*%< not implemented */
+ISC_R_UNBALANCED = ISC_RESULTCODE_ISC(28), /*%< unbalanced parentheses */
+ISC_R_NOMORE = ISC_RESULTCODE_ISC(29), /*%< no more */
+ISC_R_INVALIDFILE = ISC_RESULTCODE_ISC(30), /*%< invalid file */
+ISC_R_BADBASE64 = ISC_RESULTCODE_ISC(31), /*%< bad base64 encoding */
+ISC_R_UNEXPECTEDTOKEN = ISC_RESULTCODE_ISC(32), /*%< unexpected token */
+ISC_R_QUOTA = ISC_RESULTCODE_ISC(33), /*%< quota reached */
+ISC_R_UNEXPECTED = ISC_RESULTCODE_ISC(34), /*%< unexpected error */
+ISC_R_ALREADYRUNNING = ISC_RESULTCODE_ISC(35), /*%< already running */
+ISC_R_IGNORE = ISC_RESULTCODE_ISC(36), /*%< ignore */
+ISC_R_MASKNONCONTIG = ISC_RESULTCODE_ISC(37), /*%< addr mask not contiguous */
+ISC_R_FILENOTFOUND = ISC_RESULTCODE_ISC(38), /*%< file not found */
+ISC_R_FILEEXISTS = ISC_RESULTCODE_ISC(39), /*%< file already exists */
+ISC_R_NOTCONNECTED = ISC_RESULTCODE_ISC(40), /*%< socket is not connected */
+ISC_R_RANGE = ISC_RESULTCODE_ISC(41), /*%< out of range */
+ISC_R_NOENTROPY = ISC_RESULTCODE_ISC(42), /*%< out of entropy */
+ISC_R_MULTICAST = ISC_RESULTCODE_ISC(43), /*%< invalid use of multicast */
+ISC_R_NOTFILE = ISC_RESULTCODE_ISC(44), /*%< not a file */
+ISC_R_NOTDIRECTORY = ISC_RESULTCODE_ISC(45), /*%< not a directory */
+ISC_R_QUEUEFULL = ISC_RESULTCODE_ISC(46), /*%< queue is full */
+ISC_R_FAMILYMISMATCH = ISC_RESULTCODE_ISC(47), /*%< address family mismatch */
+ISC_R_FAMILYNOSUPPORT = ISC_RESULTCODE_ISC(48), /*%< AF not supported */
+ISC_R_BADHEX = ISC_RESULTCODE_ISC(49), /*%< bad hex encoding */
+ISC_R_TOOMANYOPENFILES = ISC_RESULTCODE_ISC(50), /*%< too many open files */
+ISC_R_NOTBLOCKING = ISC_RESULTCODE_ISC(51), /*%< not blocking */
+ISC_R_UNBALANCEDQUOTES = ISC_RESULTCODE_ISC(52), /*%< unbalanced quotes */
+ISC_R_INPROGRESS = ISC_RESULTCODE_ISC(53), /*%< operation in progress */
+ISC_R_CONNECTIONRESET = ISC_RESULTCODE_ISC(54), /*%< connection reset */
+ISC_R_SOFTQUOTA = ISC_RESULTCODE_ISC(55), /*%< soft quota reached */
+ISC_R_BADNUMBER = ISC_RESULTCODE_ISC(56), /*%< not a valid number */
+ISC_R_DISABLED = ISC_RESULTCODE_ISC(57), /*%< disabled */
+ISC_R_MAXSIZE = ISC_RESULTCODE_ISC(58), /*%< max size */
+ISC_R_BADADDRESSFORM = ISC_RESULTCODE_ISC(59), /*%< invalid address format */
+ISC_R_BADBASE32 = ISC_RESULTCODE_ISC(60), /*%< bad base32 encoding */
+ISC_R_UNSET = ISC_RESULTCODE_ISC(61), /*%< unset */
+ISC_R_MULTIPLE = ISC_RESULTCODE_ISC(62), /*%< multiple */
+ISC_R_WOULDBLOCK = ISC_RESULTCODE_ISC(63), /*%< would block */
+ISC_R_COMPLETE = ISC_RESULTCODE_ISC(64), /*%< complete */
+ISC_R_CRYPTOFAILURE = ISC_RESULTCODE_ISC(65), /*%< cryptography library failure */
+ISC_R_DISCQUOTA = ISC_RESULTCODE_ISC(66), /*%< disc quota */
+ISC_R_DISCFULL = ISC_RESULTCODE_ISC(67), /*%< disc full */
+ISC_R_DEFAULT = ISC_RESULTCODE_ISC(68), /*%< default */
+ISC_R_IPV4PREFIX = ISC_RESULTCODE_ISC(69), /*%< IPv4 prefix */
+ISC_R_TLSERROR = ISC_RESULTCODE_ISC(70), /*%< TLS error */
+ISC_R_HTTP2ALPNERROR = ISC_RESULTCODE_ISC(71), /*%< ALPN for HTTP/2 failed */
+
+/*% Not a result code: the number of results. */
+#define ISC_R_NRESULTS 72
+

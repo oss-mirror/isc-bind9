@@ -113,7 +113,6 @@ pk11_HEADERS =				\
 	include/pk11/constants.h	\
 	include/pk11/internal.h		\
 	include/pk11/pk11.h		\
-	include/pk11/result.h		\
 	include/pk11/site.h
 
 pkcs11dir = $(includedir)/pkcs11
@@ -153,7 +152,6 @@ libisc_la_SOURCES =		\
 	unix/time.c		\
 	url.c			\
 	pk11.c			\
-	pk11_result.c		\
 	aes.c			\
 	app.c			\
 	assertions.c		\

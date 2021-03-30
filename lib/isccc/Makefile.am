@@ -9,7 +9,6 @@ libisccc_la_HEADERS =			\
 	include/isccc/cc.h		\
 	include/isccc/ccmsg.h		\
 	include/isccc/events.h		\
-	include/isccc/result.h		\
 	include/isccc/sexpr.h		\
 	include/isccc/symtab.h		\
 	include/isccc/symtype.h		\
@@ -22,7 +21,6 @@ libisccc_la_SOURCES =		\
 	base64.c		\
 	cc.c			\
 	ccmsg.c			\
-	result.c		\
 	sexpr.c			\
 	symtab.c
 
