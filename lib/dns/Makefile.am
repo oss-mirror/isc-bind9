@@ -147,8 +147,7 @@ libdns_la_HEADERS =			\
 dstdir = $(includedir)/dst
 dst_HEADERS =				\
 	include/dst/dst.h		\
-	include/dst/gssapi.h		\
-	include/dst/result.h
+	include/dst/gssapi.h
 
 libdns_la_SOURCES =			\
 	$(libdns_la_HEADERS)		\
@@ -177,7 +176,6 @@ libdns_la_SOURCES =			\
 	dst_parse.c			\
 	dst_parse.h			\
 	dst_pkcs11.h			\
-	dst_result.c			\
 	dyndb.c				\
 	ecs.c				\
 	fixedname.c			\
