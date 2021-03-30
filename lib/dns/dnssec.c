@@ -41,8 +41,6 @@
 #include <dns/stats.h>
 #include <dns/tsig.h> /* for DNS_TSIG_FUDGE */
 
-#include <dst/result.h>
-
 LIBDNS_EXTERNAL_DATA isc_stats_t *dns_dnssec_stats;
 
 #define is_response(msg) ((msg->flags & DNS_MESSAGEFLAG_QR) != 0)

@@ -12,8 +12,6 @@
 #include <isc/once.h>
 #include <isc/util.h>
 
-#include <dst/result.h>
-
 static const char *text[DST_R_NRESULTS] = {
 	"algorithm is unsupported",		 /*%< 0 */
 	"crypto failure",			 /*%< 1 */

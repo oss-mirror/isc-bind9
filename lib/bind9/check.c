@@ -55,7 +55,6 @@
 #include <dns/ssu.h>
 
 #include <dst/dst.h>
-#include <dst/result.h>
 
 #include <isccfg/aclconf.h>
 #include <isccfg/cfg.h>

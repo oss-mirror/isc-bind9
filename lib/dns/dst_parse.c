@@ -43,7 +43,6 @@
 #include <dns/log.h>
 #include <dns/time.h>
 
-#include "dst/result.h"
 #include "dst_internal.h"
 
 #define DST_AS_STR(t) ((t).value.as_textregion.base)

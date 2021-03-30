@@ -67,7 +67,6 @@
 #include <dns/view.h>
 
 #include <dst/dst.h>
-#include <dst/result.h>
 
 #include <isccfg/log.h>
 #include <isccfg/namedconf.h>

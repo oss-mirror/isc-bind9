@@ -102,7 +102,6 @@
 #include <dns/zt.h>
 
 #include <dst/dst.h>
-#include <dst/result.h>
 
 #include <isccfg/grammar.h>
 #include <isccfg/kaspconf.h>

@@ -38,8 +38,6 @@
 #include <dns/result.h>
 #include <dns/tsig.h>
 
-#include <dst/result.h>
-
 #include "tsig_p.h"
 
 #define TSIG_MAGIC	  ISC_MAGIC('T', 'S', 'I', 'G')

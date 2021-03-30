@@ -28,8 +28,6 @@
 #include <isc/once.h>
 #include <isc/util.h>
 
-#include <isccc/result.h>
-
 static const char *text[ISCCC_R_NRESULTS] = {
 	"unknown version", /* 1 */
 	"syntax error",	   /* 2 */

@@ -39,7 +39,6 @@
 #include <dns/secalg.h>
 
 #include <dst/dst.h>
-#include <dst/result.h>
 
 dst_key_t *key;
 dns_fixedname_t fname;

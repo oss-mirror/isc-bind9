@@ -76,7 +76,6 @@
 #include <dns/tsig.h>
 
 #include <dst/dst.h>
-#include <dst/result.h>
 
 #include <isccfg/namedconf.h>
 
@@ -85,10 +84,6 @@
 #include <bind9/getaddresses.h>
 
 #include "dighost.h"
-
-#if USE_PKCS11
-#include <pk11/result.h>
-#endif /* if USE_PKCS11 */
 
 dig_lookuplist_t lookup_list;
 dig_serverlist_t server_list;

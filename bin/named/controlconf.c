@@ -38,7 +38,6 @@
 #include <isccc/cc.h>
 #include <isccc/ccmsg.h>
 #include <isccc/events.h>
-#include <isccc/result.h>
 #include <isccc/sexpr.h>
 #include <isccc/symtab.h>
 #include <isccc/util.h>

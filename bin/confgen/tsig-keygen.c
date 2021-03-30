@@ -34,10 +34,6 @@
 #include <isc/time.h>
 #include <isc/util.h>
 
-#if USE_PKCS11
-#include <pk11/result.h>
-#endif /* if USE_PKCS11 */
-
 #include <dns/keyvalues.h>
 #include <dns/name.h>
 #include <dns/result.h>

@@ -22,8 +22,6 @@
 #include <pk11/internal.h>
 #include <pk11/site.h>
 
-#include <dst/result.h>
-
 #include "dst_internal.h"
 #include "dst_parse.h"
 #include "dst_pkcs11.h"

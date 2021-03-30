@@ -33,7 +33,6 @@
 #include <isc/util.h>
 
 #include <dst/gssapi.h>
-#include <dst/result.h>
 
 #include "dst_internal.h"
 #include "dst_parse.h"

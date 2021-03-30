@@ -31,7 +31,6 @@
 #include <dns/result.h>
 
 #include <dst/dst.h>
-#include <dst/result.h>
 
 #define RETERR(x)                            \
 	do {                                 \

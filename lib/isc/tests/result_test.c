@@ -23,8 +23,6 @@
 #include <isc/result.h>
 #include <isc/util.h>
 
-#include <pk11/result.h>
-
 /* convert result to identifier string */
 static void
 isc_result_toid_test(void **state) {

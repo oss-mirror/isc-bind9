@@ -58,8 +58,6 @@
 #include <dns/ttl.h>
 #include <dns/types.h>
 
-#include <dst/result.h>
-
 #include "dst_internal.h"
 
 #define DST_AS_STR(t) ((t).value.as_textregion.base)
