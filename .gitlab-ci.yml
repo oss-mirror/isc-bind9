@@ -789,6 +789,7 @@ gcc:tarball:
   only:
     - schedules
     - tags
+    - web
 
 system:gcc:tarball:
   <<: *base_image
