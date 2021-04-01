@@ -1959,6 +1959,387 @@ tcpdns_half_recv_half_send(void **state __attribute__((unused))) {
 	CHECK_RANGE_HALF(ssends);
 }
 
+/* TLS */
+
+static isc_result_t
+tls_connect(isc_nm_t *nm) {
+	return (isc_nm_tlsconnect(nm, (isc_nmiface_t *)&tcp_connect_addr,
+				  (isc_nmiface_t *)&tcp_listen_addr,
+				  connect_connect_cb, NULL, tcp_connect_tlsctx,
+				  T_CONNECT, 0));
+}
+
+static void
+tls_noop(void **state) {
+	isc_result_t result = ISC_R_SUCCESS;
+	isc_nmsocket_t *listen_sock = NULL;
+
+	UNUSED(state);
+
+	result = isc_nm_listentls(listen_nm, (isc_nmiface_t *)&tcp_listen_addr,
+				  noop_accept_cb, NULL, 0, 0, NULL,
+				  tcp_listen_tlsctx, &listen_sock);
+	assert_int_equal(result, ISC_R_SUCCESS);
+
+	isc_nm_stoplistening(listen_sock);
+	isc_nmsocket_close(&listen_sock);
+	assert_null(listen_sock);
+
+	do {
+		isc_refcount_increment0(&active_cconnects);
+		result = isc_nm_tlsconnect(
+			connect_nm, (isc_nmiface_t *)&tcp_connect_addr,
+			(isc_nmiface_t *)&tcp_listen_addr, noop_connect_cb,
+			NULL, tcp_connect_tlsctx, T_CONNECT, 0);
+		if (result != ISC_R_SUCCESS) {
+			isc_refcount_decrement(&active_cconnects);
+			usleep(1000);
+		}
+	} while (result != ISC_R_SUCCESS);
+
+	isc_nm_closedown(connect_nm);
+
+	assert_int_equal(0, atomic_load(&cconnects));
+	assert_int_equal(0, atomic_load(&csends));
+	assert_int_equal(0, atomic_load(&creads));
+	assert_int_equal(0, atomic_load(&sreads));
+	assert_int_equal(0, atomic_load(&ssends));
+}
+
+static void
+tls_noresponse(void **state) {
+	isc_result_t result = ISC_R_SUCCESS;
+	isc_nmsocket_t *listen_sock = NULL;
+
+	UNUSED(state);
+
+	result = isc_nm_listentls(listen_nm, (isc_nmiface_t *)&tcp_listen_addr,
+				  noop_accept_cb, NULL, 0, 0, NULL,
+				  tcp_listen_tlsctx, &listen_sock);
+	assert_int_equal(result, ISC_R_SUCCESS);
+
+	do {
+		isc_refcount_increment0(&active_cconnects);
+		result = isc_nm_tlsconnect(
+			connect_nm, (isc_nmiface_t *)&tcp_connect_addr,
+			(isc_nmiface_t *)&tcp_listen_addr, noop_connect_cb,
+			NULL, tcp_connect_tlsctx, T_CONNECT, 0);
+		if (result != ISC_R_SUCCESS) {
+			isc_refcount_decrement(&active_cconnects);
+			usleep(1000);
+		}
+	} while (result != ISC_R_SUCCESS);
+
+	isc_nm_stoplistening(listen_sock);
+	isc_nmsocket_close(&listen_sock);
+	assert_null(listen_sock);
+	isc_nm_closedown(connect_nm);
+}
+
+static void
+tls_recv_one(void **state __attribute__((unused))) {
+	isc_result_t result = ISC_R_SUCCESS;
+	isc_nmsocket_t *listen_sock = NULL;
+	isc_quota_t *quotap = tcp_listener_init_quota(1);
+
+	atomic_store(&nsends, 1);
+
+	result = isc_nm_listentls(listen_nm, (isc_nmiface_t *)&tcp_listen_addr,
+				  stream_accept_cb, NULL, 0, 0, quotap,
+				  tcp_listen_tlsctx, &listen_sock);
+	assert_int_equal(result, ISC_R_SUCCESS);
+
+	do {
+		isc_refcount_increment0(&active_cconnects);
+		result = isc_nm_tlsconnect(
+			connect_nm, (isc_nmiface_t *)&tcp_connect_addr,
+			(isc_nmiface_t *)&tcp_listen_addr, connect_connect_cb,
+			NULL, tcp_connect_tlsctx, T_CONNECT, 0);
+		if (result != ISC_R_SUCCESS) {
+			isc_refcount_decrement(&active_cconnects);
+		}
+	} while (result != ISC_R_SUCCESS);
+
+	WAIT_FOR_EQ(cconnects, 1);
+	WAIT_FOR_LE(nsends, 0);
+	WAIT_FOR_EQ(csends, 1);
+	WAIT_FOR_EQ(sreads, 1);
+	WAIT_FOR_EQ(ssends, 0);
+	WAIT_FOR_EQ(creads, 0);
+
+	isc_nm_stoplistening(listen_sock);
+	isc_nmsocket_close(&listen_sock);
+	assert_null(listen_sock);
+	isc_nm_closedown(connect_nm);
+
+	X(cconnects);
+	X(csends);
+	X(creads);
+	X(sreads);
+	X(ssends);
+
+	atomic_assert_int_eq(cconnects, 1);
+	atomic_assert_int_eq(csends, 1);
+	atomic_assert_int_eq(creads, 0);
+	atomic_assert_int_eq(sreads, 1);
+	atomic_assert_int_eq(ssends, 0);
+}
+
+static void
+tls_recv_two(void **state __attribute__((unused))) {
+	isc_result_t result = ISC_R_SUCCESS;
+	isc_nmsocket_t *listen_sock = NULL;
+	isc_quota_t *quotap = tcp_listener_init_quota(1);
+
+	atomic_store(&nsends, 2);
+
+	result = isc_nm_listentls(listen_nm, (isc_nmiface_t *)&tcp_listen_addr,
+				  stream_accept_cb, NULL, 0, 0, quotap,
+				  tcp_listen_tlsctx, &listen_sock);
+	assert_int_equal(result, ISC_R_SUCCESS);
+
+	do {
+		isc_refcount_increment0(&active_cconnects);
+		result = isc_nm_tlsconnect(
+			connect_nm, (isc_nmiface_t *)&tcp_connect_addr,
+			(isc_nmiface_t *)&tcp_listen_addr, connect_connect_cb,
+			NULL, tcp_connect_tlsctx, T_CONNECT, 0);
+		if (result != ISC_R_SUCCESS) {
+			isc_refcount_decrement(&active_cconnects);
+		}
+	} while (result != ISC_R_SUCCESS);
+
+	WAIT_FOR_EQ(cconnects, 1);
+
+	do {
+		isc_refcount_increment0(&active_cconnects);
+		result = isc_nm_tlsconnect(
+			connect_nm, (isc_nmiface_t *)&tcp_connect_addr,
+			(isc_nmiface_t *)&tcp_listen_addr, connect_connect_cb,
+			NULL, tcp_connect_tlsctx, T_CONNECT, 0);
+		if (result != ISC_R_SUCCESS) {
+			isc_refcount_decrement(&active_cconnects);
+		}
+	} while (result != ISC_R_SUCCESS);
+
+	WAIT_FOR_EQ(cconnects, 2);
+	WAIT_FOR_LE(nsends, 0);
+	WAIT_FOR_EQ(csends, 2);
+	WAIT_FOR_EQ(sreads, 2);
+	WAIT_FOR_EQ(ssends, 1);
+	WAIT_FOR_EQ(creads, 1);
+
+	isc_nm_stoplistening(listen_sock);
+	isc_nmsocket_close(&listen_sock);
+	assert_null(listen_sock);
+	isc_nm_closedown(connect_nm);
+
+	X(cconnects);
+	X(csends);
+	X(creads);
+	X(sreads);
+	X(ssends);
+
+	atomic_assert_int_eq(cconnects, 2);
+	atomic_assert_int_eq(csends, 2);
+	atomic_assert_int_eq(creads, 1);
+	atomic_assert_int_eq(sreads, 2);
+	atomic_assert_int_eq(ssends, 1);
+}
+
+static void
+tls_recv_send(void **state __attribute__((unused))) {
+	isc_result_t result = ISC_R_SUCCESS;
+	isc_nmsocket_t *listen_sock = NULL;
+	isc_thread_t threads[workers];
+	isc_quota_t *quotap = tcp_listener_init_quota(workers);
+
+	SKIP_IN_CI;
+
+	result = isc_nm_listentls(listen_nm, (isc_nmiface_t *)&tcp_listen_addr,
+				  stream_accept_cb, NULL, 0, 0, quotap,
+				  tcp_listen_tlsctx, &listen_sock);
+	assert_int_equal(result, ISC_R_SUCCESS);
+
+	memset(threads, 0, sizeof(threads));
+	for (size_t i = 0; i < workers; i++) {
+		isc_thread_create(connect_thread, tls_connect, &threads[i]);
+	}
+
+	WAIT_FOR_GE(cconnects, esends);
+	WAIT_FOR_GE(csends, esends);
+	WAIT_FOR_GE(sreads, esends);
+	WAIT_FOR_GE(ssends, esends / 2);
+	WAIT_FOR_GE(creads, esends / 2);
+
+	DONE();
+	for (size_t i = 0; i < workers; i++) {
+		isc_thread_join(threads[i], NULL);
+	}
+
+	isc_nm_closedown(connect_nm);
+	isc_nm_stoplistening(listen_sock);
+	isc_nmsocket_close(&listen_sock);
+	assert_null(listen_sock);
+
+	X(cconnects);
+	X(csends);
+	X(creads);
+	X(sreads);
+	X(ssends);
+
+	CHECK_RANGE_FULL(csends);
+	CHECK_RANGE_FULL(creads);
+	CHECK_RANGE_FULL(sreads);
+	CHECK_RANGE_FULL(ssends);
+}
+
+static void
+tls_recv_half_send(void **state __attribute__((unused))) {
+	isc_result_t result = ISC_R_SUCCESS;
+	isc_nmsocket_t *listen_sock = NULL;
+	isc_thread_t threads[workers];
+	isc_quota_t *quotap = tcp_listener_init_quota(workers);
+
+	SKIP_IN_CI;
+
+	result = isc_nm_listentls(listen_nm, (isc_nmiface_t *)&tcp_listen_addr,
+				  stream_accept_cb, NULL, 0, 0, quotap,
+				  tcp_listen_tlsctx, &listen_sock);
+	assert_int_equal(result, ISC_R_SUCCESS);
+
+	memset(threads, 0, sizeof(threads));
+	for (size_t i = 0; i < workers; i++) {
+		isc_thread_create(connect_thread, tls_connect, &threads[i]);
+	}
+
+	WAIT_FOR_GE(cconnects, esends / 2);
+	WAIT_FOR_GE(csends, esends / 2);
+	WAIT_FOR_GE(sreads, esends / 2);
+	WAIT_FOR_GE(ssends, esends / 2);
+	WAIT_FOR_GE(creads, esends / 2);
+
+	isc_nm_closedown(connect_nm);
+
+	DONE();
+	for (size_t i = 0; i < workers; i++) {
+		isc_thread_join(threads[i], NULL);
+	}
+
+	isc_nm_stoplistening(listen_sock);
+	isc_nmsocket_close(&listen_sock);
+	assert_null(listen_sock);
+
+	X(cconnects);
+	X(csends);
+	X(creads);
+	X(sreads);
+	X(ssends);
+
+	CHECK_RANGE_HALF(csends);
+	CHECK_RANGE_HALF(creads);
+	CHECK_RANGE_HALF(sreads);
+	CHECK_RANGE_HALF(ssends);
+}
+
+static void
+tls_half_recv_send(void **state __attribute__((unused))) {
+	isc_result_t result = ISC_R_SUCCESS;
+	isc_nmsocket_t *listen_sock = NULL;
+	isc_thread_t threads[workers];
+	isc_quota_t *quotap = tcp_listener_init_quota(workers);
+
+	SKIP_IN_CI;
+
+	result = isc_nm_listentls(listen_nm, (isc_nmiface_t *)&tcp_listen_addr,
+				  stream_accept_cb, NULL, 0, 0, quotap,
+				  tcp_listen_tlsctx, &listen_sock);
+	assert_int_equal(result, ISC_R_SUCCESS);
+
+	memset(threads, 0, sizeof(threads));
+	for (size_t i = 0; i < workers; i++) {
+		isc_thread_create(connect_thread, tls_connect, &threads[i]);
+	}
+
+	WAIT_FOR_GE(cconnects, esends / 2);
+	WAIT_FOR_GE(csends, esends / 2);
+	WAIT_FOR_GE(sreads, esends / 2);
+	WAIT_FOR_GE(ssends, esends / 2);
+	WAIT_FOR_GE(creads, esends / 2);
+
+	isc_nm_stoplistening(listen_sock);
+	isc_nmsocket_close(&listen_sock);
+	assert_null(listen_sock);
+
+	/* Try to send a little while longer */
+	usleep((esends / 2) * 10000);
+
+	isc_nm_closedown(connect_nm);
+
+	DONE();
+	for (size_t i = 0; i < workers; i++) {
+		isc_thread_join(threads[i], NULL);
+	}
+
+	X(cconnects);
+	X(csends);
+	X(creads);
+	X(sreads);
+	X(ssends);
+
+	CHECK_RANGE_HALF(csends);
+	CHECK_RANGE_HALF(creads);
+	CHECK_RANGE_HALF(sreads);
+	CHECK_RANGE_HALF(ssends);
+}
+
+static void
+tls_half_recv_half_send(void **state __attribute__((unused))) {
+	isc_result_t result = ISC_R_SUCCESS;
+	isc_nmsocket_t *listen_sock = NULL;
+	isc_thread_t threads[workers];
+	isc_quota_t *quotap = tcp_listener_init_quota(workers);
+
+	SKIP_IN_CI;
+
+	result = isc_nm_listentls(listen_nm, (isc_nmiface_t *)&tcp_listen_addr,
+				  stream_accept_cb, NULL, 0, 0, quotap,
+				  tcp_listen_tlsctx, &listen_sock);
+	assert_int_equal(result, ISC_R_SUCCESS);
+
+	memset(threads, 0, sizeof(threads));
+	for (size_t i = 0; i < workers; i++) {
+		isc_thread_create(connect_thread, tls_connect, &threads[i]);
+	}
+
+	WAIT_FOR_GE(cconnects, esends / 2);
+	WAIT_FOR_GE(csends, esends / 2);
+	WAIT_FOR_GE(sreads, esends / 2);
+	WAIT_FOR_GE(ssends, esends / 2);
+	WAIT_FOR_GE(creads, esends / 2);
+
+	isc_nm_closedown(connect_nm);
+	isc_nm_stoplistening(listen_sock);
+	isc_nmsocket_close(&listen_sock);
+	assert_null(listen_sock);
+
+	DONE();
+	for (size_t i = 0; i < workers; i++) {
+		isc_thread_join(threads[i], NULL);
+	}
+
+	X(cconnects);
+	X(csends);
+	X(creads);
+	X(sreads);
+	X(ssends);
+
+	CHECK_RANGE_HALF(csends);
+	CHECK_RANGE_HALF(creads);
+	CHECK_RANGE_HALF(sreads);
+	CHECK_RANGE_HALF(ssends);
+}
+
 /* TLSDNS */
 
 static isc_result_t
@@ -2464,6 +2845,24 @@ main(void) {
 		cmocka_unit_test_setup_teardown(tcpdns_half_recv_send, nm_setup,
 						nm_teardown),
 		cmocka_unit_test_setup_teardown(tcpdns_half_recv_half_send,
+						nm_setup, nm_teardown),
+
+		/* TLS */
+		cmocka_unit_test_setup_teardown(tls_noop, nm_setup,
+						nm_teardown),
+		cmocka_unit_test_setup_teardown(tls_noresponse, nm_setup,
+						nm_teardown),
+		cmocka_unit_test_setup_teardown(tls_recv_one, nm_setup,
+						nm_teardown),
+		cmocka_unit_test_setup_teardown(tls_recv_two, nm_setup,
+						nm_teardown),
+		cmocka_unit_test_setup_teardown(tls_recv_send, nm_setup,
+						nm_teardown),
+		cmocka_unit_test_setup_teardown(tls_recv_half_send, nm_setup,
+						nm_teardown),
+		cmocka_unit_test_setup_teardown(tls_half_recv_send, nm_setup,
+						nm_teardown),
+		cmocka_unit_test_setup_teardown(tls_half_recv_half_send,
 						nm_setup, nm_teardown),
 
 		/* TLSDNS */
