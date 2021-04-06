@@ -97,11 +97,6 @@ typedef ISC_LIST(debuglink_t) debuglist_t;
 #define FLARG
 #endif /* if ISC_MEM_TRACKLINES */
 
-typedef struct element element;
-struct element {
-	alignas(CACHE_LINE_SIZE) element *next;
-};
-
 typedef struct {
 	alignas(ALIGNMENT) union {
 		size_t size;
@@ -412,7 +407,7 @@ mem_putstats(isc_mem_t *ctx, void *ptr, size_t size) {
 
 	INSIST(atomic_fetch_sub_release(&ctx->inuse, size) >= size);
 
-	INSIST(atomic_fetch_sub_release(&stats->gets, 1) >= 1);
+	INSIST(atomic_fetch_sub_release(&stats->gets, 1) > 0);
 
 	decrement_malloced(ctx, size);
 }
@@ -1208,8 +1203,8 @@ isc_mempool_create(isc_mem_t *mctx, size_t size, isc_mempool_t **mpctxp) {
 	/*
 	 * Mempools are stored as a linked list of element.
 	 */
-	if (size < sizeof(element)) {
-		size = sizeof(element);
+	if (size < CACHE_LINE_SIZE) {
+		size = CACHE_LINE_SIZE;
 	}
 
 	/*
@@ -1300,7 +1295,7 @@ isc_mempool_destroy(isc_mempool_t **mpctxp) {
 	 */
 	size_t aligned_size = ISC_ALIGN(mpctx->size, ALIGNMENT_SIZE);
 	size_t alloc_size = ISC_MAX(pagesize,
-				    aligned_size * 8 + sizeof(element));
+				    aligned_size * 8);
 	void *page;
 
 	while ((page = (void *)isc_queue_dequeue(mpctx->pages)) != 0) {
