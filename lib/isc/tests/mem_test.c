@@ -12,6 +12,7 @@
 #if HAVE_CMOCKA
 
 #include <fcntl.h>
+#include <locale.h>
 #include <sched.h> /* IWYU pragma: keep */
 #include <setjmp.h>
 #include <stdarg.h>
@@ -353,9 +354,9 @@ isc_mem_traceflag_test(void **state) {
 
 #if !defined(__SANITIZE_THREAD__)
 
-#define ITERS	  512
-#define NUM_ITEMS 1024 /* 768 */
-#define ITEM_SIZE 65534
+#define ITERS	     512
+#define NUM_ITEMS    1024 /* 768 */
+#define ITEM_SIZE    65534
 #define MP_ITEM_SIZE 256
 
 static atomic_size_t mem_size;
@@ -407,8 +408,10 @@ isc_mem_benchmark(void **state) {
 
 	t = isc_time_microdiff(&ts2, &ts1);
 
+	setlocale(LC_NUMERIC, "");
 	printf("[ TIME     ] isc_mem_benchmark: "
-	       "%d isc_mem_{get,put} calls, %f seconds, %f calls/second\n",
+	       "%d isc_mem_{get,put} calls, %'0.3f seconds, %'0.3f "
+	       "calls/second\n",
 	       nthreads * ITERS * NUM_ITEMS, t / 1000000.0,
 	       (nthreads * ITERS * NUM_ITEMS) / (t / 1000000.0));
 }
@@ -461,8 +464,10 @@ isc_mempool_benchmark(void **state) {
 
 	t = isc_time_microdiff(&ts2, &ts1);
 
+	setlocale(LC_NUMERIC, "");
 	printf("[ TIME     ] isc_mempool_benchmark: "
-	       "%d isc_mempool_{get,put} calls, %f seconds, %f calls/second\n",
+	       "%d isc_mempool_{get,put} calls, %'0.3f seconds, %'0.3f "
+	       "calls/second\n",
 	       nthreads * ITERS * NUM_ITEMS, t / 1000000.0,
 	       (nthreads * ITERS * NUM_ITEMS) / (t / 1000000.0));
 
