@@ -29,6 +29,7 @@
 #include <isc/once.h>
 #include <isc/os.h>
 #include <isc/print.h>
+#include <isc/queue.h>
 #include <isc/refcount.h>
 #include <isc/strerr.h>
 #include <isc/string.h>
@@ -51,8 +52,6 @@
 
 #define MCTXLOCK(m)	LOCK(&m->lock)
 #define MCTXUNLOCK(m)	UNLOCK(&m->lock)
-#define MPCTXLOCK(mp)	LOCK(&mp->lock);
-#define MPCTXUNLOCK(mp) UNLOCK(&mp->lock);
 
 #ifndef ISC_MEM_DEBUGGING
 #define ISC_MEM_DEBUGGING 0
@@ -174,7 +173,7 @@ typedef struct mempool_stats {
 	 */
 	atomic_int_fast64_t allocated;
 	/*%< # of items on reserved list */
-	alignas(CACHE_LINE_SIZE) atomic_size_t freecount;
+	alignas(CACHE_LINE_SIZE) atomic_int_fast64_t freecount;
 	/*%< # of requests to this pool */
 	alignas(CACHE_LINE_SIZE) atomic_size_t gets;
 } mempool_stats_t;
@@ -182,7 +181,6 @@ typedef struct mempool_stats {
 struct isc_mempool {
 	/* always unlocked */
 	unsigned int magic;
-	isc_mutex_t lock;
 	isc_mem_t *mctx; /*%< our memory context */
 	/*%< locked via the memory context's lock */
 	ISC_LINK(isc_mempool_t) link; /*%< next pool in this mem context */
@@ -192,13 +190,12 @@ struct isc_mempool {
 	alignas(CACHE_LINE_SIZE) mempool_stats_t *counters;
 
 	/*%< Debugging only. */
-	char name[16]; /*%< printed name in stats reports */
+	char *name;
 
-	/* Thread-local */
-	size_t nthreads;
-	alignas(CACHE_LINE_SIZE) element **items; /*%< list of free items */
-	alignas(CACHE_LINE_SIZE) element **pages; /*%< list of allocated "pages"
-						   */
+	/*%< list of free items */
+	alignas(CACHE_LINE_SIZE) isc_queue_t *items;
+	/*%< list of allocated "pages" */
+	alignas(CACHE_LINE_SIZE) isc_queue_t *pages;
 };
 
 /*
@@ -1226,10 +1223,7 @@ isc_mempool_create(isc_mem_t *mctx, size_t size, isc_mempool_t **mpctxp) {
 		.mctx = mctx,
 		.size = size,
 		.ncounters = MEM_MAX_THREADS,
-		.nthreads = MEM_MAX_THREADS,
 	};
-
-	isc_mutex_init(&mpctx->lock);
 
 	/* Align all elements on the CACHE_LINE_SIZE */
 	mpctx->counters = isc_mem_get(mctx, mpctx->ncounters *
@@ -1241,15 +1235,8 @@ isc_mempool_create(isc_mem_t *mctx, size_t size, isc_mempool_t **mpctxp) {
 		atomic_init(&mpctx->counters[i].gets, 0);
 	}
 
-	mpctx->items = isc_mem_get(mctx,
-				   mpctx->nthreads * sizeof(mpctx->items[0]));
-	mpctx->pages = isc_mem_get(mctx,
-				   mpctx->nthreads * sizeof(mpctx->pages[0]));
-
-	for (size_t i = 0; i < mpctx->nthreads; i++) {
-		mpctx->items[i] = NULL;
-		mpctx->pages[i] = NULL;
-	}
+	mpctx->items = isc_queue_new(mctx, mpctx->ncounters);
+	mpctx->pages = isc_queue_new(mctx, mpctx->ncounters);
 
 	*mpctxp = (isc_mempool_t *)mpctx;
 
@@ -1264,11 +1251,8 @@ isc_mempool_setname(isc_mempool_t *mpctx, const char *name) {
 	REQUIRE(VALID_MEMPOOL(mpctx));
 	REQUIRE(name != NULL);
 
-	MPCTXLOCK(mpctx);
-
-	strlcpy(mpctx->name, name, sizeof(mpctx->name));
-
-	MPCTXUNLOCK(mpctx);
+	/* FIXME */
+	mpctx->name = isc_mem_strdup(mpctx->mctx, name);
 }
 
 void
@@ -1279,33 +1263,37 @@ isc_mempool_destroy(isc_mempool_t **mpctxp) {
 	isc_mempool_t *mpctx = *mpctxp;
 	isc_mem_t *mctx = mpctx->mctx;
 	size_t allocated = isc_mempool_getallocated(mpctx);
+	size_t freecount = isc_mempool_getfreecount(mpctx);
 
 	*mpctxp = NULL;
 	mpctx->magic = 0;
 
 	if (allocated != 0) {
-		UNEXPECTED_ERROR(__FILE__, __LINE__,
-				 "isc_mempool_destroy(): mempool %s "
-				 "leaked memory",
-				 mpctx->name);
+		UNEXPECTED_ERROR(
+			__FILE__, __LINE__,
+			"isc_mempool_destroy(): mempool %s leaked memory",
+			mpctx->name);
 	}
-	REQUIRE(allocated == 0);
-
-	mctx = mpctx->mctx;
+	INSIST(allocated == 0);
 
 	/*
 	 * Return any items on the free list
 	 */
-	for (size_t i = 0; i < mpctx->nthreads; i++) {
-		fprintf(stderr, "%p->freecount[%zu] -> %zu\n", mpctx, i,
-			atomic_load(&mpctx->counters[i].freecount));
-		while (mpctx->items[i] != NULL) {
-			INSIST(atomic_fetch_sub_release(
-				       &mpctx->counters[i].freecount, 1) > 0);
-			element *item = mpctx->items[i];
-			mpctx->items[i] = item->next;
+	for (size_t i = 0; i < mpctx->ncounters; i++) {
+		uintptr_t item;
+
+		while ((item = isc_queue_dequeue(mpctx->items)) != 0) {
+			freecount--;
 		}
 	}
+	if (freecount != 0) {
+		UNEXPECTED_ERROR(
+			__FILE__, __LINE__,
+			"isc_mempool_destroy(): mempool %s lost memory",
+			mpctx->name);
+	}
+	INSIST(freecount == 0);
+
 	/*
 
 	 * Return all the pages back to the allocator
@@ -1313,25 +1301,21 @@ isc_mempool_destroy(isc_mempool_t **mpctxp) {
 	size_t aligned_size = ISC_ALIGN(mpctx->size, ALIGNMENT_SIZE);
 	size_t alloc_size = ISC_MAX(pagesize,
 				    aligned_size * 8 + sizeof(element));
+	void *page;
 
-	for (size_t i = 0; i < mpctx->nthreads; i++) {
-		while (mpctx->pages[i] != NULL) {
-			element *page = mpctx->pages[i];
-			mpctx->pages[i] = page->next;
-
-			mem_putstats(mctx, page, alloc_size);
-			mem_put(mctx, page, alloc_size);
-		}
+	while ((page = (void *)isc_queue_dequeue(mpctx->pages)) != 0) {
+		mem_putstats(mctx, (void *)page, alloc_size);
+		mem_put(mctx, page, alloc_size);
 	}
 
 	isc_mem_put(mctx, mpctx->counters,
 		    mpctx->ncounters * sizeof(mpctx->counters[0]));
-	isc_mem_put(mctx, mpctx->items,
-		    mpctx->nthreads * sizeof(mpctx->items[0]));
-	isc_mem_put(mctx, mpctx->pages,
-		    mpctx->nthreads * sizeof(mpctx->pages[0]));
+	isc_queue_destroy(mpctx->items);
+	isc_queue_destroy(mpctx->pages);
 
-	isc_mutex_destroy(&mpctx->lock);
+	if (mpctx->name != NULL) {
+		isc_mem_free(mctx, mpctx->name);
+	};
 
 	/*
 	 * Remove our linked list entry from the memory context.
@@ -1368,56 +1352,52 @@ isc__mempool_put(isc_mempool_t *mpctx, void *mem FLARG) {
 #else /* __SANITIZE_ADDRESS__ */
 void *
 isc__mempool_get(isc_mempool_t *mpctx FLARG) {
-	element *item = NULL;
-
 	REQUIRE(VALID_MEMPOOL(mpctx));
-	REQUIRE(isc_tid_v < mpctx->nthreads);
+	REQUIRE(isc_tid_v < mpctx->ncounters);
 
-	if (ISC_UNLIKELY(mpctx->items[isc_tid_v] == NULL)) {
+	uintptr_t item = isc_queue_dequeue(mpctx->items);
+
+	if (ISC_UNLIKELY(item == 0)) {
 		size_t aligned_size = ISC_ALIGN(mpctx->size, ALIGNMENT_SIZE);
-		size_t alloc_size = ISC_MAX(pagesize,
-					    aligned_size * 8 + sizeof(element));
-		element *page = mem_get(mpctx->mctx, alloc_size);
-		uint8_t *iter = (uint8_t *)page + sizeof(element);
+		size_t alloc_size = ISC_MAX(pagesize, aligned_size * 8);
+
+		uintptr_t page = (uintptr_t)mem_get(mpctx->mctx, alloc_size);
 		mem_getstats(mpctx->mctx, alloc_size);
+		isc_queue_enqueue(mpctx->pages, page);
 
-		page->next = mpctx->pages[isc_tid_v];
-		mpctx->pages[isc_tid_v] = page;
+		/* Get the first item */
+		item = page;
 
-		while (iter < (uint8_t *)page + alloc_size) {
-			((element *)iter)->next = mpctx->items[isc_tid_v];
-			mpctx->items[isc_tid_v] = (element *)iter;
-			(void)atomic_fetch_add_release(
-				&mpctx->counters[isc_tid_v].freecount, 1);
-
-			iter += alloc_size;
+		/* Enqueue rest of the items on the page */
+		for (uintptr_t iter = item + aligned_size;
+		     (iter + aligned_size) < (page + alloc_size);
+		     iter += alloc_size)
+		{
+			isc_queue_enqueue(mpctx->items, iter);
+			(void)atomic_fetch_add_release(&mpctx->counters[isc_tid_v].freecount, 1);
 		}
+	} else {
+		(void)atomic_fetch_sub_release(&mpctx->counters[isc_tid_v].freecount, 1);
 	}
 
-	INSIST(atomic_fetch_sub_release(&mpctx->counters[isc_tid_v].freecount,
-					1) > 0);
-
-	item = mpctx->items[isc_tid_v];
-	mpctx->items[isc_tid_v] = item->next;
-
-	INSIST(item != NULL);
+	INSIST(item != 0);
 
 	atomic_fetch_add_release(&mpctx->counters[isc_tid_v].gets, 1);
 	atomic_fetch_add_release(&mpctx->counters[isc_tid_v].allocated, 1);
 
 	ADD_TRACE(mpctx->mctx, item, mpctx->size, file, line);
 
-	return (item);
+	return ((void *)item);
 }
 
 /* coverity[+free : arg-1] */
 void
 isc__mempool_put(isc_mempool_t *mpctx, void *mem FLARG) {
-	element *item = NULL;
+	uintptr_t item = (uintptr_t)mem;
 
 	REQUIRE(VALID_MEMPOOL(mpctx));
 	REQUIRE(mem != NULL);
-	REQUIRE(isc_tid_v < mpctx->nthreads);
+	REQUIRE(isc_tid_v < mpctx->ncounters);
 
 	(void)atomic_fetch_sub_release(&mpctx->counters[isc_tid_v].allocated,
 				       1);
@@ -1426,9 +1406,7 @@ isc__mempool_put(isc_mempool_t *mpctx, void *mem FLARG) {
 
 	DELETE_TRACE(mpctx->mctx, mem, mpctx->size, file, line);
 
-	item = (element *)mem;
-	item->next = mpctx->items[isc_tid_v];
-	mpctx->items[isc_tid_v] = item;
+	isc_queue_enqueue(mpctx->items, item);
 }
 
 #endif /* __SANITIZE_ADDRESS__ */
@@ -1452,7 +1430,7 @@ isc_mempool_getfreecount(isc_mempool_t *mpctx) {
 size_t
 isc_mempool_getallocated(isc_mempool_t *mpctx) {
 	REQUIRE(VALID_MEMPOOL(mpctx));
-	size_t allocated = 0;
+	int_fast64_t allocated = 0;
 
 	for (size_t i = 0; i < mpctx->ncounters; i++) {
 		allocated += atomic_load_acquire(&mpctx->counters[i].allocated);
