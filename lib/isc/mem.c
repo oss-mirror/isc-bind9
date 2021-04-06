@@ -50,8 +50,8 @@
 
 #define MEM_MAX_THREADS 128
 
-#define MCTXLOCK(m)	LOCK(&m->lock)
-#define MCTXUNLOCK(m)	UNLOCK(&m->lock)
+#define MCTXLOCK(m)   LOCK(&m->lock)
+#define MCTXUNLOCK(m) UNLOCK(&m->lock)
 
 #ifndef ISC_MEM_DEBUGGING
 #define ISC_MEM_DEBUGGING 0
@@ -130,6 +130,7 @@ static uint64_t ncpus;
 struct isc_mem {
 	unsigned int magic;
 	unsigned int flags;
+	unsigned int debugging;
 	isc_mutex_t lock;
 	bool checkfree;
 	struct stats stats[STATS_BUCKETS + 1];
@@ -204,12 +205,11 @@ struct isc_mempool {
 #else /* if !ISC_MEM_TRACKLINES */
 #define TRACE_OR_RECORD (ISC_MEM_DEBUGTRACE | ISC_MEM_DEBUGRECORD)
 
-#define SHOULD_TRACE_OR_RECORD(ptr)                                  \
-	(ISC_UNLIKELY((isc_mem_debugging & TRACE_OR_RECORD) != 0) && \
-	 ptr != NULL)
+#define SHOULD_TRACE_OR_RECORD(ctx, ptr) \
+	(ISC_UNLIKELY(((ctx)->debugging & TRACE_OR_RECORD) != 0) && ptr != NULL)
 
 #define ADD_TRACE(a, b, c, d, e)                \
-	if (SHOULD_TRACE_OR_RECORD(b)) {        \
+	if (SHOULD_TRACE_OR_RECORD(a, b)) {     \
 		add_trace_entry(a, b, c, d, e); \
 	}
 
@@ -253,7 +253,7 @@ add_trace_entry(isc_mem_t *mctx, const void *ptr, size_t size FLARG) {
 
 	MCTXLOCK(mctx);
 
-	if ((isc_mem_debugging & ISC_MEM_DEBUGTRACE) != 0) {
+	if ((mctx->debugging & ISC_MEM_DEBUGTRACE) != 0) {
 		fprintf(stderr, "add %p size %zu file %s line %u mctx %p\n",
 			ptr, size, file, line, mctx);
 	}
@@ -298,7 +298,7 @@ delete_trace_entry(isc_mem_t *mctx, const void *ptr, size_t size,
 
 	MCTXLOCK(mctx);
 
-	if ((isc_mem_debugging & ISC_MEM_DEBUGTRACE) != 0) {
+	if ((mctx->debugging & ISC_MEM_DEBUGTRACE) != 0) {
 		fprintf(stderr, "del %p size %zu file %s line %u mctx %p\n",
 			ptr, size, file, line, mctx);
 	}
@@ -485,7 +485,7 @@ isc__mem_shutdown(void) {
 }
 
 static void
-mem_create(isc_mem_t **ctxp, unsigned int flags) {
+mem_create(isc_mem_t **ctxp, unsigned int flags, unsigned int debugging) {
 	REQUIRE(ctxp != NULL && *ctxp == NULL);
 
 	isc_mem_t *ctx;
@@ -500,6 +500,7 @@ mem_create(isc_mem_t **ctxp, unsigned int flags) {
 	*ctx = (isc_mem_t){
 		.magic = MEM_MAGIC,
 		.flags = flags,
+		.debugging = debugging,
 		.checkfree = true,
 	};
 
@@ -646,13 +647,13 @@ isc__mem_putanddetach(isc_mem_t **ctxp, void *ptr, size_t size FLARG) {
 	isc_mem_t *ctx = *ctxp;
 	*ctxp = NULL;
 
-	if (ISC_UNLIKELY((isc_mem_debugging &
+	if (ISC_UNLIKELY((ctx->debugging &
 			  (ISC_MEM_DEBUGSIZE | ISC_MEM_DEBUGCTX)) != 0))
 	{
-		if ((isc_mem_debugging & ISC_MEM_DEBUGSIZE) != 0) {
+		if ((ctx->debugging & ISC_MEM_DEBUGSIZE) != 0) {
 			size_info *si = &(((size_info *)ptr)[-1]);
 			size_t oldsize = si->size - ALIGNMENT_SIZE;
-			if ((isc_mem_debugging & ISC_MEM_DEBUGCTX) != 0) {
+			if ((ctx->debugging & ISC_MEM_DEBUGCTX) != 0) {
 				oldsize -= ALIGNMENT_SIZE;
 			}
 			INSIST(oldsize == size);
@@ -716,7 +717,7 @@ hi_water(isc_mem_t *ctx) {
 						     inuse);
 
 		if (hi_water != 0U && inuse > hi_water &&
-		    (isc_mem_debugging & ISC_MEM_DEBUGUSAGE) != 0)
+		    (ctx->debugging & ISC_MEM_DEBUGUSAGE) != 0)
 		{
 			fprintf(stderr, "maxinuse = %lu\n",
 				(unsigned long)inuse);
@@ -754,7 +755,7 @@ isc__mem_get(isc_mem_t *ctx, size_t size FLARG) {
 	void *ptr;
 	bool call_water = false;
 
-	if (ISC_UNLIKELY((isc_mem_debugging &
+	if (ISC_UNLIKELY((ctx->debugging &
 			  (ISC_MEM_DEBUGSIZE | ISC_MEM_DEBUGCTX)) != 0))
 	{
 		return (isc__mem_allocate(ctx, size FLARG_PASS));
@@ -782,14 +783,14 @@ isc__mem_put(isc_mem_t *ctx, void *ptr, size_t size FLARG) {
 	bool call_water = false;
 	size_info *si;
 
-	if (ISC_UNLIKELY((isc_mem_debugging &
+	if (ISC_UNLIKELY((ctx->debugging &
 			  (ISC_MEM_DEBUGSIZE | ISC_MEM_DEBUGCTX)) != 0))
 	{
-		if ((isc_mem_debugging & ISC_MEM_DEBUGSIZE) != 0) {
+		if ((ctx->debugging & ISC_MEM_DEBUGSIZE) != 0) {
 			size_t oldsize;
 			si = &(((size_info *)ptr)[-1]);
 			oldsize = si->size - ALIGNMENT_SIZE;
-			if ((isc_mem_debugging & ISC_MEM_DEBUGCTX) != 0) {
+			if ((ctx->debugging & ISC_MEM_DEBUGCTX) != 0) {
 				oldsize -= ALIGNMENT_SIZE;
 			}
 			INSIST(oldsize == size);
@@ -924,13 +925,13 @@ mem_allocateunlocked(isc_mem_t *ctx, size_t size) {
 	size_info *si;
 
 	size += ALIGNMENT_SIZE;
-	if (ISC_UNLIKELY((isc_mem_debugging & ISC_MEM_DEBUGCTX) != 0)) {
+	if (ISC_UNLIKELY((ctx->debugging & ISC_MEM_DEBUGCTX) != 0)) {
 		size += ALIGNMENT_SIZE;
 	}
 
 	si = mem_get(ctx, size);
 
-	if (ISC_UNLIKELY((isc_mem_debugging & ISC_MEM_DEBUGCTX) != 0)) {
+	if (ISC_UNLIKELY((ctx->debugging & ISC_MEM_DEBUGCTX) != 0)) {
 		si->ctx = ctx;
 		si++;
 	}
@@ -985,8 +986,8 @@ isc__mem_reallocate(isc_mem_t *ctx, void *ptr, size_t size FLARG) {
 			oldsize = (((size_info *)ptr)[-1]).size;
 			INSIST(oldsize >= ALIGNMENT_SIZE);
 			oldsize -= ALIGNMENT_SIZE;
-			if (ISC_UNLIKELY((isc_mem_debugging &
-					  ISC_MEM_DEBUGCTX) != 0)) {
+			if (ISC_UNLIKELY((ctx->debugging & ISC_MEM_DEBUGCTX) !=
+					 0)) {
 				INSIST(oldsize >= ALIGNMENT_SIZE);
 				oldsize -= ALIGNMENT_SIZE;
 			}
@@ -1010,7 +1011,7 @@ isc__mem_free(isc_mem_t *ctx, void *ptr FLARG) {
 	size_t size;
 	bool call_water = false;
 
-	if (ISC_UNLIKELY((isc_mem_debugging & ISC_MEM_DEBUGCTX) != 0)) {
+	if (ISC_UNLIKELY((ctx->debugging & ISC_MEM_DEBUGCTX) != 0)) {
 		si = &(((size_info *)ptr)[-2]);
 		REQUIRE(si->ctx == ctx);
 		size = si[1].size;
@@ -1294,8 +1295,7 @@ isc_mempool_destroy(isc_mempool_t **mpctxp) {
 	 * Return all the pages back to the allocator
 	 */
 	size_t aligned_size = ISC_ALIGN(mpctx->size, ALIGNMENT_SIZE);
-	size_t alloc_size = ISC_MAX(pagesize,
-				    aligned_size * 8);
+	size_t alloc_size = ISC_MAX(pagesize, aligned_size * 8);
 	void *page;
 
 	while ((page = (void *)isc_queue_dequeue(mpctx->pages)) != 0) {
@@ -1369,10 +1369,12 @@ isc__mempool_get(isc_mempool_t *mpctx FLARG) {
 		     iter += alloc_size)
 		{
 			isc_queue_enqueue(mpctx->items, iter);
-			(void)atomic_fetch_add_release(&mpctx->counters[isc_tid_v].freecount, 1);
+			(void)atomic_fetch_add_release(
+				&mpctx->counters[isc_tid_v].freecount, 1);
 		}
 	} else {
-		(void)atomic_fetch_sub_release(&mpctx->counters[isc_tid_v].freecount, 1);
+		(void)atomic_fetch_sub_release(
+			&mpctx->counters[isc_tid_v].freecount, 1);
 	}
 
 	INSIST(item != 0);
@@ -1802,7 +1804,7 @@ error:
 
 void
 isc_mem_create(isc_mem_t **mctxp) {
-	mem_create(mctxp, isc_mem_defaultflags);
+	mem_create(mctxp, isc_mem_defaultflags, isc_mem_debugging);
 }
 
 void
