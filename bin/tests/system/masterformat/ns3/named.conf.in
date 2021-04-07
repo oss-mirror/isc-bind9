@@ -40,4 +40,5 @@ zone "dynamic" {
 	masterfile-format map;
 	file "dynamic.db.map";
 	allow-update { any; };
+	dnssec-update-mode no-resign;
 };
