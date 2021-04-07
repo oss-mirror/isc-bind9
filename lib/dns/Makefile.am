@@ -22,6 +22,8 @@ CLEANFILES =				\
 gen$(BUILD_EXEEXT): gen.c gen.h
 	$(CC_FOR_BUILD) -g -I. $(GEN_NEED_OPTARG) $(srcdir)/gen.c -o $@
 
+CONFIG_CLEAN_FILES = gen
+
 EXTRA_DIST =				\
 	dnstap.proto			\
 	gen.c				\

@@ -48,6 +48,8 @@ EXTRA_DIST =			\
 	rst-zoneopt.pl		\
 	sort-options.pl
 
+CONFIG_CLEAN_FILES = $(OPTIONS_FILES)
+
 if MAINTAINER_MODE
 
 MAINTAINERCLEANFILES = $(OPTIONS_FILES)
