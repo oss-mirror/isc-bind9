@@ -905,6 +905,7 @@
 ./bin/tests/system/testsummary.sh		SH	2018,2019,2020,2021
 ./bin/tests/system/timeouts/clean.sh		SH	2021
 ./bin/tests/system/timeouts/conftest.py		PYTHON	2021
+./bin/tests/system/timeouts/ns1/named.args	X	2021
 ./bin/tests/system/timeouts/prereq.sh		SH	2021
 ./bin/tests/system/timeouts/setup.sh		SH	2021
 ./bin/tests/system/timeouts/tests-tcp.py	PYTHON-BIN	2021
