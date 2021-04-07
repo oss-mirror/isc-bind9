@@ -219,34 +219,34 @@ test -n "$testpid" && retry_quiet 10 check_pid $testpid || ret=1
 if [ $ret -ne 0 ]; then echo_i "failed"; fi
 status=$((status+ret))
 
-n=$((n+1))
-echo_i "verifying that named switches UID ($n)"
-if [ "$(id -u)" -eq 0 ] && [ -z "$CYGWIN" ]; then
-    ret=0
-    TEMP_NAMED_DIR=$(mktemp -d "$(pwd)/ns2/tmp.XXXXXXXX")
-    if [ "$?" -eq 0 ]; then
-	copy_setports ns2/named-alt9.conf.in "${TEMP_NAMED_DIR}/named-alt9.conf"
-	export SOFTHSM2_CONF="${TEMP_NAMED_DIR}/softhsm2.conf"
-	sh "$TOP_SRCDIR/bin/tests/prepare-softhsm2.sh"
-	chown -R nobody: "${TEMP_NAMED_DIR}"
-	chmod 0700 "${TEMP_NAMED_DIR}"
-	testpid=$(run_named "${TEMP_NAMED_DIR}" "${TEMP_NAMED_DIR}/named$n.run" -u nobody -c named-alt9.conf)
-	test -n "$testpid" || ret=1
-	retry_quiet 10 check_named_log "running$" "${TEMP_NAMED_DIR}/named$n.run" || ret=1
-	[ -s "${TEMP_NAMED_DIR}/named9.pid" ] || ret=1
-	grep "loading configuration: permission denied" "${TEMP_NAMED_DIR}/named$n.run" > /dev/null && ret=1
-	kill_named "${TEMP_NAMED_DIR}/named9.pid" || ret=1
-	test -n "$testpid" || ret=1
-	test -n "$testpid" && retry_quiet 10 check_pid $testpid || ret=1
-    else
-	echo_i "mktemp failed"
-	ret=1
-    fi
-    if [ $ret -ne 0 ]; then echo_i "failed"; fi
-    status=$((status+ret))
-else
-    echo_i "skipped, not running as root or running on Windows"
-fi
+#n=$((n+1))
+#echo_i "verifying that named switches UID ($n)"
+#if [ "$(id -u)" -eq 0 ] && [ -z "$CYGWIN" ]; then
+#    ret=0
+#    TEMP_NAMED_DIR=$(mktemp -d "$(pwd)/ns2/tmp.XXXXXXXX")
+#    if [ "$?" -eq 0 ]; then
+#	copy_setports ns2/named-alt9.conf.in "${TEMP_NAMED_DIR}/named-alt9.conf"
+#	export SOFTHSM2_CONF="${TEMP_NAMED_DIR}/softhsm2.conf"
+#	sh "$TOP_SRCDIR/bin/tests/prepare-softhsm2.sh"
+#	chown -R nobody: "${TEMP_NAMED_DIR}"
+#	chmod 0700 "${TEMP_NAMED_DIR}"
+#	testpid=$(run_named "${TEMP_NAMED_DIR}" "${TEMP_NAMED_DIR}/named$n.run" -u nobody -c named-alt9.conf)
+#	test -n "$testpid" || ret=1
+#	retry_quiet 10 check_named_log "running$" "${TEMP_NAMED_DIR}/named$n.run" || ret=1
+#	[ -s "${TEMP_NAMED_DIR}/named9.pid" ] || ret=1
+#	grep "loading configuration: permission denied" "${TEMP_NAMED_DIR}/named$n.run" > /dev/null && ret=1
+#	kill_named "${TEMP_NAMED_DIR}/named9.pid" || ret=1
+#	test -n "$testpid" || ret=1
+#	test -n "$testpid" && retry_quiet 10 check_pid $testpid || ret=1
+#    else
+#	echo_i "mktemp failed"
+#	ret=1
+#    fi
+#    if [ $ret -ne 0 ]; then echo_i "failed"; fi
+#    status=$((status+ret))
+#else
+#    echo_i "skipped, not running as root or running on Windows"
+#fi
 
 echo_i "exit status: $status"
 [ $status -eq 0 ] || exit 1
