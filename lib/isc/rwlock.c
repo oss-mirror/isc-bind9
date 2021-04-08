@@ -23,7 +23,324 @@
 #include <isc/rwlock.h>
 #include <isc/util.h>
 
-#if USE_C_RW_WP
+#if USE_CLH_RWLOCK
+/* CLH RWLock + C-RW-P */
+
+#define RWLOCK_MAGIC	  ISC_MAGIC('R', 'W', 'W', 'P')
+#define VALID_RWLOCK(rwl) ISC_MAGIC_VALID(rwl, RWLOCK_MAGIC)
+
+#define RWLOCK_MAX_THREADS 128
+
+#ifndef RWLOCK_MAX_SPIN_COUNT
+#define RWLOCK_MAX_SPIN_COUNT 100000
+#endif /* ifndef RWLOCK_MAX_SPIN_COUNT */
+
+#include <stdlib.h>
+
+#include <isc/os.h>
+#include <isc/pause.h>
+#include <isc/thread.h>
+
+static inline size_t
+tid2idx(isc_rwlock_t *rwl) {
+	REQUIRE(isc_tid_v < RWLOCK_MAX_THREADS);
+
+	UNUSED(rwl);
+
+	return (isc_tid_v);
+}
+
+#if 0
+#define READER_INCR(rwl, idx)                                             \
+	(void)atomic_fetch_add_release(&(rwl->readers[idx].counter), 1);
+
+#define READER_DECR(rwl, idx)                                             \
+	(void)atomic_fetch_sub_release(&(rwl->readers[idx].counter), 1);
+#else
+#define READER_INCR(rwl, idx)                                             \
+	(void)idx;\
+	(void)atomic_fetch_add_release(&(rwl->readers_counter), 1);
+
+#define READER_DECR(rwl, idx)                                             \
+	(void)idx;							\
+	(void)atomic_fetch_sub_release(&(rwl->readers_counter), 1);
+#endif
+
+#define NODE_LOCK(mynode)                                                      \
+	REQUIRE(atomic_compare_exchange_strong(&mynode->succ_must_wait,        \
+					       &(bool){ ISC_RWLOCK_UNLOCKED }, \
+					       ISC_RWLOCK_LOCKED));
+
+#define NODE_UNLOCK(mynode)                                                  \
+	REQUIRE(atomic_compare_exchange_strong(&mynode->succ_must_wait,      \
+					       &(bool){ ISC_RWLOCK_LOCKED }, \
+					       ISC_RWLOCK_UNLOCKED));
+
+static inline void
+isc__rwlock_exclusive_unlock(isc_rwlock_t *rwl);
+
+static inline void
+isc__rwlock_wait_for_running_readers(isc_rwlock_t *rwl);
+
+static inline isc_rwlock_node_t *
+isc__rwlock_wait_for_prev(isc_rwlock_t *rwl, const size_t idx) {
+	isc_rwlock_node_t *mynode = rwl->next[idx];
+
+	if (mynode == &(rwl->nodes[idx])) {
+		rwl->next[idx] = &(rwl->nodes[idx * 2]);
+	} else {
+		rwl->next[idx] = &(rwl->nodes[idx]);
+	}
+
+	NODE_LOCK(mynode);
+
+	isc_rwlock_node_t *prev = (void *)atomic_exchange(&rwl->tail,
+							  (uintptr_t)mynode);
+
+	bool prev_islocked = atomic_load_relaxed(&prev->succ_must_wait);
+	if (prev_islocked) {
+		uint32_t cnt = 0;
+		const uint32_t max_cnt = RWLOCK_MAX_SPIN_COUNT;
+
+		while (prev_islocked) {
+			if (ISC_LIKELY(cnt < max_cnt)) {
+				cnt++;
+				isc_pause(1);
+			} else {
+				isc_thread_yield();
+			}
+			prev_islocked = atomic_load(&prev->succ_must_wait);
+		}
+	}
+
+	return (mynode);
+}
+
+static inline void
+isc__rwlock_shared_lock(isc_rwlock_t *rwl) {
+	const size_t idx = tid2idx(rwl);
+
+	isc_rwlock_node_t *mynode = isc__rwlock_wait_for_prev(rwl, idx);
+
+	READER_INCR(rwl, idx);
+
+	NODE_UNLOCK(mynode);
+}
+
+static inline isc_result_t
+isc__rwlock_shared_trylock(isc_rwlock_t *rwl) {
+	UNUSED(rwl);
+	return (ISC_R_LOCKBUSY);
+}
+
+static inline void
+isc__rwlock_shared_unlock(isc_rwlock_t *rwl) {
+	const size_t idx = tid2idx(rwl);
+	READER_DECR(rwl, idx);
+}
+
+static inline isc_result_t
+isc__rwlock_shared_tryupgrade(isc_rwlock_t *rwl) {
+	UNUSED(rwl);
+
+	return (ISC_R_LOCKBUSY);
+}
+
+static inline void
+isc__rwlock_wait_for_running_readers(isc_rwlock_t *rwl) {
+	/* Write-lock was acquired, now wait for running Readers to finish */
+#if 0
+	for (size_t idx = 0; idx < rwl->ncounters; idx += 1) {
+		while (atomic_load_acquire(&rwl->readers[idx].counter) > 0) {
+			isc_pause(1);
+		}
+	}
+#else
+	if (atomic_load_relaxed(&rwl->readers_counter) > 0) {
+		uint32_t cnt = 0;
+		const uint32_t max_cnt = RWLOCK_MAX_SPIN_COUNT;
+
+		while (atomic_load_acquire(&rwl->readers_counter) > 0) {
+			if (ISC_LIKELY(cnt < max_cnt)) {
+				cnt++;
+				isc_pause(1);
+			} else {
+				isc_thread_yield();
+			}
+		}
+	}
+#endif
+}
+
+static inline void
+isc__rwlock_exclusive_lock(isc_rwlock_t *rwl) {
+	const size_t idx = tid2idx(rwl);
+	isc_rwlock_node_t *mynode = isc__rwlock_wait_for_prev(rwl, idx);
+
+	isc__rwlock_wait_for_running_readers(rwl);
+
+	atomic_store(&rwl->mynode, (uintptr_t)mynode);
+}
+
+static isc_result_t
+isc__rwlock_exclusive_trylock(isc_rwlock_t *rwl) {
+	UNUSED(rwl);
+	return (ISC_R_LOCKBUSY);
+}
+
+static inline void
+isc__rwlock_exclusive_unlock(isc_rwlock_t *rwl) {
+	isc_rwlock_node_t *mynode = (void *)atomic_load(&rwl->mynode);
+	NODE_UNLOCK(mynode);
+}
+
+static inline void
+isc__rwlock_exclusive_downgrade(isc_rwlock_t *rwl) {
+	const size_t idx = tid2idx(rwl);
+
+	READER_INCR(rwl, idx);
+
+	isc__rwlock_exclusive_unlock(rwl);
+}
+
+void
+isc_rwlock_init(isc_rwlock_t *rwl, unsigned int read_quota,
+		unsigned int write_quota) {
+	REQUIRE(rwl != NULL);
+	rwl->magic = 0;
+
+	atomic_init(&rwl->spins, 0);
+
+	if (read_quota != 0) {
+		UNEXPECTED_ERROR(__FILE__, __LINE__,
+				 "read quota is not supported");
+	}
+	if (write_quota != 0) {
+		UNEXPECTED_ERROR(__FILE__, __LINE__,
+				 "write quota is not supported");
+	}
+
+	rwl->ncounters = RWLOCK_MAX_THREADS + 1;
+#if 0
+	rwl->readers = malloc(rwl->ncounters * sizeof(rwl->readers[0]));
+	for (size_t i = 0; i < rwl->ncounters; i++) {
+		atomic_init(&(rwl->readers[i].counter), 0);
+	}
+#else
+	atomic_init(&rwl->readers_counter, 0);
+#endif
+
+	rwl->nodes = malloc(2 * rwl->ncounters * sizeof(rwl->nodes[0]));
+	for (size_t i = 0; i < rwl->ncounters * 2; i++) {
+		atomic_init(&(rwl->nodes[i].succ_must_wait),
+			    ISC_RWLOCK_UNLOCKED);
+	}
+
+	rwl->next = malloc(rwl->ncounters * sizeof(rwl->next[0]));
+	for (size_t i = 0; i < rwl->ncounters; i++) {
+		rwl->next[i] = &(rwl->nodes[i]);
+	}
+
+	atomic_init(&rwl->mynode,
+		    (uintptr_t) & (rwl->nodes[RWLOCK_MAX_THREADS * 2]));
+	atomic_init(&rwl->tail, (uintptr_t) & (rwl->nodes[RWLOCK_MAX_THREADS * 2]));
+
+	rwl->magic = RWLOCK_MAGIC;
+}
+
+void
+isc_rwlock_destroy(isc_rwlock_t *rwl) {
+	REQUIRE(VALID_RWLOCK(rwl));
+
+	isc_rwlock_node_t *mynode = (void *)atomic_load(&rwl->mynode);
+
+	rwl->magic = 0;
+
+	/* Check whether write lock has been unlocked */
+	REQUIRE(atomic_load(&mynode->succ_must_wait) == ISC_RWLOCK_UNLOCKED);
+
+#if 0
+	/* Check whether all read locks has been unlocked */
+	for (size_t i = 0; i < rwl->ncounters; i++) {
+		REQUIRE(atomic_load(&(rwl->readers[i].counter)) == 0);
+	}
+	free(rwl->readers);
+#else
+	REQUIRE(atomic_load(&rwl->readers_counter) == 0);
+#endif
+	for (size_t i = 0; i < rwl->ncounters * 2; i++) {
+		REQUIRE(atomic_load(&(rwl->nodes[i].succ_must_wait)) ==
+			ISC_RWLOCK_UNLOCKED);
+	}
+
+	free(rwl->nodes);
+	free(rwl->next);
+}
+
+isc_result_t
+isc_rwlock_lock(isc_rwlock_t *rwl, isc_rwlocktype_t type) {
+	REQUIRE(VALID_RWLOCK(rwl));
+
+	switch (type) {
+	case isc_rwlocktype_read:
+		isc__rwlock_shared_lock(rwl);
+		break;
+	case isc_rwlocktype_write:
+		isc__rwlock_exclusive_lock(rwl);
+		break;
+	default:
+		INSIST(0);
+		ISC_UNREACHABLE();
+	}
+	return (ISC_R_SUCCESS);
+}
+
+isc_result_t
+isc_rwlock_trylock(isc_rwlock_t *rwl, isc_rwlocktype_t type) {
+	REQUIRE(VALID_RWLOCK(rwl));
+
+	switch (type) {
+	case isc_rwlocktype_read:
+		return (isc__rwlock_shared_trylock(rwl));
+		break;
+	case isc_rwlocktype_write:
+		return (isc__rwlock_exclusive_trylock(rwl));
+		break;
+	default:
+		INSIST(0);
+		ISC_UNREACHABLE();
+	}
+}
+
+isc_result_t
+isc_rwlock_unlock(isc_rwlock_t *rwl, isc_rwlocktype_t type) {
+	REQUIRE(VALID_RWLOCK(rwl));
+
+	switch (type) {
+	case isc_rwlocktype_read:
+		isc__rwlock_shared_unlock(rwl);
+		break;
+	case isc_rwlocktype_write:
+		isc__rwlock_exclusive_unlock(rwl);
+		break;
+	default:
+		INSIST(0);
+		ISC_UNREACHABLE();
+	}
+	return (ISC_R_SUCCESS);
+}
+
+isc_result_t
+isc_rwlock_tryupgrade(isc_rwlock_t *rwl) {
+	return (isc__rwlock_shared_tryupgrade(rwl));
+}
+
+void
+isc_rwlock_downgrade(isc_rwlock_t *rwl) {
+	isc__rwlock_exclusive_downgrade(rwl);
+}
+
+#elif USE_C_RW_WP
 /*
  * C-RW-WP Implementation from NUMA-Aware Reader-Writer Locks paper:
  * http://dl.acm.org/citation.cfm?id=2442532
@@ -124,13 +441,16 @@ isc__rwlock_shared_lock(isc_rwlock_t *rwl) {
 		/* Writer has acquired the lock, must reset to 0 and wait */
 		(void)atomic_fetch_sub_release(&rwl->readers_counters[idx], 1);
 
-		while (atomic_load_acquire(&rwl->writers_mutex) != ISC_RWLOCK_UNLOCKED) {
+		while (atomic_load_acquire(&rwl->writers_mutex) !=
+		       ISC_RWLOCK_UNLOCKED) {
 			if (!barrier_raised) {
 				isc_pause(1);
-				if (ISC_UNLIKELY(cnt++ >= RWLOCK_MAX_READER_PATIENCE)) {
-						(void)atomic_fetch_add_release(&rwl->writers_barrier, 1);
-						barrier_raised = true;
-					}
+				if (ISC_UNLIKELY(cnt++ >=
+						 RWLOCK_MAX_READER_PATIENCE)) {
+					(void)atomic_fetch_add_release(
+						&rwl->writers_barrier, 1);
+					barrier_raised = true;
+				}
 			} else {
 				isc_thread_yield();
 			}
@@ -227,9 +547,9 @@ isc__rwlock_exclusive_lock(isc_rwlock_t *rwl) {
 
 	/* Try to acquire the write-lock */
 	while (!atomic_compare_exchange_weak_acq_rel(
-					  &rwl->writers_mutex,
-					  &(bool){ ISC_RWLOCK_UNLOCKED },
-					  ISC_RWLOCK_LOCKED)) {
+		&rwl->writers_mutex, &(bool){ ISC_RWLOCK_UNLOCKED },
+		ISC_RWLOCK_LOCKED))
+	{
 		isc_pause(1);
 	}
 

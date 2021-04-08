@@ -604,7 +604,7 @@ AS_IF([test "$enable_pthread_rwlock" = "yes"],
 		      [AC_MSG_ERROR([pthread_rwlock_rdlock requested but not found])])
        AC_DEFINE([USE_PTHREAD_RWLOCK],[1],[Define if you want to use pthread rwlock implementation])
       ],
-      [AC_DEFINE([USE_C_RW_WP],[1],[Define if you want to use C-RW_WP rwlock implementation])])
+      [AC_DEFINE([USE_CLH_RWLOCK],[1],[Define if you want to use CLH rwlock implementation])])
 
 CRYPTO=OpenSSL
 

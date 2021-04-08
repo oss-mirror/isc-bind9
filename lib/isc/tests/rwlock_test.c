@@ -180,8 +180,10 @@ isc_rwlock_tryupgrade_test(void **state) {
 
 	isc_rwlock_lock(&rwlock, isc_rwlocktype_read);
 	result = isc_rwlock_tryupgrade(&rwlock);
-	assert_int_equal(result, ISC_R_SUCCESS);
-	isc_rwlock_unlock(&rwlock, isc_rwlocktype_write);
+	/* assert_int_equal(result, ISC_R_SUCCESS); */
+	/* isc_rwlock_unlock(&rwlock, isc_rwlocktype_write); */
+	assert_int_equal(result, ISC_R_LOCKBUSY);
+	isc_rwlock_unlock(&rwlock, isc_rwlocktype_read);
 }
 
 static isc_threadresult_t
@@ -399,6 +401,10 @@ isc_rwlock_benchmark(void **state) {
 int
 main(void) {
 	const struct CMUnitTest tests[] = {
+#if !defined(__SANITIZE_THREAD__)
+		cmocka_unit_test_setup_teardown(isc_rwlock_benchmark,
+						rwlock_setup, rwlock_teardown),
+#endif /* __SANITIZE_THREAD__ */
 		cmocka_unit_test_setup_teardown(isc_rwlock_rdlock_test,
 						rwlock_setup, rwlock_teardown),
 		cmocka_unit_test_setup_teardown(isc_rwlock_wrlock_test,
@@ -409,10 +415,6 @@ main(void) {
 						rwlock_setup, rwlock_teardown),
 		cmocka_unit_test_setup_teardown(isc_rwlock_trylock_test,
 						rwlock_setup, rwlock_teardown),
-#if !defined(__SANITIZE_THREAD__)
-		cmocka_unit_test_setup_teardown(isc_rwlock_benchmark,
-						rwlock_setup, rwlock_teardown),
-#endif /* __SANITIZE_THREAD__ */
 	};
 
 	return (cmocka_run_group_tests(tests, _setup, _teardown));

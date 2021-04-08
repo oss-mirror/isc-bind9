@@ -30,7 +30,35 @@ typedef enum {
 	isc_rwlocktype_write
 } isc_rwlocktype_t;
 
-#if USE_C_RW_WP
+#if USE_CLH_RWLOCK
+#include <isc/align.h>
+
+#define ISC_RWLOCK_UNLOCKED 0
+#define ISC_RWLOCK_LOCKED   1
+
+#define ISC_CACHE_LINE 64
+
+typedef struct isc_rwlock_node {
+	alignas(ISC_CACHE_LINE) atomic_bool succ_must_wait;
+} isc_rwlock_node_t;
+
+typedef struct isc_rwlock_counter {
+	alignas(ISC_CACHE_LINE) atomic_int_fast32_t counter;
+} isc_rwlock_counter_t;
+
+struct isc_rwlock {
+	unsigned int magic;
+	uint16_t ncounters;
+	atomic_uint_fast32_t spins;
+	alignas(ISC_CACHE_LINE) atomic_uintptr_t mynode;
+	alignas(ISC_CACHE_LINE) atomic_uintptr_t tail;
+	/* alignas(ISC_CACHE_LINE) isc_rwlock_counter_t *readers; */
+	alignas(ISC_CACHE_LINE) atomic_uint_fast32_t readers_counter;
+	alignas(ISC_CACHE_LINE) isc_rwlock_node_t *nodes;
+	alignas(ISC_CACHE_LINE) isc_rwlock_node_t **next;
+};
+
+#elif USE_C_RW_WP
 #include <isc/align.h>
 
 #define ISC_RWLOCK_UNLOCKED false
