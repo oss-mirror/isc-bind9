@@ -1,9 +1,9 @@
-SUBDIRS = .
+SUBDIRS = man
 
 if HAVE_PERL
 SUBDIRS += misc
 endif
 
 if HAVE_SPHINX_BUILD
-SUBDIRS += man arm
+SUBDIRS += arm
 endif HAVE_SPHINX_BUILD
