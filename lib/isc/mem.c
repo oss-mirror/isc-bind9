@@ -55,6 +55,8 @@
 #define MCTXLOCK(m)   LOCK(&m->lock)
 #define MCTXUNLOCK(m) UNLOCK(&m->lock)
 
+#define TRACE_OR_RECORD (ISC_MEM_DEBUGTRACE | ISC_MEM_DEBUGRECORD)
+
 #ifndef ISC_MEM_DEBUGGING
 #define ISC_MEM_DEBUGGING 0
 #endif /* ifndef ISC_MEM_DEBUGGING */
@@ -201,7 +203,6 @@ struct isc_mempool {
 #define DELETE_TRACE(a, b, c, d, e)
 #define ISC_MEMFUNC_SCOPE
 #else /* if !ISC_MEM_TRACKLINES */
-#define TRACE_OR_RECORD (ISC_MEM_DEBUGTRACE | ISC_MEM_DEBUGRECORD)
 
 #define SHOULD_TRACE_OR_RECORD(ctx, ptr) \
 	(ISC_UNLIKELY(((ctx)->debugging & TRACE_OR_RECORD) != 0) && ptr != NULL)
@@ -1057,7 +1058,6 @@ isc_mempool_create(isc_mem_t *mctx, size_t size, isc_mempool_t **mpctxp) {
 		atomic_init(&mpctx->counters[i].gets, 0);
 	}
 
-	/* FIXME: nworkers */
 	mpctx->tis = isc_mem_get(mctx, mpctx->ncounters * sizeof(mpctx->tis[0]));
 	for (size_t i = 0; i < mpctx->ncounters; i++) {
 		size_t sz = sizeof(mpctx->tis[i]);
@@ -1108,6 +1108,10 @@ isc_mempool_destroy(isc_mempool_t **mpctxp) {
 	for (size_t i = 0; i < mpctx->ncounters; i++) {
 		mallctl("tcache.destroy", NULL, NULL, &mpctx->tis[i], sizeof(mpctx->tis[0]));
 	}
+
+	isc_mem_put(mctx, mpctx->tis, mpctx->ncounters * sizeof(mpctx->tis[0]));
+
+	isc_mem_put(mctx, mpctx->counters, mpctx->ncounters * sizeof(mpctx->counters[0]));
 
 	if (mpctx->name != NULL) {
 		isc_mem_free(mctx, mpctx->name);
