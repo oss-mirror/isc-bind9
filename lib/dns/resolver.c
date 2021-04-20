@@ -42,7 +42,6 @@
 #include <dns/events.h>
 #include <dns/forward.h>
 #include <dns/keytable.h>
-#include <dns/lib.h>
 #include <dns/log.h>
 #include <dns/message.h>
 #include <dns/ncache.h>
@@ -64,9 +63,6 @@
 #include <dns/stats.h>
 #include <dns/tsig.h>
 #include <dns/validator.h>
-
-#include "resolver_p.h"
-
 #ifdef WANT_QUERYTRACE
 #define RTRACE(m)                                                             \
 	isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER,                     \
@@ -600,8 +596,6 @@ dns_resolver_setfuzzing(void) {
 	dns_fuzzing_resolver = true;
 }
 #endif /* ifdef ENABLE_AFL */
-
-static isc_mempool_t *dns__fetch_pool;
 
 static unsigned char ip6_arpa_data[] = "\003IP6\004ARPA";
 static unsigned char ip6_arpa_offsets[] = { 0, 4, 9 };
@@ -10924,7 +10918,7 @@ dns_resolver_createfetch(dns_resolver_t *res, const dns_name_t *name,
 	/*
 	 * XXXRTH  use a mempool?
 	 */
-	fetch = isc_mempool_get(dns__fetch_pool);
+	fetch = isc_mem_get(res->mctx, sizeof(*fetch));
 	fetch->mctx = NULL;
 	isc_mem_attach(res->mctx, &fetch->mctx);
 
@@ -11032,8 +11026,7 @@ unlock:
 		FTRACE("created");
 		*fetchp = fetch;
 	} else {
-		isc_mem_detach(&fetch->mctx);
-		isc_mempool_put(dns__fetch_pool, fetch);
+		isc_mem_putanddetach(&fetch->mctx, fetch, sizeof(*fetch));
 	}
 
 	return (result);
@@ -11123,8 +11116,7 @@ dns_resolver_destroyfetch(dns_fetch_t **fetchp) {
 	bucket_empty = fctx_decreference(fctx);
 	UNLOCK(&res->buckets[bucketnum].lock);
 
-	isc_mem_detach(&fetch->mctx);
-	isc_mempool_put(dns__fetch_pool, fetch);
+	isc_mem_putanddetach(&fetch->mctx, fetch, sizeof(*fetch));
 
 	if (bucket_empty) {
 		empty_bucket(res);
@@ -11831,15 +11823,4 @@ dns_resolver_setnonbackofftries(dns_resolver_t *resolver, unsigned int tries) {
 	REQUIRE(tries > 0);
 
 	resolver->nonbackofftries = tries;
-}
-
-void
-dns__resolver_initialize(void) {
-	isc_mempool_create(dns_g_mctx, sizeof(dns_fetch_t), &dns__fetch_pool);
-	isc_mempool_setname(dns__fetch_pool, "dns_resolver:fetch_pool");
-}
-
-void
-dns__resolver_shutdown(void) {
-	isc_mempool_destroy(&dns__fetch_pool);
 }

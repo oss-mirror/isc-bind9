@@ -252,7 +252,6 @@ libdns_la_SOURCES =			\
 	dispatch_p.h			\
 	lib_p.h				\
 	message_p.h			\
-	resolver_p.h			\
 	tsig_p.h			\
 	zone_p.h
 
