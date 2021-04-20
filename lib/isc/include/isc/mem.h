@@ -134,6 +134,7 @@ LIBISC_EXTERNAL_DATA extern unsigned int isc_mem_defaultflags;
 #define ISCMEMFUNC(sfx)	    isc__mem_##sfx
 #define ISCMEMPOOLFUNC(sfx) isc__mempool_##sfx
 
+#define isc_mem_getaligned(c, s, a)   ISCMEMFUNC(getaligned)((c), (s), (a)_ISC_MEM_FILELINE)
 #define isc_mem_get(c, s)      ISCMEMFUNC(get)((c), (s)_ISC_MEM_FILELINE)
 #define isc_mem_allocate(c, s) ISCMEMFUNC(allocate)((c), (s)_ISC_MEM_FILELINE)
 #define isc_mem_reallocate(c, p, s) \
@@ -429,6 +430,7 @@ isc_mempool_getgets(isc_mempool_t *mpctx);
 /*
  * Pseudo-private functions for use via macros.  Do not call directly.
  */
+void *ISCMEMFUNC(getaligned)(isc_mem_t *, size_t, size_t _ISC_MEM_FLARG);
 void *ISCMEMFUNC(get)(isc_mem_t *, size_t _ISC_MEM_FLARG);
 void  ISCMEMFUNC(putanddetach)(isc_mem_t **, void *, size_t _ISC_MEM_FLARG);
 void  ISCMEMFUNC(put)(isc_mem_t *, void *, size_t _ISC_MEM_FLARG);

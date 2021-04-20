@@ -45,7 +45,6 @@ struct isc_queue {
 	int max_threads;
 	int taken;
 	isc_hp_t *hp;
-	void *alloced_ptr;
 };
 
 static node_t *
@@ -96,23 +95,18 @@ isc_queue_t *
 isc_queue_new(isc_mem_t *mctx, int max_threads) {
 	isc_queue_t *queue = NULL;
 	node_t *sentinel = NULL;
-	void *qbuf = NULL;
-	uintptr_t qptr;
 
 	/*
 	 * A trick to allocate an aligned isc_queue_t structure
 	 */
-	qbuf = isc_mem_get(mctx, sizeof(*queue) + ALIGNMENT);
-	qptr = (uintptr_t)qbuf;
-	queue = (isc_queue_t *)(qptr + (ALIGNMENT - (qptr % ALIGNMENT)));
+	queue = isc_mem_getaligned(mctx, sizeof(*queue), ALIGNMENT);
 
 	if (max_threads == 0) {
 		max_threads = MAX_THREADS;
 	}
 
 	*queue = (isc_queue_t){
-		.max_threads = max_threads,
-		.alloced_ptr = qbuf,
+		.max_threads = max_threads
 	};
 
 	isc_mem_attach(mctx, &queue->mctx);
@@ -215,7 +209,6 @@ isc_queue_dequeue(isc_queue_t *queue) {
 void
 isc_queue_destroy(isc_queue_t *queue) {
 	node_t *last = NULL;
-	void *alloced = NULL;
 
 	REQUIRE(queue != NULL);
 
@@ -227,6 +220,5 @@ isc_queue_destroy(isc_queue_t *queue) {
 	node_destroy(last);
 	isc_hp_destroy(queue->hp);
 
-	alloced = queue->alloced_ptr;
-	isc_mem_putanddetach(&queue->mctx, alloced, sizeof(*queue) + ALIGNMENT);
+	isc_mem_putanddetach(&queue->mctx, queue, sizeof(*queue));
 }
