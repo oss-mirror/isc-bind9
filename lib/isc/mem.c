@@ -50,12 +50,15 @@
 
 #include "mem_p.h"
 
-#define MEM_MAX_THREADS 128
+#define STRINGIFY_HELPER(x) #x
+#define STRINGIFY(x) STRINGIFY_HELPER(x)
 
 #define MCTXLOCK(m)   LOCK(&m->lock)
 #define MCTXUNLOCK(m) UNLOCK(&m->lock)
 
 #define TRACE_OR_RECORD (ISC_MEM_DEBUGTRACE | ISC_MEM_DEBUGRECORD)
+
+#define MEM_MAX_THREADS 128 /* FIXME */
 
 #ifndef ISC_MEM_DEBUGGING
 #define ISC_MEM_DEBUGGING 0
@@ -119,6 +122,7 @@ struct isc_mem {
 	unsigned int magic;
 	unsigned int flags;
 	unsigned int debugging;
+	unsigned int arena;
 	isc_mutex_t lock;
 	bool checkfree;
 	struct stats stats[STATS_BUCKETS + 1];
@@ -149,17 +153,6 @@ struct isc_mem {
 #define MEMPOOL_MAGIC	 ISC_MAGIC('M', 'E', 'M', 'p')
 #define VALID_MEMPOOL(c) ISC_MAGIC_VALID(c, MEMPOOL_MAGIC)
 
-typedef struct mempool_stats {
-	/*%< # of items currently given out
-	 *
-	 * individual counters could be negative, but the sum could never go
-	 * below zero
-	 */
-	atomic_int_fast64_t allocated;
-	/*%< # of requests to this pool */
-	alignas(CACHE_LINE_SIZE) atomic_size_t gets;
-} mempool_stats_t;
-
 struct isc_mempool {
 	/* always unlocked */
 	unsigned int magic;
@@ -169,7 +162,9 @@ struct isc_mempool {
 	/*%< optionally locked from here down */
 	size_t size; /*%< size of each item on this pool */
 	size_t ncounters;
-	alignas(CACHE_LINE_SIZE) mempool_stats_t *counters;
+	atomic_size_t allocated;
+	/*%< # of requests to this pool */
+	alignas(CACHE_LINE_SIZE) atomic_size_t gets;
 
 	/*%< Debugging only. */
 	char *name;
@@ -306,7 +301,7 @@ delete_trace_entry(isc_mem_t *mctx, const void *ptr, size_t size,
 		if (ISC_UNLIKELY(dl->ptr == ptr)) {
 			ISC_LIST_UNLINK(mctx->debuglist[idx], dl, link);
 			decrement_malloced(mctx, sizeof(*dl));
-			free(dl);
+			dallocx(dl, MALLOCX_ARENA(mctx->arena));
 			goto unlock;
 		}
 		dl = ISC_LIST_NEXT(dl, link);
@@ -383,14 +378,21 @@ mem_create(isc_mem_t **ctxp, unsigned int flags, unsigned int debugging) {
 	REQUIRE(ctxp != NULL && *ctxp == NULL);
 
 	isc_mem_t *ctx;
+	int r;
+	unsigned int arena;
+	size_t sz = sizeof(arena);
 
-	ctx = malloc(sizeof(*ctx));
+	r = mallctl("arenas.create", &arena, &sz, NULL, 0);
+	INSIST(r == 0);
+
+	ctx = mallocx(sizeof(*ctx), MALLOCX_ARENA(arena));
 
 	*ctx = (isc_mem_t){
 		.magic = MEM_MAGIC,
 		.flags = flags,
 		.debugging = debugging,
 		.checkfree = true,
+		.arena = arena,
 	};
 
 	isc_mutex_init(&ctx->lock);
@@ -408,7 +410,7 @@ mem_create(isc_mem_t **ctxp, unsigned int flags, unsigned int debugging) {
 	if (ISC_UNLIKELY((ctx->debugging & ISC_MEM_DEBUGRECORD) != 0)) {
 		unsigned int i;
 
-		ctx->debuglist = calloc(DEBUG_TABLE_COUNT, sizeof(debuglist_t));
+		ctx->debuglist = mallocx(DEBUG_TABLE_COUNT * sizeof(debuglist_t), MALLOCX_ARENA(arena));
 		for (i = 0; i < DEBUG_TABLE_COUNT; i++) {
 			ISC_LIST_INIT(ctx->debuglist[i]);
 		}
@@ -432,6 +434,8 @@ static void
 destroy(isc_mem_t *ctx) {
 	unsigned int i;
 	size_t malloced;
+	unsigned int arena = ctx->arena;
+	int r;
 
 	LOCK(&contextslock);
 	ISC_LIST_UNLINK(contexts, ctx, link);
@@ -460,7 +464,7 @@ destroy(isc_mem_t *ctx) {
 			}
 		}
 
-		free(ctx->debuglist);
+		dallocx(ctx->debuglist, MALLOCX_ARENA(ctx->arena));
 		decrement_malloced(ctx,
 				   DEBUG_TABLE_COUNT * sizeof(debuglist_t));
 	}
@@ -491,7 +495,13 @@ destroy(isc_mem_t *ctx) {
 	if (ctx->checkfree) {
 		INSIST(malloced == 0);
 	}
-	free(ctx);
+	dallocx(ctx, MALLOCX_ARENA(arena));
+
+	char buf[1024];
+	snprintf(buf, sizeof(buf), "arena.%u.destroy", arena);
+
+	r = mallctl(buf, NULL, NULL, NULL, 0);
+	INSIST(r == 0);
 }
 
 void
@@ -537,7 +547,7 @@ isc__mem_putanddetach(isc_mem_t **ctxp, void *ptr, size_t size FLARG) {
 
 	DELETE_TRACE(ctx, ptr, size, file, line);
 	mem_putstats(ctx, size);
-	sdallocx(ptr, size, 0);
+	sdallocx(ptr, size, MALLOCX_ARENA(ctx->arena));
 
 	if (isc_refcount_decrement(&ctx->references) == 1) {
 		isc_refcount_destroy(&ctx->references);
@@ -622,7 +632,7 @@ void *
 isc__mem_get(isc_mem_t *ctx, size_t size FLARG) {
 	REQUIRE(VALID_CONTEXT(ctx));
 
-	void *ptr = mallocx(size, 0);
+	void *ptr = mallocx(size, MALLOCX_ARENA(ctx->arena));
 
 	mem_getstats(ctx, size);
 	ADD_TRACE(ctx, ptr, size, file, line);
@@ -645,7 +655,7 @@ isc__mem_put(isc_mem_t *ctx, void *ptr, size_t size FLARG) {
 
 	DELETE_TRACE(ctx, ptr, size, file, line);
 	mem_putstats(ctx, size);
-	sdallocx(ptr, size, 0);
+	sdallocx(ptr, size, MALLOCX_ARENA(ctx->arena));
 
 	call_water = lo_water(ctx);
 
@@ -767,9 +777,9 @@ void *
 isc__mem_allocate(isc_mem_t *ctx, size_t size FLARG) {
 	REQUIRE(VALID_CONTEXT(ctx));
 
-	void *ptr = mallocx(size, 0);
+	void *ptr = mallocx(size, MALLOCX_ARENA(ctx->arena));
 
-	size = sallocx(ptr, 0);
+	size = sallocx(ptr, MALLOCX_ARENA(ctx->arena));
 	mem_getstats(ctx, size);
 	ADD_TRACE(ctx, ptr, size, file, line);
 
@@ -785,16 +795,16 @@ isc__mem_allocate(isc_mem_t *ctx, size_t size FLARG) {
 void *
 isc__mem_reallocate(isc_mem_t *ctx, void *old_ptr, size_t new_size FLARG) {
 	REQUIRE(VALID_CONTEXT(ctx));
-	size_t old_size = sallocx(old_ptr, 0);
+	size_t old_size = sallocx(old_ptr, MALLOCX_ARENA(ctx->arena));
 
 	REQUIRE(new_size > 0);
 
 	DELETE_TRACE(ctx, old_ptr, old_size, file, line);
 	mem_putstats(ctx, old_size);
 
-	void *new_ptr = rallocx(old_ptr, new_size, 0);
+	void *new_ptr = rallocx(old_ptr, new_size, MALLOCX_ARENA(ctx->arena));
 
-	new_size = sallocx(new_ptr, 0);
+	new_size = sallocx(new_ptr, MALLOCX_ARENA(ctx->arena));
 	mem_getstats(ctx, new_size);
 	ADD_TRACE(ctx, new_ptr, new_size, file, line);
 
@@ -806,12 +816,12 @@ isc__mem_free(isc_mem_t *ctx, void *ptr FLARG) {
 	REQUIRE(VALID_CONTEXT(ctx));
 	REQUIRE(ptr != NULL);
 
-	size_t size = sallocx(ptr, 0);
+	size_t size = sallocx(ptr, MALLOCX_ARENA(ctx->arena));
 
 	DELETE_TRACE(ctx, ptr, size, file, line);
 	mem_putstats(ctx, size);
 
-	sdallocx(ptr, size, 0);
+	sdallocx(ptr, size, MALLOCX_ARENA(ctx->arena));
 
 	bool call_water = lo_water(ctx);
 
@@ -875,9 +885,6 @@ isc_mem_setdestroycheck(isc_mem_t *ctx, bool flag) {
 
 	MCTXUNLOCK(ctx);
 }
-
-#define STRINGIFY_HELPER(x) #x
-#define STRINGIFY(x) STRINGIFY_HELPER(x)
 
 size_t
 isc_mem_inuse(isc_mem_t *ctx) {
@@ -1012,14 +1019,8 @@ isc_mempool_create(isc_mem_t *mctx, size_t size, isc_mempool_t **mpctxp) {
 		.ncounters = MEM_MAX_THREADS,
 	};
 
-	/* Align all elements on the CACHE_LINE_SIZE */
-	mpctx->counters = isc_mem_get(mctx, mpctx->ncounters *
-						    sizeof(mpctx->counters[0]));
-
-	for (size_t i = 0; i < mpctx->ncounters; i++) {
-		atomic_init(&mpctx->counters[i].allocated, 0);
-		atomic_init(&mpctx->counters[i].gets, 0);
-	}
+	atomic_init(&mpctx->allocated, 0);
+	atomic_init(&mpctx->gets, 0);
 
 	mpctx->tis = isc_mem_get(mctx, mpctx->ncounters * sizeof(mpctx->tis[0]));
 	for (size_t i = 0; i < mpctx->ncounters; i++) {
@@ -1074,8 +1075,6 @@ isc_mempool_destroy(isc_mempool_t **mpctxp) {
 
 	isc_mem_put(mctx, mpctx->tis, mpctx->ncounters * sizeof(mpctx->tis[0]));
 
-	isc_mem_put(mctx, mpctx->counters, mpctx->ncounters * sizeof(mpctx->counters[0]));
-
 	if (mpctx->name != NULL) {
 		isc_mem_free(mctx, mpctx->name);
 	};
@@ -1118,10 +1117,10 @@ isc__mempool_get(isc_mempool_t *mpctx FLARG) {
 	REQUIRE(VALID_MEMPOOL(mpctx));
 	REQUIRE(isc_tid_v < mpctx->ncounters);
 
-	void *item = mallocx(mpctx->size, MALLOCX_TCACHE(mpctx->tis[isc_tid_v]));
+	void *item = mallocx(mpctx->size, MALLOCX_ARENA(mpctx->mctx->arena) | MALLOCX_TCACHE(mpctx->tis[isc_tid_v]));
 
-	atomic_fetch_add_release(&mpctx->counters[isc_tid_v].gets, 1);
-	atomic_fetch_add_release(&mpctx->counters[isc_tid_v].allocated, 1);
+	atomic_fetch_add_release(&mpctx->gets, 1);
+	atomic_fetch_add_release(&mpctx->allocated, 1);
 
 	ADD_TRACE(mpctx->mctx, (void *)item, mpctx->size, file, line);
 
@@ -1135,10 +1134,10 @@ isc__mempool_put(isc_mempool_t *mpctx, void *mem FLARG) {
 	REQUIRE(mem != NULL);
 	REQUIRE(isc_tid_v < mpctx->ncounters);
 
-	(void)atomic_fetch_sub_release(&mpctx->counters[isc_tid_v].allocated, 1);
+	(void)atomic_fetch_sub_release(&mpctx->allocated, 1);
 	DELETE_TRACE(mpctx->mctx, mem, mpctx->size, file, line);
 
-	sdallocx(mem, mpctx->size, MALLOCX_TCACHE(mpctx->tis[isc_tid_v]));
+	sdallocx(mem, mpctx->size, MALLOCX_ARENA(mpctx->mctx->arena) | MALLOCX_TCACHE(mpctx->tis[isc_tid_v]));
 }
 
 #endif /* __SANITIZE_ADDRESS__ */
@@ -1159,27 +1158,15 @@ isc_mempool_getfreecount(isc_mempool_t *mpctx) {
 size_t
 isc_mempool_getallocated(isc_mempool_t *mpctx) {
 	REQUIRE(VALID_MEMPOOL(mpctx));
-	int_fast64_t allocated = 0;
 
-	for (size_t i = 0; i < mpctx->ncounters; i++) {
-		allocated += atomic_load_acquire(&mpctx->counters[i].allocated);
-	}
-
-	INSIST(allocated >= 0);
-
-	return (allocated);
+	return (atomic_load_acquire(&mpctx->allocated));
 }
 
 size_t
 isc_mempool_getgets(isc_mempool_t *mpctx) {
 	REQUIRE(VALID_MEMPOOL(mpctx));
-	size_t gets = 0;
 
-	for (size_t i = 0; i < mpctx->ncounters; i++) {
-		gets += atomic_load_acquire(&mpctx->counters[i].gets);
-	}
-
-	return (gets);
+	return (atomic_load_acquire(&mpctx->gets));
 }
 
 /*
