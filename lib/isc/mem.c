@@ -1376,9 +1376,7 @@ isc__mempool_get(isc_mempool_t *mpctx FLARG) {
 	atomic_fetch_add_release(&mpctx->counters[isc_tid_v].gets, 1);
 	atomic_fetch_add_release(&mpctx->counters[isc_tid_v].allocated, 1);
 
-	UNUSED(file);
-	UNUSED(line);
-	/* ADD_TRACE(mpctx->mctx, (void *)item, mpctx->size, file, line); */
+	ADD_TRACE(mpctx->mctx, (void *)item, mpctx->size, file, line);
 
 	return ((void *)item);
 }
@@ -1396,10 +1394,7 @@ isc__mempool_put(isc_mempool_t *mpctx, void *mem FLARG) {
 				       1);
 	(void)atomic_fetch_add_release(&mpctx->counters[isc_tid_v].freecount,
 				       1);
-
-	UNUSED(file);
-	UNUSED(line);
-	/* DELETE_TRACE(mpctx->mctx, mem, mpctx->size, file, line); */
+	DELETE_TRACE(mpctx->mctx, mem, mpctx->size, file, line);
 
 	isc_queue_enqueue(mpctx->items, item);
 }
