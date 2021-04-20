@@ -77,8 +77,6 @@ LIBISC_EXTERNAL_DATA unsigned int isc_mem_defaultflags = ISC_MEMFLAG_DEFAULT;
 	8 /* the number of large-sized items to preallocate \
 	   */
 
-static size_t pagesize = 4096;
-
 /*
  * Types.
  */
@@ -129,7 +127,6 @@ static isc_mutex_t contextslock;
  * Locked by the global lock.
  */
 static uint64_t totallost;
-static uint64_t ncpus;
 
 struct isc_mem {
 	unsigned int magic;
@@ -380,17 +377,11 @@ mem_putstats(isc_mem_t *ctx, size_t size) {
 
 static void
 mem_initialize(void) {
+	malloc_conf = "xmalloc:true,background_thread:true,metadata_thp:auto,dirty_decay_ms:30000,muzzy_decay_ms:30000";
+
 	isc_mutex_init(&contextslock);
 	ISC_LIST_INIT(contexts);
 	totallost = 0;
-	ncpus = isc_os_ncpus();
-#if HAVE_SYSCONF
-	long r = sysconf(_SC_PAGESIZE);
-	RUNTIME_CHECK(r != -1);
-	pagesize = (size_t)r;
-#elif HAVE_GETPAGESIZE
-	pagesize = getpagesize();
-#endif
 }
 
 void
@@ -660,7 +651,6 @@ isc__mem_get(isc_mem_t *ctx, size_t size FLARG) {
 	REQUIRE(VALID_CONTEXT(ctx));
 
 	void *ptr = mallocx(size, 0);
-	INSIST(ptr != NULL);
 
 	mem_getstats(ctx, size);
 	ADD_TRACE(ctx, ptr, size, file, line);
@@ -806,7 +796,6 @@ isc__mem_allocate(isc_mem_t *ctx, size_t size FLARG) {
 	REQUIRE(VALID_CONTEXT(ctx));
 
 	void *ptr = mallocx(size, 0);
-	INSIST(ptr != NULL);
 
 	size = sallocx(ptr, 0);
 	mem_getstats(ctx, size);
@@ -832,7 +821,6 @@ isc__mem_reallocate(isc_mem_t *ctx, void *old_ptr, size_t new_size FLARG) {
 	mem_putstats(ctx, old_size);
 
 	void *new_ptr = rallocx(old_ptr, new_size, 0);
-	INSIST(new_ptr != NULL);
 
 	new_size = sallocx(new_ptr, 0);
 	mem_getstats(ctx, new_size);
@@ -916,6 +904,9 @@ isc_mem_setdestroycheck(isc_mem_t *ctx, bool flag) {
 	MCTXUNLOCK(ctx);
 }
 
+#define STRINGIFY_HELPER(x) #x
+#define STRINGIFY(x) STRINGIFY_HELPER(x)
+
 size_t
 isc_mem_inuse(isc_mem_t *ctx) {
 	REQUIRE(VALID_CONTEXT(ctx));
@@ -934,7 +925,20 @@ size_t
 isc_mem_total(isc_mem_t *ctx) {
 	REQUIRE(VALID_CONTEXT(ctx));
 
-	return (atomic_load_acquire(&ctx->total));
+	int r;
+	size_t small = 0;
+	size_t large = 0;
+	size_t sz;
+
+	sz = sizeof(small);
+	r = mallctl("stats.arenas." STRINGIFY(MALLCTL_ARENAS_ALL) ".small.allocated", &small, &sz, NULL, 0);
+	INSIST(r == 0);
+
+	sz = sizeof(large);
+	r = mallctl("stats.arenas." STRINGIFY(MALLCTL_ARENAS_ALL) ".large.allocated", &large, &sz, NULL, 0);
+	INSIST(r == 0);
+
+	return (small + large);
 }
 
 size_t
@@ -1156,7 +1160,6 @@ isc__mempool_get(isc_mempool_t *mpctx FLARG) {
 	REQUIRE(isc_tid_v < mpctx->ncounters);
 
 	void *item = mallocx(mpctx->size, MALLOCX_TCACHE(mpctx->tis[isc_tid_v]));
-	INSIST(item != NULL);
 
 	atomic_fetch_add_release(&mpctx->counters[isc_tid_v].gets, 1);
 	atomic_fetch_add_release(&mpctx->counters[isc_tid_v].allocated, 1);
