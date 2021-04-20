@@ -29,6 +29,7 @@
 #include "dispatch_p.h"
 #include "lib_p.h"
 #include "message_p.h"
+#include "resolver_p.h"
 
 /***
  *** Globals
@@ -47,12 +48,14 @@ dns__initialize(void) {
 
 	dns__message_initialize();
 	dns__dispatch_initialize();
+	dns__resolver_initialize();
 
 	dns_result_register();
 }
 
 void
 dns__shutdown(void) {
+	dns__resolver_shutdown();
 	dns__dispatch_shutdown();
 	dns__message_shutdown();
 	isc_mem_detach(&dns_g_mctx);

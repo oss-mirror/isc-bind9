@@ -214,7 +214,7 @@ struct isc_mempool {
 	}
 
 #define DELETE_TRACE(a, b, c, d, e)                \
-	if (SHOULD_TRACE_OR_RECORD(b)) {           \
+	if (SHOULD_TRACE_OR_RECORD(a, b)) {	   \
 		delete_trace_entry(a, b, c, d, e); \
 	}
 
@@ -400,10 +400,8 @@ mem_getstats(isc_mem_t *ctx, size_t size) {
  * Update internal counters after a memory put.
  */
 static inline void
-mem_putstats(isc_mem_t *ctx, void *ptr, size_t size) {
+mem_putstats(isc_mem_t *ctx, size_t size) {
 	struct stats *stats = stats_bucket(ctx, size);
-
-	UNUSED(ptr);
 
 	INSIST(atomic_fetch_sub_release(&ctx->inuse, size) >= size);
 
@@ -664,8 +662,7 @@ isc__mem_putanddetach(isc_mem_t **ctxp, void *ptr, size_t size FLARG) {
 	}
 
 	DELETE_TRACE(ctx, ptr, size, file, line);
-
-	mem_putstats(ctx, ptr, size);
+	mem_putstats(ctx, size);
 	mem_put(ctx, ptr, size);
 
 destroy:
@@ -763,7 +760,6 @@ isc__mem_get(isc_mem_t *ctx, size_t size FLARG) {
 
 	ptr = mem_get(ctx, size);
 	mem_getstats(ctx, size);
-
 	ADD_TRACE(ctx, ptr, size, file, line);
 
 	call_water = hi_water(ctx);
@@ -800,8 +796,7 @@ isc__mem_put(isc_mem_t *ctx, void *ptr, size_t size FLARG) {
 	}
 
 	DELETE_TRACE(ctx, ptr, size, file, line);
-
-	mem_putstats(ctx, ptr, size);
+	mem_putstats(ctx, size);
 	mem_put(ctx, ptr, size);
 
 	call_water = lo_water(ctx);
@@ -948,7 +943,6 @@ isc__mem_allocate(isc_mem_t *ctx, size_t size FLARG) {
 
 	si = mem_allocateunlocked(ctx, size);
 	mem_getstats(ctx, si[-1].size);
-
 	ADD_TRACE(ctx, si, si[-1].size, file, line);
 
 	call_water = hi_water(ctx);
@@ -1021,8 +1015,7 @@ isc__mem_free(isc_mem_t *ctx, void *ptr FLARG) {
 	}
 
 	DELETE_TRACE(ctx, ptr, size, file, line);
-
-	mem_putstats(ctx, si, size);
+	mem_putstats(ctx, size);
 	mem_put(ctx, si, size);
 
 	call_water = lo_water(ctx);
@@ -1299,7 +1292,7 @@ isc_mempool_destroy(isc_mempool_t **mpctxp) {
 	void *page;
 
 	while ((page = (void *)isc_queue_dequeue(mpctx->pages)) != 0) {
-		mem_putstats(mctx, (void *)page, alloc_size);
+		mem_putstats(mctx, alloc_size);
 		mem_put(mctx, page, alloc_size);
 	}
 
@@ -1358,6 +1351,7 @@ isc__mempool_get(isc_mempool_t *mpctx FLARG) {
 
 		uintptr_t page = (uintptr_t)mem_get(mpctx->mctx, alloc_size);
 		mem_getstats(mpctx->mctx, alloc_size);
+
 		isc_queue_enqueue(mpctx->pages, page);
 
 		/* Get the first item */
@@ -1382,7 +1376,9 @@ isc__mempool_get(isc_mempool_t *mpctx FLARG) {
 	atomic_fetch_add_release(&mpctx->counters[isc_tid_v].gets, 1);
 	atomic_fetch_add_release(&mpctx->counters[isc_tid_v].allocated, 1);
 
-	ADD_TRACE(mpctx->mctx, item, mpctx->size, file, line);
+	UNUSED(file);
+	UNUSED(line);
+	/* ADD_TRACE(mpctx->mctx, (void *)item, mpctx->size, file, line); */
 
 	return ((void *)item);
 }
@@ -1401,7 +1397,9 @@ isc__mempool_put(isc_mempool_t *mpctx, void *mem FLARG) {
 	(void)atomic_fetch_add_release(&mpctx->counters[isc_tid_v].freecount,
 				       1);
 
-	DELETE_TRACE(mpctx->mctx, mem, mpctx->size, file, line);
+	UNUSED(file);
+	UNUSED(line);
+	/* DELETE_TRACE(mpctx->mctx, mem, mpctx->size, file, line); */
 
 	isc_queue_enqueue(mpctx->items, item);
 }

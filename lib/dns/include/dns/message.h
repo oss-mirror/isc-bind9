@@ -192,8 +192,6 @@ typedef int dns_messagetextflag_t;
 		*   additional section. */
 /* Obsolete: DNS_MESSAGERENDER_FILTER_AAAA	0x0020	*/
 
-typedef struct dns_msgblock dns_msgblock_t;
-
 struct dns_sortlist_arg {
 	dns_aclenv_t *		env;
 	const dns_acl_t *	acl;
@@ -246,18 +244,9 @@ struct dns_message {
 	dns_compress_t *cctx;
 
 	isc_mem_t *    mctx;
-	isc_mempool_t *namepool;
-	isc_mempool_t *rdspool;
 
 	isc_bufferlist_t scratchpad;
 	isc_bufferlist_t cleanup;
-
-	ISC_LIST(dns_msgblock_t) rdatas;
-	ISC_LIST(dns_msgblock_t) rdatalists;
-	ISC_LIST(dns_msgblock_t) offsets;
-
-	ISC_LIST(dns_rdata_t) freerdata;
-	ISC_LIST(dns_rdatalist_t) freerdatalist;
 
 	dns_rcode_t tsigstatus;
 	dns_rcode_t querytsigstatus;
@@ -338,6 +327,12 @@ dns_message_reset(dns_message_t *msg, unsigned int intent);
  *\li	'msg' be valid.
  *
  *\li	'intent' is DNS_MESSAGE_INTENTPARSE or DNS_MESSAGE_INTENTRENDER
+ */
+
+void
+dns_message_resetnames(dns_message_t *msg, unsigned int first_section, unsigned int attr);
+/*
+ * Clean up name lists by calling the rdataset disassociate function.
  */
 
 void
@@ -891,23 +886,6 @@ dns_message_gettempname(dns_message_t *msg, dns_name_t **item);
  * one of the message's sections before the message is destroyed.
  *
  * It is the caller's responsibility to initialize this name.
- *
- * Requires:
- *\li	msg be a valid message
- *
- *\li	item != NULL && *item == NULL
- *
- * Returns:
- *\li	#ISC_R_SUCCESS		-- All is well.
- *\li	#ISC_R_NOMEMORY		-- No item can be allocated.
- */
-
-isc_result_t
-dns_message_gettempoffsets(dns_message_t *msg, dns_offsets_t **item);
-/*%<
- * Return an offsets array that can be used for any temporary purpose,
- * such as attaching to a temporary name.  The offsets will be freed
- * when the message is destroyed or reset.
  *
  * Requires:
  *\li	msg be a valid message

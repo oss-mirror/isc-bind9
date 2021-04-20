@@ -5996,57 +5996,12 @@ cleanup:
 }
 
 /*
- * Clear all rdatasets from the message that are in the given section and
- * that have the 'attr' attribute set.
- */
-static void
-message_clearrdataset(dns_message_t *msg, unsigned int attr) {
-	unsigned int i;
-	dns_name_t *name, *next_name;
-	dns_rdataset_t *rds, *next_rds;
-
-	/*
-	 * Clean up name lists by calling the rdataset disassociate function.
-	 */
-	for (i = DNS_SECTION_ANSWER; i < DNS_SECTION_MAX; i++) {
-		name = ISC_LIST_HEAD(msg->sections[i]);
-		while (name != NULL) {
-			next_name = ISC_LIST_NEXT(name, link);
-
-			rds = ISC_LIST_HEAD(name->list);
-			while (rds != NULL) {
-				next_rds = ISC_LIST_NEXT(rds, link);
-				if ((rds->attributes & attr) != attr) {
-					rds = next_rds;
-					continue;
-				}
-				ISC_LIST_UNLINK(name->list, rds, link);
-				INSIST(dns_rdataset_isassociated(rds));
-				dns_rdataset_disassociate(rds);
-				isc_mempool_put(msg->rdspool, rds);
-				rds = next_rds;
-			}
-
-			if (ISC_LIST_EMPTY(name->list)) {
-				ISC_LIST_UNLINK(msg->sections[i], name, link);
-				if (dns_name_dynamic(name)) {
-					dns_name_free(name, msg->mctx);
-				}
-				isc_mempool_put(msg->namepool, name);
-			}
-
-			name = next_name;
-		}
-	}
-}
-
-/*
  * Clear any rdatasets from the client's message that were added on a lookup
  * due to a client timeout.
  */
 static void
 query_clear_stale(ns_client_t *client) {
-	message_clearrdataset(client->message, DNS_RDATASETATTR_STALE_ADDED);
+	dns_message_resetnames(client->message, DNS_SECTION_ANSWER, DNS_RDATASETATTR_STALE_ADDED);
 }
 
 /*
