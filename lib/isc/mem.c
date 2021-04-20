@@ -37,6 +37,8 @@
 #include <isc/types.h>
 #include <isc/util.h>
 
+#include <jemalloc/jemalloc.h>
+
 #ifdef HAVE_LIBXML2
 #include <libxml/xmlwriter.h>
 #define ISC_XMLCHAR (const xmlChar *)
@@ -168,8 +170,6 @@ typedef struct mempool_stats {
 	 * below zero
 	 */
 	atomic_int_fast64_t allocated;
-	/*%< # of items on reserved list */
-	alignas(CACHE_LINE_SIZE) atomic_int_fast64_t freecount;
 	/*%< # of requests to this pool */
 	alignas(CACHE_LINE_SIZE) atomic_size_t gets;
 } mempool_stats_t;
@@ -189,9 +189,7 @@ struct isc_mempool {
 	char *name;
 
 	/*%< list of free items */
-	alignas(CACHE_LINE_SIZE) isc_queue_t *items;
-	/*%< list of allocated "pages" */
-	alignas(CACHE_LINE_SIZE) isc_queue_t *pages;
+	alignas(CACHE_LINE_SIZE) unsigned int *tis;
 };
 
 /*
@@ -340,41 +338,6 @@ unlock:
 }
 #endif /* ISC_MEM_TRACKLINES */
 
-static void *
-default_memalloc(size_t size);
-static void
-default_memfree(void *ptr);
-
-/*!
- * Perform a malloc, doing memory filling and overrun detection as necessary.
- */
-static inline void *
-mem_get(isc_mem_t *ctx, size_t size) {
-	char *ret;
-
-	ret = default_memalloc(size);
-
-	if (ISC_UNLIKELY((ctx->flags & ISC_MEMFLAG_FILL) != 0)) {
-		if (ISC_LIKELY(ret != NULL)) {
-			memset(ret, 0xbe, size); /* Mnemonic for "beef". */
-		}
-	}
-
-	return (ret);
-}
-
-/*!
- * Perform a free, doing memory filling and overrun detection as necessary.
- */
-/* coverity[+free : arg-1] */
-static inline void
-mem_put(isc_mem_t *ctx, void *mem, size_t size) {
-	if (ISC_UNLIKELY((ctx->flags & ISC_MEMFLAG_FILL) != 0)) {
-		memset(mem, 0xde, size); /* Mnemonic for "dead". */
-	}
-	default_memfree(mem);
-}
-
 #define stats_bucket(ctx, size)                      \
 	((size / STATS_BUCKET_SIZE) >= STATS_BUCKETS \
 		 ? &ctx->stats[STATS_BUCKETS]        \
@@ -413,42 +376,6 @@ mem_putstats(isc_mem_t *ctx, size_t size) {
 /*
  * Private.
  */
-
-static void *
-default_memalloc(size_t size) {
-	void *ptr;
-
-	ptr = malloc(size);
-
-	/*
-	 * If the space cannot be allocated, a null pointer is returned. If the
-	 * size of the space requested is zero, the behavior is
-	 * implementation-defined: either a null pointer is returned, or the
-	 * behavior is as if the size were some nonzero value, except that the
-	 * returned pointer shall not be used to access an object.
-	 * [ISO9899 § 7.22.3]
-	 *
-	 * [ISO9899]
-	 *   ISO/IEC WG 9899:2011: Programming languages - C.
-	 *   International Organization for Standardization, Geneva,
-	 * Switzerland.
-	 *   http://www.open-std.org/JTC1/SC22/WG14/www/docs/n1570.pdf
-	 */
-
-	if (ptr == NULL && size != 0) {
-		char strbuf[ISC_STRERRORSIZE];
-		strerror_r(errno, strbuf, sizeof(strbuf));
-		isc_error_fatal(__FILE__, __LINE__, "malloc failed: %s",
-				strbuf);
-	}
-
-	return (ptr);
-}
-
-static void
-default_memfree(void *ptr) {
-	free(ptr);
-}
 
 static void
 mem_initialize(void) {
@@ -493,7 +420,7 @@ mem_create(isc_mem_t **ctxp, unsigned int flags, unsigned int debugging) {
 	STATIC_ASSERT(ALIGNMENT_SIZE >= sizeof(size_info),
 		      "alignment size too small");
 
-	ctx = default_memalloc(sizeof(*ctx));
+	ctx = malloc(sizeof(*ctx));
 
 	*ctx = (isc_mem_t){
 		.magic = MEM_MAGIC,
@@ -517,8 +444,7 @@ mem_create(isc_mem_t **ctxp, unsigned int flags, unsigned int debugging) {
 	if (ISC_UNLIKELY((ctx->debugging & ISC_MEM_DEBUGRECORD) != 0)) {
 		unsigned int i;
 
-		ctx->debuglist = default_memalloc(
-			(DEBUG_TABLE_COUNT * sizeof(debuglist_t)));
+		ctx->debuglist = calloc(DEBUG_TABLE_COUNT, sizeof(debuglist_t));
 		for (i = 0; i < DEBUG_TABLE_COUNT; i++) {
 			ISC_LIST_INIT(ctx->debuglist[i]);
 		}
@@ -570,7 +496,7 @@ destroy(isc_mem_t *ctx) {
 			}
 		}
 
-		default_memfree(ctx->debuglist);
+		free(ctx->debuglist);
 		decrement_malloced(ctx,
 				   DEBUG_TABLE_COUNT * sizeof(debuglist_t));
 	}
@@ -601,7 +527,7 @@ destroy(isc_mem_t *ctx) {
 	if (ctx->checkfree) {
 		INSIST(malloced == 0);
 	}
-	default_memfree(ctx);
+	free(ctx);
 }
 
 void
@@ -645,27 +571,10 @@ isc__mem_putanddetach(isc_mem_t **ctxp, void *ptr, size_t size FLARG) {
 	isc_mem_t *ctx = *ctxp;
 	*ctxp = NULL;
 
-	if (ISC_UNLIKELY((ctx->debugging &
-			  (ISC_MEM_DEBUGSIZE | ISC_MEM_DEBUGCTX)) != 0))
-	{
-		if ((ctx->debugging & ISC_MEM_DEBUGSIZE) != 0) {
-			size_info *si = &(((size_info *)ptr)[-1]);
-			size_t oldsize = si->size - ALIGNMENT_SIZE;
-			if ((ctx->debugging & ISC_MEM_DEBUGCTX) != 0) {
-				oldsize -= ALIGNMENT_SIZE;
-			}
-			INSIST(oldsize == size);
-		}
-		isc__mem_free(ctx, ptr FLARG_PASS);
-
-		goto destroy;
-	}
-
 	DELETE_TRACE(ctx, ptr, size, file, line);
 	mem_putstats(ctx, size);
-	mem_put(ctx, ptr, size);
+	sdallocx(ptr, size, 0);
 
-destroy:
 	if (isc_refcount_decrement(&ctx->references) == 1) {
 		isc_refcount_destroy(&ctx->references);
 		destroy(ctx);
@@ -749,20 +658,13 @@ void *
 isc__mem_get(isc_mem_t *ctx, size_t size FLARG) {
 	REQUIRE(VALID_CONTEXT(ctx));
 
-	void *ptr;
-	bool call_water = false;
+	void *ptr = mallocx(size, 0);
+	INSIST(ptr != NULL);
 
-	if (ISC_UNLIKELY((ctx->debugging &
-			  (ISC_MEM_DEBUGSIZE | ISC_MEM_DEBUGCTX)) != 0))
-	{
-		return (isc__mem_allocate(ctx, size FLARG_PASS));
-	}
-
-	ptr = mem_get(ctx, size);
 	mem_getstats(ctx, size);
 	ADD_TRACE(ctx, ptr, size, file, line);
 
-	call_water = hi_water(ctx);
+	bool call_water = hi_water(ctx);
 
 	if (call_water && (ctx->water != NULL)) {
 		(ctx->water)(ctx->water_arg, ISC_MEM_HIWATER);
@@ -777,27 +679,10 @@ isc__mem_put(isc_mem_t *ctx, void *ptr, size_t size FLARG) {
 	REQUIRE(ptr != NULL);
 
 	bool call_water = false;
-	size_info *si;
-
-	if (ISC_UNLIKELY((ctx->debugging &
-			  (ISC_MEM_DEBUGSIZE | ISC_MEM_DEBUGCTX)) != 0))
-	{
-		if ((ctx->debugging & ISC_MEM_DEBUGSIZE) != 0) {
-			size_t oldsize;
-			si = &(((size_info *)ptr)[-1]);
-			oldsize = si->size - ALIGNMENT_SIZE;
-			if ((ctx->debugging & ISC_MEM_DEBUGCTX) != 0) {
-				oldsize -= ALIGNMENT_SIZE;
-			}
-			INSIST(oldsize == size);
-		}
-		isc__mem_free(ctx, ptr FLARG_PASS);
-		return;
-	}
 
 	DELETE_TRACE(ctx, ptr, size, file, line);
 	mem_putstats(ctx, size);
-	mem_put(ctx, ptr, size);
+	sdallocx(ptr, size, 0);
 
 	call_water = lo_water(ctx);
 
@@ -915,83 +800,42 @@ isc_mem_stats(isc_mem_t *ctx, FILE *out) {
  * size of the object allocated (with some additional overhead).
  */
 
-static void *
-mem_allocateunlocked(isc_mem_t *ctx, size_t size) {
-	size_info *si;
-
-	size += ALIGNMENT_SIZE;
-	if (ISC_UNLIKELY((ctx->debugging & ISC_MEM_DEBUGCTX) != 0)) {
-		size += ALIGNMENT_SIZE;
-	}
-
-	si = mem_get(ctx, size);
-
-	if (ISC_UNLIKELY((ctx->debugging & ISC_MEM_DEBUGCTX) != 0)) {
-		si->ctx = ctx;
-		si++;
-	}
-	si->size = size;
-	return (&si[1]);
-}
-
 void *
 isc__mem_allocate(isc_mem_t *ctx, size_t size FLARG) {
 	REQUIRE(VALID_CONTEXT(ctx));
 
-	size_info *si;
-	bool call_water = false;
+	void *ptr = mallocx(size, 0);
+	INSIST(ptr != NULL);
 
-	si = mem_allocateunlocked(ctx, size);
-	mem_getstats(ctx, si[-1].size);
-	ADD_TRACE(ctx, si, si[-1].size, file, line);
+	size = sallocx(ptr, 0);
+	mem_getstats(ctx, size);
+	ADD_TRACE(ctx, ptr, size, file, line);
 
-	call_water = hi_water(ctx);
+	bool call_water = hi_water(ctx);
 
 	if (call_water && (ctx->water != NULL)) {
 		(ctx->water)(ctx->water_arg, ISC_MEM_HIWATER);
 	}
 
-	return (si);
+	return (ptr);
 }
 
 void *
-isc__mem_reallocate(isc_mem_t *ctx, void *ptr, size_t size FLARG) {
+isc__mem_reallocate(isc_mem_t *ctx, void *old_ptr, size_t new_size FLARG) {
 	REQUIRE(VALID_CONTEXT(ctx));
+	size_t old_size = sallocx(old_ptr, 0);
 
-	void *new_ptr = NULL;
+	REQUIRE(new_size > 0);
 
-	/*
-	 * This function emulates the realloc(3) standard library
-	 * function:
-	 * - if size > 0, allocate new memory; and if ptr is non NULL,
-	 * copy as much of the old contents to the new buffer and free
-	 * the old one. Note that when allocation fails the original
-	 * pointer is intact; the caller must free it.
-	 * - if size is 0 and ptr is non NULL, simply free the given
-	 * ptr.
-	 * - this function returns:
-	 *     pointer to the newly allocated memory, or
-	 *     NULL if allocation fails or doesn't happen.
-	 */
-	if (size > 0U) {
-		new_ptr = isc__mem_allocate(ctx, size FLARG_PASS);
-		if (new_ptr != NULL && ptr != NULL) {
-			size_t oldsize, copysize;
-			oldsize = (((size_info *)ptr)[-1]).size;
-			INSIST(oldsize >= ALIGNMENT_SIZE);
-			oldsize -= ALIGNMENT_SIZE;
-			if (ISC_UNLIKELY((ctx->debugging & ISC_MEM_DEBUGCTX) !=
-					 0)) {
-				INSIST(oldsize >= ALIGNMENT_SIZE);
-				oldsize -= ALIGNMENT_SIZE;
-			}
-			copysize = (oldsize > size) ? size : oldsize;
-			memmove(new_ptr, ptr, copysize);
-			isc__mem_free(ctx, ptr FLARG_PASS);
-		}
-	} else if (ptr != NULL) {
-		isc__mem_free(ctx, ptr FLARG_PASS);
-	}
+	DELETE_TRACE(ctx, old_ptr, old_size, file, line);
+	mem_putstats(ctx, old_size);
+
+	void *new_ptr = rallocx(old_ptr, new_size, 0);
+	INSIST(new_ptr != NULL);
+
+	new_size = sallocx(new_ptr, 0);
+	mem_getstats(ctx, new_size);
+	ADD_TRACE(ctx, new_ptr, new_size, file, line);
 
 	return (new_ptr);
 }
@@ -1001,24 +845,14 @@ isc__mem_free(isc_mem_t *ctx, void *ptr FLARG) {
 	REQUIRE(VALID_CONTEXT(ctx));
 	REQUIRE(ptr != NULL);
 
-	size_info *si;
-	size_t size;
-	bool call_water = false;
-
-	if (ISC_UNLIKELY((ctx->debugging & ISC_MEM_DEBUGCTX) != 0)) {
-		si = &(((size_info *)ptr)[-2]);
-		REQUIRE(si->ctx == ctx);
-		size = si[1].size;
-	} else {
-		si = &(((size_info *)ptr)[-1]);
-		size = si->size;
-	}
+	size_t size = sallocx(ptr, 0);
 
 	DELETE_TRACE(ctx, ptr, size, file, line);
 	mem_putstats(ctx, size);
-	mem_put(ctx, si, size);
 
-	call_water = lo_water(ctx);
+	sdallocx(ptr, size, 0);
+
+	bool call_water = lo_water(ctx);
 
 	if (call_water && (ctx->water != NULL)) {
 		(ctx->water)(ctx->water_arg, ISC_MEM_LOWATER);
@@ -1220,12 +1054,16 @@ isc_mempool_create(isc_mem_t *mctx, size_t size, isc_mempool_t **mpctxp) {
 
 	for (size_t i = 0; i < mpctx->ncounters; i++) {
 		atomic_init(&mpctx->counters[i].allocated, 0);
-		atomic_init(&mpctx->counters[i].freecount, 0);
 		atomic_init(&mpctx->counters[i].gets, 0);
 	}
 
-	mpctx->items = isc_queue_new(mctx, mpctx->ncounters);
-	mpctx->pages = isc_queue_new(mctx, mpctx->ncounters);
+	/* FIXME: nworkers */
+	mpctx->tis = isc_mem_get(mctx, mpctx->ncounters * sizeof(mpctx->tis[0]));
+	for (size_t i = 0; i < mpctx->ncounters; i++) {
+		size_t sz = sizeof(mpctx->tis[i]);
+		int r = mallctl("tcache.create", &mpctx->tis[i], &sz, NULL, 0);
+		INSIST(r == 0);
+	}
 
 	*mpctxp = (isc_mempool_t *)mpctx;
 
@@ -1252,7 +1090,6 @@ isc_mempool_destroy(isc_mempool_t **mpctxp) {
 	isc_mempool_t *mpctx = *mpctxp;
 	isc_mem_t *mctx = mpctx->mctx;
 	size_t allocated = isc_mempool_getallocated(mpctx);
-	size_t freecount = isc_mempool_getfreecount(mpctx);
 
 	*mpctxp = NULL;
 	mpctx->magic = 0;
@@ -1266,40 +1103,11 @@ isc_mempool_destroy(isc_mempool_t **mpctxp) {
 	INSIST(allocated == 0);
 
 	/*
-	 * Return any items on the free list
+	 * Destroy the thread specific caches
 	 */
 	for (size_t i = 0; i < mpctx->ncounters; i++) {
-		uintptr_t item;
-
-		while ((item = isc_queue_dequeue(mpctx->items)) != 0) {
-			freecount--;
-		}
+		mallctl("tcache.destroy", NULL, NULL, &mpctx->tis[i], sizeof(mpctx->tis[0]));
 	}
-	if (freecount != 0) {
-		UNEXPECTED_ERROR(
-			__FILE__, __LINE__,
-			"isc_mempool_destroy(): mempool %s lost memory",
-			mpctx->name);
-	}
-	INSIST(freecount == 0);
-
-	/*
-
-	 * Return all the pages back to the allocator
-	 */
-	size_t aligned_size = ISC_ALIGN(mpctx->size, ALIGNMENT_SIZE);
-	size_t alloc_size = ISC_MAX(pagesize, aligned_size * 8);
-	void *page;
-
-	while ((page = (void *)isc_queue_dequeue(mpctx->pages)) != 0) {
-		mem_putstats(mctx, alloc_size);
-		mem_put(mctx, page, alloc_size);
-	}
-
-	isc_mem_put(mctx, mpctx->counters,
-		    mpctx->ncounters * sizeof(mpctx->counters[0]));
-	isc_queue_destroy(mpctx->items);
-	isc_queue_destroy(mpctx->pages);
 
 	if (mpctx->name != NULL) {
 		isc_mem_free(mctx, mpctx->name);
@@ -1343,35 +1151,8 @@ isc__mempool_get(isc_mempool_t *mpctx FLARG) {
 	REQUIRE(VALID_MEMPOOL(mpctx));
 	REQUIRE(isc_tid_v < mpctx->ncounters);
 
-	uintptr_t item = isc_queue_dequeue(mpctx->items);
-
-	if (ISC_UNLIKELY(item == 0)) {
-		size_t aligned_size = ISC_ALIGN(mpctx->size, ALIGNMENT_SIZE);
-		size_t alloc_size = ISC_MAX(pagesize, aligned_size * 8);
-
-		uintptr_t page = (uintptr_t)mem_get(mpctx->mctx, alloc_size);
-		mem_getstats(mpctx->mctx, alloc_size);
-
-		isc_queue_enqueue(mpctx->pages, page);
-
-		/* Get the first item */
-		item = page;
-
-		/* Enqueue rest of the items on the page */
-		for (uintptr_t iter = item + aligned_size;
-		     (iter + aligned_size) < (page + alloc_size);
-		     iter += alloc_size)
-		{
-			isc_queue_enqueue(mpctx->items, iter);
-			(void)atomic_fetch_add_release(
-				&mpctx->counters[isc_tid_v].freecount, 1);
-		}
-	} else {
-		(void)atomic_fetch_sub_release(
-			&mpctx->counters[isc_tid_v].freecount, 1);
-	}
-
-	INSIST(item != 0);
+	void *item = mallocx(mpctx->size, MALLOCX_TCACHE(mpctx->tis[isc_tid_v]));
+	INSIST(item != NULL);
 
 	atomic_fetch_add_release(&mpctx->counters[isc_tid_v].gets, 1);
 	atomic_fetch_add_release(&mpctx->counters[isc_tid_v].allocated, 1);
@@ -1384,19 +1165,14 @@ isc__mempool_get(isc_mempool_t *mpctx FLARG) {
 /* coverity[+free : arg-1] */
 void
 isc__mempool_put(isc_mempool_t *mpctx, void *mem FLARG) {
-	uintptr_t item = (uintptr_t)mem;
-
 	REQUIRE(VALID_MEMPOOL(mpctx));
 	REQUIRE(mem != NULL);
 	REQUIRE(isc_tid_v < mpctx->ncounters);
 
-	(void)atomic_fetch_sub_release(&mpctx->counters[isc_tid_v].allocated,
-				       1);
-	(void)atomic_fetch_add_release(&mpctx->counters[isc_tid_v].freecount,
-				       1);
+	(void)atomic_fetch_sub_release(&mpctx->counters[isc_tid_v].allocated, 1);
 	DELETE_TRACE(mpctx->mctx, mem, mpctx->size, file, line);
 
-	isc_queue_enqueue(mpctx->items, item);
+	sdallocx(mem, mpctx->size, MALLOCX_TCACHE(mpctx->tis[isc_tid_v]));
 }
 
 #endif /* __SANITIZE_ADDRESS__ */
@@ -1408,13 +1184,10 @@ isc__mempool_put(isc_mempool_t *mpctx, void *mem FLARG) {
 size_t
 isc_mempool_getfreecount(isc_mempool_t *mpctx) {
 	REQUIRE(VALID_MEMPOOL(mpctx));
-	size_t freecount = 0;
 
-	for (size_t i = 0; i < mpctx->ncounters; i++) {
-		freecount += atomic_load_acquire(&mpctx->counters[i].freecount);
-	}
+	/* FIXME: mallctl() */
 
-	return (freecount);
+	return (0);
 }
 
 size_t

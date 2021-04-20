@@ -1374,6 +1374,27 @@ AC_CHECK_HEADERS(locale.h)
 AC_CHECK_FUNCS(setlocale)
 
 #
+#
+#
+AC_ARG_WITH([jemalloc],
+	    [AS_HELP_STRING([--with-jemalloc=detect],[enable jemalloc memory allocator (default is detect)])],
+	    [],[with_jemalloc=detect])
+
+AS_CASE([$with_jemalloc],
+	[no],[],
+	[detect],[PKG_CHECK_MODULES([JEMALLOC], [jemalloc >= 3.6.0],
+				    [AC_DEFINE([HAVE_JEMALLOC], [1], [Use jemalloc memory allocator])
+				     with_jemalloc=yes],[with_jemalloc=no])],
+	[yes],[PKG_CHECK_MODULES([JEMALLOC], [jemalloc >= 3.6.0],
+				 [AC_DEFINE([HAVE_JEMALLOC], [1], [Use jemalloc memory allocator])])],
+	[AC_MSG_ERROR([Use PKG_CONFIG_PATH to specify path to jemalloc library])]
+	)
+AC_SUBST([JEMALLOC_CFLAGS])
+AC_SUBST([JEMALLOC_LIBS])
+
+AM_CONDITIONAL([HAVE_JEMALLOC], [test "$with_jemalloc" = "yes"])
+
+#
 # was --with-tuning specified?
 #
 # [pairwise: --with-tuning=small, --without-tuning]
