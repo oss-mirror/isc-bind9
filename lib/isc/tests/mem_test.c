@@ -219,7 +219,7 @@ static void
 isc_mem_noflags_test(void **state) {
 	isc_result_t result;
 	isc_mem_t *mctx2 = NULL;
-	char buf[4096], *p, *q;
+	char buf[4096], *p;
 	FILE *f;
 	void *ptr;
 
@@ -228,8 +228,8 @@ isc_mem_noflags_test(void **state) {
 
 	UNUSED(state);
 
-	isc_mem_create(&mctx2);
 	isc_mem_debugging = 0;
+	isc_mem_create(&mctx2);
 	ptr = isc_mem_get(mctx2, 2048);
 	assert_non_null(ptr);
 	isc__mem_printactive(mctx2, f);
@@ -240,7 +240,9 @@ isc_mem_noflags_test(void **state) {
 	memset(buf, 0, sizeof(buf));
 	result = isc_stdio_open("mem.output", "r", &f);
 	assert_int_equal(result, ISC_R_SUCCESS);
-	result = isc_stdio_read(buf, sizeof(buf), 1, f, NULL);
+	size_t nret = 0;
+	result = isc_stdio_read(buf, sizeof(buf), 1, f, &nret);
+	assert_int_equal(nret, 0);
 	assert_int_equal(result, ISC_R_EOF);
 	isc_stdio_close(f);
 	isc_file_remove("mem.output");
@@ -248,15 +250,7 @@ isc_mem_noflags_test(void **state) {
 	buf[sizeof(buf) - 1] = 0;
 
 	p = strchr(buf, '\n');
-	assert_non_null(p);
-	assert_in_range(p, 0, buf + sizeof(buf) - 3);
-	p += 2;
-	q = strchr(p, '\n');
-	assert_non_null(q);
-	*q = '\0';
-	assert_string_equal(p, "None.");
-
-	isc_mem_debugging = ISC_MEM_DEBUGRECORD;
+	assert_null(p);
 }
 
 /* test mem with record flag */
@@ -273,6 +267,7 @@ isc_mem_recordflag_test(void **state) {
 
 	UNUSED(state);
 
+	isc_mem_debugging = ISC_MEM_DEBUGRECORD;
 	isc_mem_create(&mctx2);
 	ptr = isc_mem_get(mctx2, 2048);
 	assert_non_null(ptr);
@@ -315,8 +310,8 @@ isc_mem_traceflag_test(void **state) {
 
 	UNUSED(state);
 
+	isc_mem_debugging = ISC_MEM_DEBUGTRACE | ISC_MEM_DEBUGRECORD;
 	isc_mem_create(&mctx2);
-	isc_mem_debugging = ISC_MEM_DEBUGTRACE;
 	ptr = isc_mem_get(mctx2, 2048);
 	assert_non_null(ptr);
 	isc__mem_printactive(mctx2, f);

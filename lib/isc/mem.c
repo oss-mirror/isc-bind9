@@ -68,14 +68,10 @@ LIBISC_EXTERNAL_DATA unsigned int isc_mem_defaultflags = ISC_MEMFLAG_DEFAULT;
  */
 
 #define ALIGNMENT	  8U /*%< must be a power of 2 */
-#define ALIGNMENT_SIZE	  sizeof(size_info)
 #define DEBUG_TABLE_COUNT 512U
 #define STATS_BUCKETS	  512U
 #define STATS_BUCKET_SIZE 32U
 #define CACHE_LINE_SIZE	  64
-#define MEMPOOL_PREALLOC                                    \
-	8 /* the number of large-sized items to preallocate \
-	   */
 
 /*
  * Types.
@@ -99,13 +95,6 @@ typedef ISC_LIST(debuglink_t) debuglist_t;
 #define FLARG
 #endif /* if ISC_MEM_TRACKLINES */
 
-typedef struct {
-	alignas(ALIGNMENT) union {
-		size_t size;
-		isc_mem_t *ctx;
-	};
-} size_info;
-
 struct stats {
 	atomic_size_t gets;
 	atomic_size_t totalgets;
@@ -118,8 +107,6 @@ struct stats {
 
 static ISC_LIST(isc_mem_t) contexts;
 
-static isc_once_t init_once = ISC_ONCE_INIT;
-static isc_once_t shut_once = ISC_ONCE_INIT;
 static isc_mutex_t contextslock;
 
 /*%
@@ -375,8 +362,8 @@ mem_putstats(isc_mem_t *ctx, size_t size) {
  * Private.
  */
 
-static void
-mem_initialize(void) {
+void
+isc__mem_initialize(void) {
 	malloc_conf = "xmalloc:true,background_thread:true,metadata_thp:auto,dirty_decay_ms:30000,muzzy_decay_ms:30000";
 
 	isc_mutex_init(&contextslock);
@@ -385,20 +372,10 @@ mem_initialize(void) {
 }
 
 void
-isc__mem_initialize(void) {
-	RUNTIME_CHECK(isc_once_do(&init_once, mem_initialize) == ISC_R_SUCCESS);
-}
-
-static void
-mem_shutdown(void) {
+isc__mem_shutdown(void) {
 	isc__mem_checkdestroyed();
 
 	isc_mutex_destroy(&contextslock);
-}
-
-void
-isc__mem_shutdown(void) {
-	RUNTIME_CHECK(isc_once_do(&shut_once, mem_shutdown) == ISC_R_SUCCESS);
 }
 
 static void
@@ -406,11 +383,6 @@ mem_create(isc_mem_t **ctxp, unsigned int flags, unsigned int debugging) {
 	REQUIRE(ctxp != NULL && *ctxp == NULL);
 
 	isc_mem_t *ctx;
-
-	STATIC_ASSERT((ALIGNMENT_SIZE & (ALIGNMENT_SIZE - 1)) == 0,
-		      "alignment size not power of 2");
-	STATIC_ASSERT(ALIGNMENT_SIZE >= sizeof(size_info),
-		      "alignment size too small");
 
 	ctx = malloc(sizeof(*ctx));
 
@@ -925,20 +897,7 @@ size_t
 isc_mem_total(isc_mem_t *ctx) {
 	REQUIRE(VALID_CONTEXT(ctx));
 
-	int r;
-	size_t small = 0;
-	size_t large = 0;
-	size_t sz;
-
-	sz = sizeof(small);
-	r = mallctl("stats.arenas." STRINGIFY(MALLCTL_ARENAS_ALL) ".small.allocated", &small, &sz, NULL, 0);
-	INSIST(r == 0);
-
-	sz = sizeof(large);
-	r = mallctl("stats.arenas." STRINGIFY(MALLCTL_ARENAS_ALL) ".large.allocated", &large, &sz, NULL, 0);
-	INSIST(r == 0);
-
-	return (small + large);
+	return (atomic_load_acquire(&ctx->total));
 }
 
 size_t
