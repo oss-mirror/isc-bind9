@@ -514,7 +514,7 @@ mem_create(isc_mem_t **ctxp, unsigned int flags, unsigned int debugging) {
 	ISC_LIST_INIT(ctx->pools);
 
 #if ISC_MEM_TRACKLINES
-	if (ISC_UNLIKELY((isc_mem_debugging & ISC_MEM_DEBUGRECORD) != 0)) {
+	if (ISC_UNLIKELY((ctx->debugging & ISC_MEM_DEBUGRECORD) != 0)) {
 		unsigned int i;
 
 		ctx->debuglist = default_memalloc(
@@ -1446,21 +1446,23 @@ isc_mempool_getgets(isc_mempool_t *mpctx) {
 /*
  * Requires contextslock to be held by caller.
  */
-#if ISC_MEM_TRACKLINES
 static void
 print_contexts(FILE *file) {
+#if ISC_MEM_TRACKLINES
 	isc_mem_t *ctx;
 
 	for (ctx = ISC_LIST_HEAD(contexts); ctx != NULL;
 	     ctx = ISC_LIST_NEXT(ctx, link)) {
-		fprintf(file, "context: %p (%s): %" PRIuFAST32 " references\n",
-			ctx, ctx->name[0] == 0 ? "<unknown>" : ctx->name,
-			isc_refcount_current(&ctx->references));
-		print_active(ctx, file);
+		if (ISC_UNLIKELY((ctx->debugging & TRACE_OR_RECORD) != 0)) {
+			fprintf(file, "context: %p (%s): %" PRIuFAST32 " references\n",
+				ctx, ctx->name[0] == 0 ? "<unknown>" : ctx->name,
+				isc_refcount_current(&ctx->references));
+			print_active(ctx, file);
+		}
 	}
+#endif
 	fflush(file);
 }
-#endif
 
 static atomic_uintptr_t checkdestroyed = ATOMIC_VAR_INIT(0);
 
@@ -1479,11 +1481,7 @@ isc__mem_checkdestroyed(void) {
 
 	LOCK(&contextslock);
 	if (!ISC_LIST_EMPTY(contexts)) {
-#if ISC_MEM_TRACKLINES
-		if (ISC_UNLIKELY((isc_mem_debugging & TRACE_OR_RECORD) != 0)) {
-			print_contexts(file);
-		}
-#endif /* if ISC_MEM_TRACKLINES */
+		print_contexts(file);
 		INSIST(0);
 		ISC_UNREACHABLE();
 	}
