@@ -91,8 +91,8 @@ struct dns_dispentry {
 	isc_task_t *task;
 	isc_nm_cb_t connected;
 	isc_nm_cb_t sent;
+	isc_nm_cb_t timedout;
 	isc_taskaction_t action;
-	isc_taskaction_t timeout_action;
 	void *arg;
 	bool item_out;
 	dispsocket_t *dispsocket;
@@ -792,7 +792,6 @@ udp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	dns_dispatchmgr_t *mgr = NULL;
 	isc_sockaddr_t peer;
 	isc_netaddr_t netaddr;
-	isc_taskaction_t action;
 	int match;
 
 	REQUIRE(VALID_DISPSOCK(dispsock));
@@ -834,8 +833,7 @@ udp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	}
 
 	if (dispsock == NULL) {
-		UNLOCK(&disp->lock);
-		return;
+		goto next;
 	}
 
 	resp = dispsock->resp;
@@ -844,12 +842,20 @@ udp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	peer = isc_nmhandle_peeraddr(handle);
 	isc_netaddr_fromsockaddr(&netaddr, &peer);
 
+	if (eresult == ISC_R_TIMEDOUT && resp->timedout != NULL) {
+		resp->timedout(handle, ISC_R_TIMEDOUT, resp->arg);
+		if (isc_nmhandle_timer_running(handle)) {
+			goto next;
+		}
+	}
+
 	if (eresult != ISC_R_SUCCESS) {
 		/*
-		 * This is most likely either a timeout or a network
-		 * error on a connected socket.  It makes no sense to
-		 * check the address or parse the packet, but it
-		 * will help to return the error to the caller.
+		 * This is most likely a network error on a connected
+		 * socket, or a timeout on a timer that has not been
+		 * reset. It makes no sense to check the address or
+		 * parse the packet, but it will help to return the
+		 * error to the caller.
 		 */
 		goto sendevent;
 	}
@@ -925,12 +931,11 @@ sendevent:
 		isc_buffer_add(&rev->buffer, rev->region.length);
 	}
 
-	rev->result = eresult;
 	if (queue_response) {
 		ISC_LIST_APPEND(resp->items, rev, ev_link);
 	} else {
 		ISC_EVENT_INIT(rev, sizeof(*rev), 0, NULL, DNS_EVENT_DISPATCH,
-			       action, resp->arg, resp, NULL, NULL);
+			       resp->action, resp->arg, resp, NULL, NULL);
 		request_log(disp, resp, LVL(90),
 			    "[a] Sent event %p buffer %p len %d to task %p",
 			    rev, rev->buffer.base, rev->buffer.length,
@@ -967,6 +972,7 @@ tcp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	dns_messageid_t id;
 	isc_result_t dres;
 	unsigned int flags;
+	dispsocket_t *dispsock = NULL;
 	dns_dispentry_t *resp = NULL;
 	dns_dispatchevent_t *rev = NULL;
 	unsigned int bucket;
@@ -977,7 +983,6 @@ tcp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	char buf[ISC_SOCKADDR_FORMATSIZE];
 	isc_buffer_t source;
 	isc_sockaddr_t peer;
-	isc_taskaction_t action;
 
 	REQUIRE(VALID_DISPATCH(disp));
 
@@ -1007,6 +1012,8 @@ tcp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 
 		switch (eresult) {
 		case ISC_R_CANCELED:
+			dispatch_log(disp, LVL(90), "shutting down on cancel");
+			do_cancel(disp);
 			break;
 
 		case ISC_R_EOF:
@@ -1019,8 +1026,26 @@ tcp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 			goto logit;
 
 		case ISC_R_TIMEDOUT:
-			id = 0; /* XXX this is broken */
-			goto sendevent;
+			/*
+			 * Time out the first active response for which
+			 * no event has already been sent.
+			 */
+			for (dispsock = ISC_LIST_HEAD(disp->activesockets);
+			     dispsock != NULL;
+			     dispsock = ISC_LIST_NEXT(dispsock, link))
+			{
+				resp = dispsock->resp;
+				if (resp->item_out) {
+					continue;
+				}
+				ISC_LIST_UNLINK(disp->activesockets, dispsock,
+						link);
+				ISC_LIST_APPEND(disp->activesockets, dispsock,
+						link);
+				goto sendevent;
+			}
+			INSIST(0);
+			ISC_UNREACHABLE();
 
 		default:
 			level = ISC_LOG_ERROR;
@@ -1081,20 +1106,20 @@ tcp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 		goto next;
 	}
 
-sendevent:
 	/*
-	 * Response.
+	 * We have a response; find the associated dispentry.
 	 */
 	bucket = dns_hash(qid, &peer, id, disp->localport);
 	LOCK(&qid->lock);
 	resp = entry_search(qid, &peer, id, disp->localport, bucket);
 	dispatch_log(disp, LVL(90), "search for response in bucket %d: %s",
 		     bucket, (resp == NULL ? "not found" : "found"));
+	UNLOCK(&qid->lock);
 	if (resp == NULL) {
-		UNLOCK(&qid->lock);
 		goto next;
 	}
 
+sendevent:
 	queue_response = resp->item_out;
 	rev = allocate_devent(disp);
 
@@ -1119,14 +1144,13 @@ sendevent:
 		ISC_LIST_APPEND(resp->items, rev, ev_link);
 	} else {
 		ISC_EVENT_INIT(rev, sizeof(*rev), 0, NULL, DNS_EVENT_DISPATCH,
-			       action, resp->arg, resp, NULL, NULL);
+			       resp->action, resp->arg, resp, NULL, NULL);
 		request_log(disp, resp, LVL(90),
 			    "[b] Sent event %p buffer %p len %d to task %p",
 			    rev, rev->buffer.base, rev->buffer.length,
 			    resp->task);
 		isc_task_send(resp->task, ISC_EVENT_PTR(&rev));
 	}
-	UNLOCK(&qid->lock);
 
 next:
 	UNLOCK(&disp->lock);
@@ -1775,8 +1799,8 @@ dns_dispatch_addresponse(dns_dispatch_t *disp, unsigned int options,
 			 unsigned int timeout, const isc_sockaddr_t *dest,
 			 isc_task_t *task, isc_nm_cb_t connected,
 			 isc_nm_cb_t sent, isc_taskaction_t action,
-			 isc_taskaction_t timeout_action, void *arg,
-			 dns_messageid_t *idp, dns_dispentry_t **resp) {
+			 isc_nm_cb_t timedout, void *arg, dns_messageid_t *idp,
+			 dns_dispentry_t **resp) {
 	isc_result_t result;
 	dns_dispentry_t *res = NULL;
 	unsigned int bucket;
@@ -1894,8 +1918,8 @@ dns_dispatch_addresponse(dns_dispatch_t *disp, unsigned int options,
 				  .peer = *dest,
 				  .connected = connected,
 				  .sent = sent,
+				  .timedout = timedout,
 				  .action = action,
-				  .timeout_action = timeout_action,
 				  .arg = arg,
 				  .dispsocket = dispsocket };
 	isc_task_attach(task, &res->task);

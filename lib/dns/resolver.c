@@ -302,7 +302,6 @@ struct fetchctx {
 	dns_name_t domain;
 	dns_rdataset_t nameservers;
 	atomic_uint_fast32_t attributes;
-	isc_timer_t *timer;
 	isc_timer_t *timer_try_stale;
 	isc_time_t expires;
 	isc_time_t expires_try_stale;
@@ -852,6 +851,9 @@ rctx_lameserver(respctx_t *rctx);
 static isc_result_t
 rctx_dispfail(respctx_t *rctx);
 
+static isc_result_t
+rctx_timedout(respctx_t *rctx);
+
 static void
 rctx_delonly_zone(respctx_t *rctx);
 
@@ -1113,19 +1115,6 @@ munge:
 }
 
 static inline isc_result_t
-fctx_starttimer(fetchctx_t *fctx) {
-	/*
-	 * Start the lifetime timer for fctx.
-	 *
-	 * This is also used for stopping the idle timer; in that
-	 * case we must purge events already posted to ensure that
-	 * no further idle events are delivered.
-	 */
-	return (isc_timer_reset(fctx->timer, isc_timertype_once, &fctx->expires,
-				NULL, true));
-}
-
-static inline isc_result_t
 fctx_starttimer_trystale(fetchctx_t *fctx) {
 	/*
 	 * Start the stale-answer-client-timeout timer for fctx.
@@ -1133,24 +1122,6 @@ fctx_starttimer_trystale(fetchctx_t *fctx) {
 
 	return (isc_timer_reset(fctx->timer_try_stale, isc_timertype_once,
 				&fctx->expires_try_stale, NULL, true));
-}
-
-static inline void
-fctx_stoptimer(fetchctx_t *fctx) {
-	isc_result_t result;
-
-	/*
-	 * We don't return a result if resetting the timer to inactive fails
-	 * since there's nothing to be done about it.  Resetting to inactive
-	 * should never fail anyway, since the code as currently written
-	 * cannot fail in that case.
-	 */
-	result = isc_timer_reset(fctx->timer, isc_timertype_inactive, NULL,
-				 NULL, true);
-	if (result != ISC_R_SUCCESS) {
-		UNEXPECTED_ERROR(__FILE__, __LINE__, "isc_timer_reset(): %s",
-				 isc_result_totext(result));
-	}
 }
 
 static inline void
@@ -1168,22 +1139,6 @@ fctx_stoptimer_trystale(fetchctx_t *fctx) {
 		}
 	}
 }
-
-static inline isc_result_t
-fctx_startidletimer(fetchctx_t *fctx, isc_interval_t *interval) {
-	/*
-	 * Start the idle timer for fctx.  The lifetime timer continues
-	 * to be in effect.
-	 */
-	return (isc_timer_reset(fctx->timer, isc_timertype_once, &fctx->expires,
-				interval, false));
-}
-
-/*
- * Stopping the idle timer is equivalent to calling fctx_starttimer(), but
- * we use fctx_stopidletimer for readability in the code below.
- */
-#define fctx_stopidletimer fctx_starttimer
 
 static inline void
 resquery_destroy(resquery_t **queryp) {
@@ -1527,7 +1482,6 @@ static inline void
 fctx_stopqueries(fetchctx_t *fctx, bool no_response, bool age_untried) {
 	FCTXTRACE("stopqueries");
 	fctx_cancelqueries(fctx, no_response, age_untried);
-	fctx_stoptimer(fctx);
 	fctx_stoptimer_trystale(fctx);
 }
 
@@ -1801,7 +1755,6 @@ static void
 resquery_senddone(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	resquery_t *query = (resquery_t *)arg;
 	bool destroy_query = false;
-	isc_result_t result;
 	fetchctx_t *fctx = NULL;
 
 	QTRACE("senddone");
@@ -1839,17 +1792,8 @@ resquery_senddone(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 				badns_unreachable);
 			fctx_cancelquery(&query, NULL, NULL, true, false);
 
-			/*
-			 * Behave as if the idle timer has expired.  For TCP
-			 * this may not actually reflect the latest timer.
-			 */
 			FCTX_ATTR_CLR(fctx, FCTX_ATTR_ADDRWAIT);
-			result = fctx_stopidletimer(fctx);
-			if (result != ISC_R_SUCCESS) {
-				fctx_done(fctx, result, __LINE__);
-			} else {
-				fctx_try(fctx, true, false);
-			}
+			fctx_try(fctx, true, false);
 			break;
 
 		default:
@@ -1857,6 +1801,7 @@ resquery_senddone(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 				   "due to unexpected result; responding",
 				   eresult);
 			fctx_cancelquery(&query, NULL, NULL, false, false);
+			fctx_done(fctx, eresult, __LINE__);
 			break;
 		}
 	}
@@ -1882,10 +1827,21 @@ fctx_addopt(dns_message_t *message, unsigned int version, uint16_t udpsize,
 
 static inline void
 fctx_setretryinterval(fetchctx_t *fctx, unsigned int rtt) {
-	unsigned int seconds;
-	unsigned int us;
+	unsigned int seconds, us;
+	uint64_t limit;
+	isc_time_t now;
+
+	/*
+	 * Has this fetch already expired?
+	 */
+	isc_time_now(&now);
+	limit = isc_time_microdiff(&fctx->expires, &now);
+	if (limit == 0) {
+		isc_interval_set(&fctx->interval, 0, 0);
+	}
 
 	us = fctx->res->retryinterval * 1000;
+
 	/*
 	 * Exponential backoff after the first few tries.
 	 */
@@ -1917,8 +1873,12 @@ fctx_setretryinterval(fetchctx_t *fctx, unsigned int rtt) {
 	}
 
 	/*
-	 * But don't ever wait for more than 10 seconds.
+	 * But don't wait past the final expiration of the fetch,
+	 * or for more than 10 seconds.
 	 */
+	if (us > limit) {
+		us = limit;
+	}
 	if (us > MAX_SINGLE_QUERY_TIMEOUT_US) {
 		us = MAX_SINGLE_QUERY_TIMEOUT_US;
 	}
@@ -1926,6 +1886,25 @@ fctx_setretryinterval(fetchctx_t *fctx, unsigned int rtt) {
 	seconds = us / US_PER_SEC;
 	us -= seconds * US_PER_SEC;
 	isc_interval_set(&fctx->interval, seconds, us * 1000);
+}
+
+static void
+resquery_timeout(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
+	resquery_t *query = (resquery_t *)arg;
+	fetchctx_t *fctx = query->fctx;
+
+	REQUIRE(VALID_FCTX(fctx));
+
+	UNUSED(handle);
+	UNUSED(eresult);
+
+	/*
+	 * TODO:
+	 * If serve-stale is enabled, send a response to the
+	 * client and reset the timer so we resume waiting for
+	 * a real response. Otherwise, just return.
+	 */
+	FCTXTRACE("timeout");
 }
 
 static isc_result_t
@@ -1965,9 +1944,8 @@ fctx_query(fetchctx_t *fctx, dns_adbaddrinfo_t *addrinfo,
 	}
 
 	fctx_setretryinterval(fctx, srtt);
-	result = fctx_startidletimer(fctx, &fctx->interval);
-	if (result != ISC_R_SUCCESS) {
-		return (result);
+	if (isc_interval_iszero(&fctx->interval)) {
+		return (ISC_R_TIMEDOUT);
 	}
 
 	INSIST(ISC_LIST_EMPTY(fctx->validators));
@@ -2052,6 +2030,8 @@ fctx_query(fetchctx_t *fctx, dns_adbaddrinfo_t *addrinfo,
 		if (result != ISC_R_SUCCESS) {
 			goto cleanup_query;
 		}
+
+		FCTXTRACE("connecting via TCP");
 	} else {
 		if (have_addr) {
 			switch (isc_sockaddr_pf(&addr)) {
@@ -2110,6 +2090,7 @@ fctx_query(fetchctx_t *fctx, dns_adbaddrinfo_t *addrinfo,
 
 	if ((query->options & DNS_FETCHOPT_TCP) == 0) {
 		if (dns_adbentry_overquota(addrinfo->entry)) {
+			result = ISC_R_QUOTA;
 			goto cleanup_dispatch;
 		}
 
@@ -2122,11 +2103,11 @@ fctx_query(fetchctx_t *fctx, dns_adbaddrinfo_t *addrinfo,
 	UNLOCK(&res->buckets[fctx->bucketnum].lock);
 
 	/* Set up the dispatch and set the query ID */
-	/* XXX: timeout hard-coded to 10 seconds */
 	result = dns_dispatch_addresponse(
-		query->dispatch, 0, 10000, &query->addrinfo->sockaddr, task,
-		resquery_connected, resquery_senddone, resquery_response, NULL,
-		query, &query->id, &query->dispentry);
+		query->dispatch, 0, isc_interval_ms(&fctx->interval),
+		&query->addrinfo->sockaddr, task, resquery_connected,
+		resquery_senddone, resquery_response, resquery_timeout, query,
+		&query->id, &query->dispentry);
 	if (result != ISC_R_SUCCESS) {
 		goto cleanup_dispatch;
 	}
@@ -2147,8 +2128,6 @@ cleanup_query:
 		dns_message_detach(&query->rmessage);
 		isc_mem_put(fctx->mctx, query, sizeof(*query));
 	}
-
-	RUNTIME_CHECK(fctx_stopidletimer(fctx) == ISC_R_SUCCESS);
 
 	return (result);
 }
@@ -2736,7 +2715,6 @@ cleanup_temps:
 static void
 resquery_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	resquery_t *query = (resquery_t *)arg;
-	isc_interval_t interval;
 	isc_result_t result;
 	fetchctx_t *fctx = NULL;
 	dns_resolver_t *res = NULL;
@@ -2761,27 +2739,6 @@ resquery_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	} else {
 		switch (eresult) {
 		case ISC_R_SUCCESS:
-
-			/*
-			 * Extend the idle timer for TCP.  Half of
-			 * "resolver-query-timeout" will hopefully be long
-			 * enough for a TCP connection to be established, a
-			 * single DNS request to be sent, and the response
-			 * received.
-			 */
-			isc_interval_set(&interval,
-					 res->query_timeout / 1000 / 2, 0);
-			result = fctx_startidletimer(query->fctx, &interval);
-			if (result != ISC_R_SUCCESS) {
-				FCTXTRACE("query canceled: idle timer failed; "
-					  "responding");
-
-				fctx_cancelquery(&query, NULL, NULL, false,
-						 false);
-				fctx_done(fctx, result, __LINE__);
-				break;
-			}
-
 			/*
 			 * We are connected. Update the dispatcher and
 			 * send the query.
@@ -2821,6 +2778,7 @@ resquery_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 		case ISC_R_NOPERM:
 		case ISC_R_ADDRNOTAVAIL:
 		case ISC_R_CONNECTIONRESET:
+		case ISC_R_TIMEDOUT:
 			FCTXTRACE3("query canceled in resquery_connected(): "
 				   "no route to host; no response",
 				   eresult);
@@ -2833,18 +2791,8 @@ resquery_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 				badns_unreachable);
 			fctx_cancelquery(&query, NULL, NULL, true, false);
 
-			/*
-			 * Behave as if the idle timer has expired.  For
-			 * TCP connections this may not actually reflect
-			 * the latest timer.
-			 */
 			FCTX_ATTR_CLR(fctx, FCTX_ATTR_ADDRWAIT);
-			result = fctx_stopidletimer(fctx);
-			if (result != ISC_R_SUCCESS) {
-				fctx_done(fctx, result, __LINE__);
-			} else {
-				fctx_try(fctx, true, false);
-			}
+			fctx_try(fctx, true, false);
 			break;
 
 		default:
@@ -2853,6 +2801,7 @@ resquery_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 				   eresult);
 
 			fctx_cancelquery(&query, NULL, NULL, false, false);
+			fctx_done(fctx, eresult, __LINE__);
 		}
 	}
 }
@@ -4000,7 +3949,6 @@ fctx_try(fetchctx_t *fctx, bool retrying, bool badcache) {
 		}
 		fctx_increference(fctx);
 		task = res->buckets[bucketnum].task;
-		fctx_stoptimer(fctx);
 		fctx_stoptimer_trystale(fctx);
 		result = dns_resolver_createfetch(
 			fctx->res, &fctx->qminname, fctx->qmintype,
@@ -4283,7 +4231,6 @@ fctx_destroy(fetchctx_t *fctx) {
 
 	isc_counter_detach(&fctx->qc);
 	fcount_decr(fctx);
-	isc_timer_detach(&fctx->timer);
 	if (fctx->timer_try_stale != NULL) {
 		isc_timer_detach(&fctx->timer_try_stale);
 	}
@@ -4307,61 +4254,6 @@ fctx_destroy(fetchctx_t *fctx) {
  * Fetch event handlers.
  */
 
-static void
-fctx_timeout(isc_task_t *task, isc_event_t *event) {
-	fetchctx_t *fctx = event->ev_arg;
-	isc_timerevent_t *tevent = (isc_timerevent_t *)event;
-	resquery_t *query;
-
-	REQUIRE(VALID_FCTX(fctx));
-
-	UNUSED(task);
-
-	FCTXTRACE("timeout");
-
-	inc_stats(fctx->res, dns_resstatscounter_querytimeout);
-
-	if (event->ev_type == ISC_TIMEREVENT_LIFE) {
-		fctx_done(fctx, ISC_R_TIMEDOUT, __LINE__);
-	} else {
-		isc_result_t result;
-
-		fctx->timeouts++;
-		fctx->timeout = true;
-
-		/*
-		 * We could cancel the running queries here, or we could let
-		 * them keep going.  Since we normally use separate sockets for
-		 * different queries, we adopt the former approach to reduce
-		 * the number of open sockets: cancel the oldest query if it
-		 * expired after the query had started (this is usually the
-		 * case but is not always so, depending on the task schedule
-		 * timing).
-		 */
-		query = ISC_LIST_HEAD(fctx->queries);
-		if (query != NULL &&
-		    isc_time_compare(&tevent->due, &query->start) >= 0) {
-			FCTXTRACE("query timed out; no response");
-			fctx_cancelquery(&query, NULL, NULL, true, false);
-		}
-		FCTX_ATTR_CLR(fctx, FCTX_ATTR_ADDRWAIT);
-
-		/*
-		 * Our timer has triggered.  Reestablish the fctx lifetime
-		 * timer.
-		 */
-		result = fctx_starttimer(fctx);
-		if (result != ISC_R_SUCCESS) {
-			fctx_done(fctx, result, __LINE__);
-		} else {
-			/* Keep trying */
-			fctx_try(fctx, true, false);
-		}
-	}
-
-	isc_event_free(&event);
-}
-
 /*
  * Fetch event handlers called if stale answers are enabled
  * (stale-answer-enabled) and the fetch took more than
@@ -4370,8 +4262,8 @@ fctx_timeout(isc_task_t *task, isc_event_t *event) {
 static void
 fctx_timeout_try_stale(isc_task_t *task, isc_event_t *event) {
 	fetchctx_t *fctx = event->ev_arg;
-	dns_fetchevent_t *dns_event, *next_event;
-	isc_task_t *sender_task;
+	dns_fetchevent_t *dns_event = NULL, *next_event = NULL;
+	isc_task_t *sender_task = NULL;
 	unsigned int count = 0;
 
 	REQUIRE(VALID_FCTX(fctx));
@@ -4586,15 +4478,14 @@ fctx_start(isc_task_t *task, isc_event_t *event) {
 	UNLOCK(&res->buckets[bucketnum].lock);
 
 	if (!done) {
-		isc_result_t result;
+		isc_result_t result = ISC_R_SUCCESS;
 
 		INSIST(!dodestroy);
 
 		/*
 		 * All is well.  Start working on the fetch.
 		 */
-		result = fctx_starttimer(fctx);
-		if (result == ISC_R_SUCCESS && fctx->timer_try_stale != NULL) {
+		if (fctx->timer_try_stale != NULL) {
 			result = fctx_starttimer_trystale(fctx);
 		}
 		if (result != ISC_R_SUCCESS) {
@@ -4944,22 +4835,6 @@ fctx_create(dns_resolver_t *res, const dns_name_t *name, dns_rdatatype_t type,
 	isc_interval_set(&fctx->interval, 2, 0);
 
 	/*
-	 * Create an inactive timer for resolver-query-timeout. It
-	 * will be made active when the fetch is actually started.
-	 */
-	fctx->timer = NULL;
-
-	iresult = isc_timer_create(res->timermgr, isc_timertype_inactive, NULL,
-				   NULL, res->buckets[bucketnum].task,
-				   fctx_timeout, fctx, &fctx->timer);
-	if (iresult != ISC_R_SUCCESS) {
-		UNEXPECTED_ERROR(__FILE__, __LINE__, "isc_timer_create: %s",
-				 isc_result_totext(iresult));
-		result = ISC_R_UNEXPECTED;
-		goto cleanup_qmessage;
-	}
-
-	/*
 	 * If stale answers are enabled, then create an inactive timer
 	 * for stale-answer-client-timeout. It will be made active when
 	 * the fetch is actually started.
@@ -5022,7 +4897,6 @@ cleanup_mctx:
 	isc_mem_detach(&fctx->mctx);
 	dns_adb_detach(&fctx->adb);
 	dns_db_detach(&fctx->cache);
-	isc_timer_detach(&fctx->timer);
 	isc_timer_detach(&fctx->timer_try_stale);
 
 cleanup_qmessage:
@@ -7400,8 +7274,6 @@ resquery_response(isc_task_t *task, isc_event_t *event) {
 		inc_stats(fctx->res, dns_resstatscounter_responsev6);
 	}
 
-	(void)isc_timer_touch(fctx->timer);
-
 	rctx_respinit(task, devent, query, fctx, &rctx);
 
 	if (atomic_load_acquire(&fctx->res->exiting)) {
@@ -7411,9 +7283,14 @@ resquery_response(isc_task_t *task, isc_event_t *event) {
 		return;
 	}
 
-	fctx->timeouts = 0;
-	fctx->timeout = false;
+	result = rctx_timedout(&rctx);
+	if (result == ISC_R_COMPLETE) {
+		return;
+	}
+
 	fctx->addrinfo = query->addrinfo;
+	fctx->timeout = false;
+	fctx->timeouts = 0;
 
 	/*
 	 * Check whether the dispatcher has failed; if so we're done
@@ -7781,23 +7658,17 @@ resquery_response(isc_task_t *task, isc_event_t *event) {
 static void
 rctx_respinit(isc_task_t *task, dns_dispatchevent_t *devent, resquery_t *query,
 	      fetchctx_t *fctx, respctx_t *rctx) {
-	memset(rctx, 0, sizeof(*rctx));
+	*rctx = (respctx_t){ .task = task,
+			     .devent = devent,
+			     .result = devent->result,
+			     .query = query,
+			     .fctx = fctx,
+			     .broken_type = badns_response,
+			     .retryopts = query->options };
 
-	rctx->task = task;
-	rctx->devent = devent;
-	rctx->query = query;
-	rctx->fctx = fctx;
-	rctx->broken_type = badns_response;
-	rctx->retryopts = query->options;
-
-	/*
-	 * XXXRTH  We should really get the current time just once.  We
-	 *		need a routine to convert from an isc_time_t to an
-	 *		isc_stdtime_t.
-	 */
 	TIME_NOW(&rctx->tnow);
 	rctx->finish = &rctx->tnow;
-	isc_stdtime_get(&rctx->now);
+	rctx->now = (isc_stdtime_t)isc_time_seconds(&rctx->tnow);
 }
 
 /*
@@ -7903,6 +7774,39 @@ rctx_dispfail(respctx_t *rctx) {
 	FCTXTRACE3("dispatcher failure", devent->result);
 	rctx_done(rctx, ISC_R_SUCCESS);
 	return (ISC_R_COMPLETE);
+}
+
+/*
+ * rctx_timedout():
+ * Handle the case where a dispatch read timed out.
+ */
+static isc_result_t
+rctx_timedout(respctx_t *rctx) {
+	fetchctx_t *fctx = rctx->fctx;
+
+	if (rctx->result == ISC_R_TIMEDOUT) {
+		isc_time_t now;
+
+		inc_stats(fctx->res, dns_resstatscounter_querytimeout);
+		FCTX_ATTR_CLR(fctx, FCTX_ATTR_ADDRWAIT);
+		fctx->timeout = true;
+		fctx->timeouts++;
+
+		isc_time_now(&now);
+		if (isc_time_microdiff(&fctx->expires, &now) == 0) {
+			FCTXTRACE("stopped trying to make fetch happen");
+		} else {
+			FCTXTRACE("query timed out; no response");
+			rctx->no_response = true;
+			rctx->resend = true;
+			rctx->finish = NULL;
+		}
+
+		rctx_done(rctx, rctx->result);
+		return (ISC_R_COMPLETE);
+	}
+
+	return (ISC_R_SUCCESS);
 }
 
 /*
@@ -9553,10 +9457,6 @@ rctx_chaseds(respctx_t *rctx, dns_message_t *message,
 		fctx_done(fctx, result, __LINE__);
 	} else {
 		fctx_increference(fctx);
-		result = fctx_stopidletimer(fctx);
-		if (result != ISC_R_SUCCESS) {
-			fctx_done(fctx, result, __LINE__);
-		}
 	}
 }
 
@@ -9572,13 +9472,14 @@ rctx_done(respctx_t *rctx, isc_result_t result) {
 	resquery_t *query = rctx->query;
 	fetchctx_t *fctx = rctx->fctx;
 	dns_adbaddrinfo_t *addrinfo = query->addrinfo;
+	dns_message_t *message = NULL;
+
 	/*
 	 * Need to attach to the message until the scope
 	 * of this function ends, since there are many places
 	 * where te message is used and/or may be destroyed
 	 * before this function ends.
 	 */
-	dns_message_t *message = NULL;
 	dns_message_attach(query->rmessage, &message);
 
 	FCTXTRACE4("query canceled in rctx_done(); ",
@@ -9586,8 +9487,6 @@ rctx_done(respctx_t *rctx, isc_result_t result) {
 
 	/*
 	 * Cancel the query.
-	 *
-	 * XXXRTH  Don't cancel the query if waiting for validation?
 	 */
 	if (!rctx->nextitem) {
 		fctx_cancelquery(&query, &rctx->devent, rctx->finish,
@@ -9622,14 +9521,6 @@ rctx_done(respctx_t *rctx, isc_result_t result) {
 		 */
 		FCTXTRACE("wait for validator");
 		fctx_cancelqueries(fctx, true, false);
-		/*
-		 * We must not retransmit while the validator is working;
-		 * it has references to the current rmessage.
-		 */
-		result = fctx_stopidletimer(fctx);
-		if (result != ISC_R_SUCCESS) {
-			fctx_done(fctx, result, __LINE__);
-		}
 	} else {
 		/*
 		 * We're done.
@@ -10049,7 +9940,7 @@ dns_resolver_create(dns_view_t *view, isc_taskmgr_t *taskmgr,
 				 .spillatmin = 10,
 				 .spillat = 10,
 				 .spillatmax = 100,
-				 .retryinterval = 30000,
+				 .retryinterval = 10000,
 				 .nonbackofftries = 3,
 				 .query_timeout = DEFAULT_QUERY_TIMEOUT,
 				 .maxdepth = DEFAULT_RECURSION_DEPTH,
