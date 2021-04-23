@@ -134,16 +134,10 @@ static isc_threadresult_t
 nm_thread(isc_threadarg_t worker0);
 static void
 async_cb(uv_async_t *handle);
-static bool
+static void
 process_queue(isc__networker_t *worker, isc_queue_t *queue);
-static bool
-process_priority_queue(isc__networker_t *worker);
 static void
-process_privilege_queue(isc__networker_t *worker);
-static void
-process_tasks_queue(isc__networker_t *worker);
-static void
-process_normal_queue(isc__networker_t *worker);
+schedule_queue(isc__networker_t *worker, isc_queue_t *queue);
 
 static void
 isc__nm_async_stop(isc__networker_t *worker, isc__netievent_t *ev0);
@@ -329,26 +323,16 @@ nm_destroy(isc_nm_t **mgr0) {
 
 	for (size_t i = 0; i < mgr->nworkers; i++) {
 		isc__networker_t *worker = &mgr->workers[i];
-		isc__netievent_t *ievent = NULL;
 		int r;
 
 		/* Empty the async event queues */
-		while ((ievent = (isc__netievent_t *)isc_queue_dequeue(
-				worker->ievents)) != NULL)
-		{
-			isc_mempool_put(mgr->evpool, ievent);
-		}
-
+		INSIST(isc_queue_dequeue(worker->ievents) == (uintptr_t)NULL);
 		INSIST(isc_queue_dequeue(worker->ievents_priv) ==
 		       (uintptr_t)NULL);
 		INSIST(isc_queue_dequeue(worker->ievents_task) ==
 		       (uintptr_t)NULL);
-
-		while ((ievent = (isc__netievent_t *)isc_queue_dequeue(
-				worker->ievents_prio)) != NULL)
-		{
-			isc_mempool_put(mgr->evpool, ievent);
-		}
+		INSIST(isc_queue_dequeue(worker->ievents_prio) ==
+		       (uintptr_t)NULL);
 
 		r = uv_loop_close(&worker->loop);
 		INSIST(r == 0);
@@ -631,7 +615,7 @@ nm_thread(isc_threadarg_t worker0) {
 			while (worker->paused) {
 				WAIT(&worker->cond, &worker->lock);
 				UNLOCK(&worker->lock);
-				(void)process_priority_queue(worker);
+				process_queue(worker, worker->ievents_prio);
 				LOCK(&worker->lock);
 			}
 
@@ -645,7 +629,7 @@ nm_thread(isc_threadarg_t worker0) {
 			 * All workers must run the privileged event
 			 * queue before we resume from pause.
 			 */
-			process_privilege_queue(worker);
+			process_queue(worker, worker->ievents_priv);
 
 			LOCK(&mgr->lock);
 			while (atomic_load(&mgr->paused)) {
@@ -668,8 +652,8 @@ nm_thread(isc_threadarg_t worker0) {
 		 * that all pending events are processed before another
 		 * pause can slip in.)
 		 */
-		process_tasks_queue(worker);
-		process_normal_queue(worker);
+		schedule_queue(worker, worker->ievents_task);
+		schedule_queue(worker, worker->ievents);
 	}
 
 	/*
@@ -677,8 +661,10 @@ nm_thread(isc_threadarg_t worker0) {
 	 * (they may include shutdown events) but do not process
 	 * the netmgr event queue.
 	 */
-	process_privilege_queue(worker);
-	process_tasks_queue(worker);
+	process_queue(worker, worker->ievents_prio);
+	process_queue(worker, worker->ievents_priv);
+	process_queue(worker, worker->ievents_task);
+	process_queue(worker, worker->ievents);
 
 	LOCK(&mgr->lock);
 	mgr->workers_running--;
@@ -698,17 +684,10 @@ static void
 async_cb(uv_async_t *handle) {
 	isc__networker_t *worker = (isc__networker_t *)handle->loop->data;
 
-	/*
-	 * process_priority_queue() returns false when pausing or stopping,
-	 * so we don't want to process the other queues in that case.
-	 */
-	if (!process_priority_queue(worker)) {
-		return;
-	}
-
-	process_privilege_queue(worker);
-	process_tasks_queue(worker);
-	process_normal_queue(worker);
+	process_queue(worker, worker->ievents_prio);
+	schedule_queue(worker, worker->ievents_priv);
+	schedule_queue(worker, worker->ievents_task);
+	schedule_queue(worker, worker->ievents);
 }
 
 static void
@@ -786,24 +765,97 @@ isc__nm_async_task(isc__networker_t *worker, isc__netievent_t *ev0) {
 	}
 }
 
-static bool
-process_priority_queue(isc__networker_t *worker) {
-	return (process_queue(worker, worker->ievents_prio));
+/*
+ * The macro here generate the individual cases for the netievent_closecb()
+ * function.
+ */
+#define NETIEVENT_CLOSE(type)                                              \
+	case netievent_##type: {                                           \
+		isc__nm_put_netievent_##type(                              \
+			worker->mgr, (isc__netievent_##type##_t *)ievent); \
+		break;                                                     \
+	}
+
+static void
+close_netievent(isc__networker_t *worker, isc__netievent_t *ievent) {
+	switch (ievent->type) {
+		/* Don't process more ievents when we are stopping */
+		NETIEVENT_CLOSE(stop);
+
+		NETIEVENT_CLOSE(privilegedtask);
+		NETIEVENT_CLOSE(task);
+
+		NETIEVENT_CLOSE(udpconnect);
+		NETIEVENT_CLOSE(udplisten);
+		NETIEVENT_CLOSE(udpstop);
+		NETIEVENT_CLOSE(udpsend);
+		NETIEVENT_CLOSE(udpread);
+		NETIEVENT_CLOSE(udpcancel);
+		NETIEVENT_CLOSE(udpclose);
+
+		NETIEVENT_CLOSE(tcpaccept);
+		NETIEVENT_CLOSE(tcpconnect);
+		NETIEVENT_CLOSE(tcplisten);
+		NETIEVENT_CLOSE(tcpstartread);
+		NETIEVENT_CLOSE(tcppauseread);
+		NETIEVENT_CLOSE(tcpsend);
+		NETIEVENT_CLOSE(tcpstop);
+		NETIEVENT_CLOSE(tcpcancel);
+		NETIEVENT_CLOSE(tcpclose);
+
+		NETIEVENT_CLOSE(tcpdnsaccept);
+		NETIEVENT_CLOSE(tcpdnslisten);
+		NETIEVENT_CLOSE(tcpdnsconnect);
+		NETIEVENT_CLOSE(tcpdnssend);
+		NETIEVENT_CLOSE(tcpdnscancel);
+		NETIEVENT_CLOSE(tcpdnsclose);
+		NETIEVENT_CLOSE(tcpdnsread);
+		NETIEVENT_CLOSE(tcpdnsstop);
+
+		NETIEVENT_CLOSE(tlsstartread);
+		NETIEVENT_CLOSE(tlssend);
+		NETIEVENT_CLOSE(tlsclose);
+		NETIEVENT_CLOSE(tlsconnect);
+		NETIEVENT_CLOSE(tlsdobio);
+		NETIEVENT_CLOSE(tlscancel);
+
+		NETIEVENT_CLOSE(tlsdnscycle);
+		NETIEVENT_CLOSE(tlsdnsaccept);
+		NETIEVENT_CLOSE(tlsdnslisten);
+		NETIEVENT_CLOSE(tlsdnsconnect);
+		NETIEVENT_CLOSE(tlsdnssend);
+		NETIEVENT_CLOSE(tlsdnscancel);
+		NETIEVENT_CLOSE(tlsdnsclose);
+		NETIEVENT_CLOSE(tlsdnsread);
+		NETIEVENT_CLOSE(tlsdnsstop);
+		NETIEVENT_CLOSE(tlsdnsshutdown);
+
+		NETIEVENT_CLOSE(httpstop);
+		NETIEVENT_CLOSE(httpsend);
+		NETIEVENT_CLOSE(httpclose);
+
+		NETIEVENT_CLOSE(connectcb);
+		NETIEVENT_CLOSE(readcb);
+		NETIEVENT_CLOSE(sendcb);
+
+		NETIEVENT_CLOSE(close);
+		NETIEVENT_CLOSE(detach);
+
+		NETIEVENT_CLOSE(shutdown);
+		NETIEVENT_CLOSE(resume);
+		NETIEVENT_CLOSE(pause);
+	default:
+		INSIST(0);
+		ISC_UNREACHABLE();
+	}
 }
 
 static void
-process_privilege_queue(isc__networker_t *worker) {
-	(void)process_queue(worker, worker->ievents_priv);
-}
+netievent_closecb(uv_handle_t *handle) {
+	isc__networker_t *worker = (isc__networker_t *)handle->loop->data;
+	isc__netievent_t *ievent = uv_handle_get_data(handle);
 
-static void
-process_tasks_queue(isc__networker_t *worker) {
-	(void)process_queue(worker, worker->ievents_task);
-}
-
-static void
-process_normal_queue(isc__networker_t *worker) {
-	(void)process_queue(worker, worker->ievents);
+	close_netievent(worker, ievent);
 }
 
 /*
@@ -813,28 +865,19 @@ process_normal_queue(isc__networker_t *worker) {
  * process_queue() to stop, e.g. it's only used for the netievent that
  * stops/pauses processing the enqueued netievents.
  */
-#define NETIEVENT_CASE(type)                                               \
-	case netievent_##type: {                                           \
-		isc__nm_async_##type(worker, ievent);                      \
-		isc__nm_put_netievent_##type(                              \
-			worker->mgr, (isc__netievent_##type##_t *)ievent); \
-		return (true);                                             \
+#define NETIEVENT_CASE(type)                          \
+	case netievent_##type: {                      \
+		isc__nm_async_##type(worker, ievent); \
+		break;                                \
 	}
 
-#define NETIEVENT_CASE_NOMORE(type)                                \
-	case netievent_##type: {                                   \
-		isc__nm_async_##type(worker, ievent);              \
-		isc__nm_put_netievent_##type(worker->mgr, ievent); \
-		return (false);                                    \
-	}
-
-static bool
+static void
 process_netievent(isc__networker_t *worker, isc__netievent_t *ievent) {
 	REQUIRE(worker->id == isc_nm_tid());
 
 	switch (ievent->type) {
 		/* Don't process more ievents when we are stopping */
-		NETIEVENT_CASE_NOMORE(stop);
+		NETIEVENT_CASE(stop);
 
 		NETIEVENT_CASE(privilegedtask);
 		NETIEVENT_CASE(task);
@@ -897,25 +940,48 @@ process_netievent(isc__networker_t *worker, isc__netievent_t *ievent) {
 
 		NETIEVENT_CASE(shutdown);
 		NETIEVENT_CASE(resume);
-		NETIEVENT_CASE_NOMORE(pause);
+		NETIEVENT_CASE(pause);
 	default:
 		INSIST(0);
 		ISC_UNREACHABLE();
 	}
-	return (true);
 }
 
-static bool
+static void
 process_queue(isc__networker_t *worker, isc_queue_t *queue) {
 	isc__netievent_t *ievent = NULL;
 
 	while ((ievent = (isc__netievent_t *)isc_queue_dequeue(queue)) != NULL)
 	{
-		if (!process_netievent(worker, ievent)) {
-			return (false);
-		}
+		process_netievent(worker, ievent);
+		close_netievent(worker, ievent);
 	}
-	return (true);
+}
+
+static void
+netievent_idle_cb(uv_idle_t *idle) {
+	isc__networker_t *worker = (isc__networker_t *)idle->loop->data;
+	isc__netievent_t *ievent =
+		(isc__netievent_t *)uv_handle_get_data((uv_handle_t *)idle);
+
+	process_netievent(worker, ievent);
+
+	uv_idle_stop(&ievent->idle);
+
+	uv_close((uv_handle_t *)&ievent->idle, netievent_closecb);
+}
+
+static void
+schedule_queue(isc__networker_t *worker, isc_queue_t *queue) {
+	isc__netievent_t *ievent = NULL;
+
+	while ((ievent = (isc__netievent_t *)isc_queue_dequeue(queue)) != NULL)
+	{
+		uv_idle_init(&worker->loop, &ievent->idle);
+		uv_handle_set_data((uv_handle_t *)&ievent->idle, ievent);
+
+		uv_idle_start(&ievent->idle, netievent_idle_cb);
+	}
 }
 
 void *
@@ -1003,6 +1069,7 @@ isc__nm_maybe_enqueue_ievent(isc__networker_t *worker,
 	 */
 	if (worker->id == isc_nm_tid()) {
 		process_netievent(worker, event);
+		close_netievent(worker, event);
 		return;
 	}
 

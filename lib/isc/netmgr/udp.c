@@ -1039,14 +1039,10 @@ isc__nm_udp_close(isc_nmsocket_t *sock) {
 		return;
 	}
 
-	if (sock->tid == isc_nm_tid()) {
-		udp_close_direct(sock);
-	} else {
-		isc__netievent_udpclose_t *ievent =
-			isc__nm_get_netievent_udpclose(sock->mgr, sock);
-		isc__nm_enqueue_ievent(&sock->mgr->workers[sock->tid],
-				       (isc__netievent_t *)ievent);
-	}
+	isc__netievent_udpclose_t *ievent =
+		isc__nm_get_netievent_udpclose(sock->mgr, sock);
+	isc__nm_maybe_enqueue_ievent(&sock->mgr->workers[sock->tid],
+				     (isc__netievent_t *)ievent);
 }
 
 void

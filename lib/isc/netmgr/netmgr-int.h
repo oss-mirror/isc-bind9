@@ -293,6 +293,9 @@ typedef enum isc__netievent_type {
 	netievent_readcb,
 	netievent_sendcb,
 
+	netievent_detach,
+	netievent_close,
+
 	netievent_task,
 	netievent_privilegedtask,
 
@@ -306,8 +309,6 @@ typedef enum isc__netievent_type {
 	netievent_tcpdnslisten,
 	netievent_tlsdnslisten,
 	netievent_resume,
-	netievent_detach,
-	netievent_close,
 
 } isc__netievent_type;
 
@@ -401,6 +402,7 @@ isc__nm_put_netievent(isc_nm_t *mgr, void *ievent);
 
 #define NETIEVENT__SOCKET         \
 	isc__netievent_type type; \
+	uv_idle_t idle;		  \
 	isc_nmsocket_t *sock;     \
 	const char *file;         \
 	unsigned int line;        \
@@ -468,6 +470,7 @@ typedef struct isc__netievent__socket_req {
 
 typedef struct isc__netievent__socket_req_result {
 	isc__netievent_type type;
+	uv_idle_t idle;
 	isc_nmsocket_t *sock;
 	isc__nm_uvreq_t *req;
 	isc_result_t result;
@@ -567,6 +570,7 @@ typedef struct isc__netievent__socket_quota {
 
 typedef struct isc__netievent__task {
 	isc__netievent_type type;
+	uv_idle_t idle;
 	isc_task_t *task;
 } isc__netievent__task_t;
 
@@ -602,8 +606,7 @@ typedef struct isc__netievent_udpsend {
 } isc__netievent_udpsend_t;
 
 typedef struct isc__netievent_tlsconnect {
-	isc__netievent_type type;
-	isc_nmsocket_t *sock;
+	NETIEVENT__SOCKET;
 	SSL_CTX *ctx;
 	isc_sockaddr_t local; /* local address */
 	isc_sockaddr_t peer;  /* peer address */
@@ -611,6 +614,7 @@ typedef struct isc__netievent_tlsconnect {
 
 typedef struct isc__netievent {
 	isc__netievent_type type;
+	uv_idle_t idle;
 } isc__netievent_t;
 
 #define NETIEVENT_TYPE(type) typedef isc__netievent_t isc__netievent_##type##_t;
