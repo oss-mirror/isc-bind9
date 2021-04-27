@@ -493,7 +493,7 @@ doh_noop(void **state) {
 					      .length = send_msg.len },
 			     noop_read_cb, NULL, atomic_load(&use_TLS), 30000);
 
-	isc_nm_closedown(connect_nm);
+	isc__netmgr_shutdown(connect_nm);
 
 	assert_int_equal(0, atomic_load(&csends));
 	assert_int_equal(0, atomic_load(&creads));
@@ -540,7 +540,7 @@ doh_noresponse(void **state) {
 	isc_nm_stoplistening(listen_sock);
 	isc_nmsocket_close(&listen_sock);
 	assert_null(listen_sock);
-	isc_nm_closedown(connect_nm);
+	isc__netmgr_shutdown(connect_nm);
 }
 
 static void
@@ -661,7 +661,7 @@ doh_timeout_recovery(void **state) {
 	isc_nm_stoplistening(listen_sock);
 	isc_nmsocket_close(&listen_sock);
 	assert_null(listen_sock);
-	isc_nm_closedown(connect_nm);
+	isc__netmgr_shutdown(connect_nm);
 }
 
 static void
@@ -780,7 +780,7 @@ doh_recv_one(void **state) {
 	isc_nm_stoplistening(listen_sock);
 	isc_nmsocket_close(&listen_sock);
 	assert_null(listen_sock);
-	isc_nm_closedown(connect_nm);
+	isc__netmgr_shutdown(connect_nm);
 
 	X(csends);
 	X(creads);
@@ -901,7 +901,7 @@ doh_recv_two(void **state) {
 	isc_nm_stoplistening(listen_sock);
 	isc_nmsocket_close(&listen_sock);
 	assert_null(listen_sock);
-	isc_nm_closedown(connect_nm);
+	isc__netmgr_shutdown(connect_nm);
 
 	X(csends);
 	X(creads);
@@ -967,7 +967,7 @@ doh_recv_send(void **state) {
 		isc_thread_join(threads[i], NULL);
 	}
 
-	isc_nm_closedown(connect_nm);
+	isc__netmgr_shutdown(connect_nm);
 	isc_nm_stoplistening(listen_sock);
 	isc_nmsocket_close(&listen_sock);
 	assert_null(listen_sock);
@@ -1036,7 +1036,7 @@ doh_recv_half_send(void **state) {
 		isc_thread_yield();
 	}
 
-	isc_nm_closedown(connect_nm);
+	isc__netmgr_shutdown(connect_nm);
 
 	for (size_t i = 0; i < nthreads; i++) {
 		isc_thread_join(threads[i], NULL);
@@ -1118,7 +1118,7 @@ doh_half_recv_send(void **state) {
 		isc_thread_join(threads[i], NULL);
 	}
 
-	isc_nm_closedown(connect_nm);
+	isc__netmgr_shutdown(connect_nm);
 
 	X(csends);
 	X(creads);
@@ -1184,7 +1184,7 @@ doh_half_recv_half_send(void **state) {
 		isc_thread_yield();
 	}
 
-	isc_nm_closedown(connect_nm);
+	isc__netmgr_shutdown(connect_nm);
 	isc_nm_stoplistening(listen_sock);
 	isc_nmsocket_close(&listen_sock);
 	assert_null(listen_sock);
