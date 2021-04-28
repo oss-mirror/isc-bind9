@@ -2114,6 +2114,7 @@ fctx_query(fetchctx_t *fctx, dns_adbaddrinfo_t *addrinfo,
 
 	/* Connect the socket */
 	query->connects++;
+	fctx_increference(fctx);
 	result = dns_dispatch_connect(query->dispentry);
 	return (result);
 
@@ -2804,6 +2805,8 @@ resquery_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 			fctx_done(fctx, eresult, __LINE__);
 		}
 	}
+
+	fctx_decreference(fctx);
 }
 
 static void

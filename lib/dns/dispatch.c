@@ -625,6 +625,7 @@ destroy_dispsocket(dns_dispatch_t *disp, dispsocket_t **dispsockp) {
 	disp->nsockets--;
 	dispsock->magic = 0;
 	if (dispsock->handle != NULL) {
+		isc_nm_cancelread(dispsock->handle);
 		isc_nmhandle_detach(&dispsock->handle);
 	}
 	if (ISC_LINK_LINKED(dispsock, blink)) {
@@ -651,12 +652,14 @@ deactivate_dispsocket(dns_dispatch_t *disp, dispsocket_t *dispsock) {
 	if (dispsock->resp != NULL) {
 		INSIST(dispsock->resp->dispsocket == dispsock);
 		dispsock->resp->dispsocket = NULL;
+		dispsock->resp = NULL;
 	}
 
 	if (disp->nsockets > DNS_DISPATCH_POOLSOCKS) {
 		destroy_dispsocket(disp, &dispsock);
 	} else {
 		if (dispsock->handle != NULL) {
+			isc_nm_cancelread(dispsock->handle);
 			isc_nmhandle_detach(&dispsock->handle);
 		}
 
@@ -757,6 +760,8 @@ allocate_devent(dns_dispatch_t *disp) {
 
 	ev = isc_mem_get(disp->mgr->mctx, sizeof(*ev));
 	isc_refcount_increment0(&disp->mgr->irefs);
+
+	*ev = (dns_dispatchevent_t){ 0 };
 	ISC_EVENT_INIT(ev, sizeof(*ev), 0, NULL, 0, NULL, NULL, NULL, NULL,
 		       NULL);
 	return (ev);
@@ -810,12 +815,8 @@ udp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	if (eresult == ISC_R_CANCELED || dispsock->resp == NULL) {
 		/*
 		 * dispsock->resp can be NULL if this transaction was canceled
-		 * just after receiving a response.  Since this socket is
-		 * exclusively used and there should be at most one receive
-		 * event the canceled event should have no effect.  So
-		 * we can (and should) deactivate the socket right now.
+		 * just after receiving a response. So we can just move on.
 		 */
-		deactivate_dispsocket(disp, dispsock);
 		dispsock = NULL;
 	}
 
@@ -1153,6 +1154,7 @@ sendevent:
 	}
 
 next:
+	startrecv(disp, NULL);
 	UNLOCK(&disp->lock);
 }
 
@@ -1507,8 +1509,12 @@ dispatch_free(dns_dispatch_t **dispp) {
 	INSIST(ISC_LIST_EMPTY(disp->inactivesockets));
 
 	isc_refcount_decrement(&mgr->irefs);
-	isc_mem_put(mgr->mctx, disp->failsafe_ev, sizeof(*disp->failsafe_ev));
-	disp->failsafe_ev = NULL;
+
+	if (disp->failsafe_ev != NULL) {
+		isc_mem_put(mgr->mctx, disp->failsafe_ev,
+			    sizeof(*disp->failsafe_ev));
+		disp->failsafe_ev = NULL;
+	}
 
 	disp->mgr = NULL;
 	isc_mutex_destroy(&disp->lock);
@@ -1761,17 +1767,19 @@ void
 dns_dispatch_detach(dns_dispatch_t **dispp) {
 	dns_dispatch_t *disp = NULL;
 	dispsocket_t *dispsock = NULL;
-	bool killit;
+	bool killit = false;
 
 	REQUIRE(dispp != NULL && VALID_DISPATCH(*dispp));
 
 	disp = *dispp;
 	*dispp = NULL;
 
-	LOCK(&disp->lock);
 	if (isc_refcount_decrement(&disp->refcount) == 1) {
+		LOCK(&disp->lock);
 		if (disp->recv_pending != 0 && disp->handle != NULL) {
 			isc_nm_cancelread(disp->handle);
+		}
+		if (disp->handle != NULL) {
 			isc_nmhandle_detach(&disp->handle);
 		}
 		for (dispsock = ISC_LIST_HEAD(disp->activesockets);
@@ -1782,13 +1790,15 @@ dns_dispatch_detach(dns_dispatch_t **dispp) {
 			}
 		}
 		disp->shutting_down = 1;
+		do_cancel(disp);
+
+		killit = destroy_disp_ok(disp);
+		UNLOCK(&disp->lock);
 	}
 
 	dispatch_log(disp, LVL(90), "detach: refcount %" PRIuFAST32,
 		     isc_refcount_current(&disp->refcount));
 
-	killit = destroy_disp_ok(disp);
-	UNLOCK(&disp->lock);
 	if (killit) {
 		isc_task_send(disp->task, &disp->ctlevent);
 	}
@@ -1803,13 +1813,13 @@ dns_dispatch_addresponse(dns_dispatch_t *disp, unsigned int options,
 			 dns_dispentry_t **resp) {
 	isc_result_t result;
 	dns_dispentry_t *res = NULL;
-	unsigned int bucket;
+	dispsocket_t *dispsocket = NULL;
+	dns_qid_t *qid = NULL;
 	in_port_t localport = 0;
 	dns_messageid_t id;
-	int i = 0;
+	unsigned int bucket;
 	bool ok = false;
-	dns_qid_t *qid = NULL;
-	dispsocket_t *dispsocket = NULL;
+	int i = 0;
 
 	REQUIRE(VALID_DISPATCH(disp));
 	REQUIRE(task != NULL);
@@ -1910,8 +1920,8 @@ dns_dispatch_addresponse(dns_dispatch_t *disp, unsigned int options,
 
 	res = isc_mem_get(disp->mgr->mctx, sizeof(*res));
 	isc_refcount_increment0(&disp->mgr->irefs);
-	*res = (dns_dispentry_t){ .disp = disp,
-				  .id = id,
+
+	*res = (dns_dispentry_t){ .id = id,
 				  .port = localport,
 				  .bucket = bucket,
 				  .timeout = timeout,
@@ -1922,12 +1932,14 @@ dns_dispatch_addresponse(dns_dispatch_t *disp, unsigned int options,
 				  .action = action,
 				  .arg = arg,
 				  .dispsocket = dispsocket };
+
+	dns_dispatch_attach(disp, &res->disp);
 	isc_task_attach(task, &res->task);
+
 	ISC_LIST_INIT(res->items);
 	ISC_LINK_INIT(res, link);
 	res->magic = RESPONSE_MAGIC;
 
-	isc_refcount_increment(&disp->refcount);
 	disp->requests++;
 
 	if (dispsocket != NULL) {
@@ -2009,10 +2021,8 @@ dns_dispatch_removeresponse(dns_dispentry_t **resp,
 	dns_dispatchmgr_t *mgr = NULL;
 	dns_dispatch_t *disp = NULL;
 	dns_dispentry_t *res = NULL;
-	dispsocket_t *dispsock = NULL;
 	dns_dispatchevent_t *ev = NULL;
 	unsigned int bucket;
-	bool killit;
 	isc_eventlist_t events;
 	dns_qid_t *qid = NULL;
 
@@ -2023,7 +2033,9 @@ dns_dispatch_removeresponse(dns_dispentry_t **resp,
 	*resp = NULL;
 
 	disp = res->disp;
+	res->disp = NULL;
 	REQUIRE(VALID_DISPATCH(disp));
+
 	mgr = disp->mgr;
 	REQUIRE(VALID_DISPATCHMGR(mgr));
 	qid = mgr->qid;
@@ -2037,7 +2049,6 @@ dns_dispatch_removeresponse(dns_dispentry_t **resp,
 	}
 
 	LOCK(&disp->lock);
-
 	INSIST(disp->requests > 0);
 	disp->requests--;
 	dec_stats(disp->mgr, (qid == disp->mgr->qid)
@@ -2047,21 +2058,7 @@ dns_dispatch_removeresponse(dns_dispentry_t **resp,
 	if (res->dispsocket != NULL) {
 		deactivate_dispsocket(disp, res->dispsocket);
 	}
-
-	if (isc_refcount_decrement(&disp->refcount) == 1) {
-		if (disp->recv_pending != 0 && disp->handle != NULL) {
-			isc_nm_cancelread(disp->handle);
-			isc_nmhandle_detach(&disp->handle);
-		}
-		for (dispsock = ISC_LIST_HEAD(disp->activesockets);
-		     dispsock != NULL; dispsock = ISC_LIST_NEXT(dispsock, link))
-		{
-			if (dispsock->handle != NULL) {
-				isc_nmhandle_detach(&dispsock->handle);
-			}
-		}
-		disp->shutting_down = 1;
-	}
+	UNLOCK(&disp->lock);
 
 	bucket = res->bucket;
 
@@ -2108,15 +2105,7 @@ dns_dispatch_removeresponse(dns_dispentry_t **resp,
 	isc_refcount_decrement(&disp->mgr->irefs);
 	isc_mem_put(disp->mgr->mctx, res, sizeof(*res));
 
-	if (disp->shutting_down == 1) {
-		do_cancel(disp);
-	}
-
-	killit = destroy_disp_ok(disp);
-	UNLOCK(&disp->lock);
-	if (killit) {
-		isc_task_send(disp->task, &disp->ctlevent);
-	}
+	dns_dispatch_detach(&disp);
 }
 
 /*
@@ -2302,6 +2291,7 @@ do_cancel(dns_dispatch_t *disp) {
 	 * Send the shutdown failsafe event to this resp.
 	 */
 	ev = disp->failsafe_ev;
+	disp->failsafe_ev = NULL;
 	ISC_EVENT_INIT(ev, sizeof(*ev), 0, NULL, DNS_EVENT_DISPATCH,
 		       resp->action, resp->arg, resp, NULL, NULL);
 	ev->result = disp->shutdown_why;
