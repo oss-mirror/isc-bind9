@@ -16228,11 +16228,13 @@ fi
     else
 	KRB5_CONFIG="$use_gssapi"
     fi
-    gssapi_cflags=`$KRB5_CONFIG --cflags gssapi krb5`
-    gssapi_libs=`$KRB5_CONFIG --libs gssapi krb5`
-    saved_cppflags="$CPPFLAGS"
-    CPPFLAGS="$gssapi_cflags $CPPFLAGS"
-           for ac_header in gssapi.h gssapi/gssapi.h
+    if test -n "$KRB5_CONFIG"
+    then
+        gssapi_cflags=`$KRB5_CONFIG --cflags gssapi`
+        gssapi_libs=`$KRB5_CONFIG --libs gssapi`
+        saved_cppflags="$CPPFLAGS"
+        CPPFLAGS="$gssapi_cflags $CPPFLAGS"
+               for ac_header in gssapi.h gssapi/gssapi.h
 do :
   as_ac_Header=`printf "%s\n" "ac_cv_header_$ac_header" | $as_tr_sh`
 ac_fn_c_check_header_compile "$LINENO" "$ac_header" "$as_ac_Header" "$ac_includes_default"
@@ -16245,13 +16247,13 @@ _ACEOF
 fi
 
 done
-    if test "" = "$ISC_PLATFORM_GSSAPIHEADER"; then
-	{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: krb5-config: gssapi.h not found" >&5
+        if test "" = "$ISC_PLATFORM_GSSAPIHEADER"; then
+	    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: krb5-config: gssapi.h not found" >&5
 printf "%s\n" "krb5-config: gssapi.h not found" >&6; }
-	CPPFLAGS="$saved_cppflags"
-	use_gssapi="yes"
-    else
-	       for ac_header in krb5/krb5.h krb5.h
+	    CPPFLAGS="$saved_cppflags"
+	    use_gssapi="yes"
+        else
+	           for ac_header in krb5/krb5.h krb5.h
 do :
   as_ac_Header=`printf "%s\n" "ac_cv_header_$ac_header" | $as_tr_sh`
 ac_fn_c_check_header_compile "$LINENO" "$ac_header" "$as_ac_Header" "$ac_includes_default"
@@ -16264,18 +16266,18 @@ _ACEOF
 fi
 
 done
-	if test "" = "$ISC_PLATFORM_KRB5HEADER"; then
-	    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: krb5-config: krb5.h not found" >&5
+	    if test "" = "$ISC_PLATFORM_KRB5HEADER"; then
+	        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: krb5-config: krb5.h not found" >&5
 printf "%s\n" "krb5-config: krb5.h not found" >&6; }
-	    CPPFLAGS="$saved_cppflags"
-	    use_gssapi="yes"
-	else
-	    CPPFLAGS="$saved_cppflags"
-	    saved_libs="$LIBS"
-	    LIBS=$gssapi_libs
-	    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking krb5-config linking as $LIBS" >&5
+	        CPPFLAGS="$saved_cppflags"
+	        use_gssapi="yes"
+	    else
+	        CPPFLAGS="$saved_cppflags"
+	        saved_libs="$LIBS"
+	        LIBS=$gssapi_libs
+	        { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking krb5-config linking as $LIBS" >&5
 printf %s "checking krb5-config linking as $LIBS... " >&6; }
-	    cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+	        cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
 int
@@ -16294,16 +16296,19 @@ else $as_nop
 fi
 rm -f core conftest.err conftest.$ac_objext conftest.beam \
     conftest$ac_exeext conftest.$ac_ext
-	    case $gssapi_linked in
-		yes) { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: krb5-config: linked" >&5
+	        case $gssapi_linked in
+		    yes) { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: krb5-config: linked" >&5
 printf "%s\n" "krb5-config: linked" >&6; };;
-		no)  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: krb5-config: could not determine proper GSSAPI linkage" >&5
+		    no)  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: krb5-config: could not determine proper GSSAPI linkage" >&5
 printf "%s\n" "krb5-config: could not determine proper GSSAPI linkage" >&6; }
-		    use_gssapi="yes"
-		    ;;
-	    esac
-	    LIBS=$saved_libs
-	fi
+		        use_gssapi="yes"
+		        ;;
+	        esac
+	        LIBS=$saved_libs
+	    fi
+        fi
+    else
+        use_gssapi="yes"
     fi
     if test "yes" = "$use_gssapi"; then
 	{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for GSSAPI library, non krb5-config method" >&5
