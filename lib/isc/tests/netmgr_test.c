@@ -2276,6 +2276,7 @@ static void
 tls_half_recv_send_quota(void **state) {
 	SKIP_IN_CI;
 	stream_use_TLS = true;
+	atomic_store(&check_listener_quota, true);
 	stream_half_recv_send(state);
 }
 
@@ -2283,6 +2284,7 @@ static void
 tls_half_recv_half_send_quota(void **state) {
 	SKIP_IN_CI;
 	stream_use_TLS = true;
+	atomic_store(&check_listener_quota, true);
 	stream_half_recv_half_send(state);
 }
 
