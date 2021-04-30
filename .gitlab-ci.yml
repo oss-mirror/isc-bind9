@@ -229,6 +229,7 @@ stages:
     --with-libjson \
     --prefix="${BIND_INSTALL_PATH}" \
     --without-make-clean \
+    --with-gssapi=krb5-config \
     $EXTRA_CONFIGURE \
     || (test -s config.log && cat config.log; exit 1)
 
