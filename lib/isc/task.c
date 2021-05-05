@@ -877,8 +877,7 @@ task_run(isc_task_t *task) {
 			 */
 			XTRACE("empty");
 			if (isc_refcount_current(&task->references) == 0 &&
-			    TASK_SHUTTINGDOWN(task))
-			{
+			    TASK_SHUTTINGDOWN(task)) {
 				/*
 				 * The task is done.
 				 */
