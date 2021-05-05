@@ -103,6 +103,7 @@ struct isc_task {
 	task_state_t state;
 	int pause_cnt;
 	isc_refcount_t references;
+	isc_refcount_t running;
 	isc_eventlist_t events;
 	isc_eventlist_t on_shutdown;
 	unsigned int nevents;
@@ -179,6 +180,7 @@ task_finished(isc_task_t *task) {
 
 	XTRACE("task_finished");
 
+	isc_refcount_destroy(&task->running);
 	isc_refcount_destroy(&task->references);
 
 	LOCK(&manager->lock);
@@ -237,6 +239,7 @@ isc_task_create_bound(isc_taskmgr_t *manager, unsigned int quantum,
 	task->pause_cnt = 0;
 
 	isc_refcount_init(&task->references, 1);
+	isc_refcount_init(&task->running, 0);
 	INIT_LIST(task->events);
 	INIT_LIST(task->on_shutdown);
 	task->nevents = 0;
@@ -337,7 +340,14 @@ task_ready(isc_task_t *task) {
 	REQUIRE(VALID_MANAGER(manager));
 
 	XTRACE("task_ready");
+
+	isc_refcount_increment0(&task->running);
 	isc_nm_task_enqueue(manager->netmgr, task, task->threadid);
+}
+
+void
+isc_task_ready(isc_task_t *task) {
+	task_ready(task);
 }
 
 static inline bool
@@ -868,13 +878,13 @@ task_run(isc_task_t *task) {
 			 */
 			XTRACE("empty");
 			if (isc_refcount_current(&task->references) == 0 &&
-			    TASK_SHUTTINGDOWN(task)) {
+			    TASK_SHUTTINGDOWN(task))
+			{
 				/*
 				 * The task is done.
 				 */
 				XTRACE("done");
 				finished = true;
-				task->state = task_state_done;
 			} else {
 				if (task->state == task_state_running) {
 					XTRACE("idling");
@@ -909,7 +919,8 @@ task_run(isc_task_t *task) {
 	}
 	UNLOCK(&task->lock);
 
-	if (finished) {
+	if (isc_refcount_decrement(&task->running) == 1 && finished) {
+		task->state = task_state_done;
 		task_finished(task);
 	}
 

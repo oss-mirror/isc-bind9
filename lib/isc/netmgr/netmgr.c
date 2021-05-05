@@ -800,8 +800,7 @@ isc__nm_async_task(isc__networker_t *worker, isc__netievent_t *ev0) {
 
 	switch (result) {
 	case ISC_R_QUOTA:
-		isc_nm_task_enqueue(worker->mgr, (isc_task_t *)ievent->task,
-				    isc_nm_tid());
+		isc_task_ready(ievent->task);
 		return;
 	case ISC_R_SUCCESS:
 		return;
