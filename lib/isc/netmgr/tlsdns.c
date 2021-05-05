@@ -409,7 +409,7 @@ isc__nm_tlsdns_lb_socket(sa_family_t sa_family) {
 
 static void
 start_tlsdns_child(isc_nm_t *mgr, isc_nmiface_t *iface, isc_nmsocket_t *sock,
-		int tid) {
+		   int tid) {
 	isc__netievent_tlsdnslisten_t *ievent = NULL;
 	isc_nmsocket_t *csock = &sock->children[tid];
 

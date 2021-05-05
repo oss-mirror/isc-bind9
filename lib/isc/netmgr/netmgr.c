@@ -137,7 +137,8 @@ async_cb(uv_async_t *handle);
 static bool
 process_netievent(isc__networker_t *worker, isc__netievent_t *ievent);
 static bool
-process_queue(isc__networker_t *worker, isc_queue_t *queue, unsigned int *quantump);
+process_queue(isc__networker_t *worker, isc_queue_t *queue,
+	      unsigned int *quantump);
 static void
 wait_for_priority_queue(isc__networker_t *worker);
 static bool

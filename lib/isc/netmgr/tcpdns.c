@@ -344,7 +344,7 @@ isc__nm_tcpdns_lb_socket(sa_family_t sa_family) {
 
 static void
 start_tcpdns_child(isc_nm_t *mgr, isc_nmiface_t *iface, isc_nmsocket_t *sock,
-		int tid) {
+		   int tid) {
 	isc__netievent_tcpdnslisten_t *ievent = NULL;
 	isc_nmsocket_t *csock = &sock->children[tid];
 
@@ -373,7 +373,7 @@ start_tcpdns_child(isc_nm_t *mgr, isc_nmiface_t *iface, isc_nmsocket_t *sock,
 
 	ievent = isc__nm_get_netievent_tcpdnslisten(mgr, csock);
 	isc__nm_maybe_enqueue_ievent(&mgr->workers[tid],
-					     (isc__netievent_t *)ievent);
+				     (isc__netievent_t *)ievent);
 }
 isc_result_t
 isc_nm_listentcpdns(isc_nm_t *mgr, isc_nmiface_t *iface,
