@@ -459,7 +459,7 @@ isc_nm_listentcp(isc_nm_t *mgr, isc_nmiface_t *iface,
 	}
 
 #if !HAVE_SO_REUSEPORT_LB && !defined(WIN32)
-	isc__nm_closesocket(fd);
+	isc__nm_closesocket(sock->fd);
 	sock->fd = -1;
 #endif
 
