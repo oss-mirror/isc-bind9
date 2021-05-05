@@ -661,17 +661,10 @@ isc_nm_listentls(isc_nm_t *mgr, isc_nmiface_t *iface,
 
 	/* wait for listen result */
 	isc__nmsocket_attach(tlssock->outer, &tsock);
-	LOCK(&tlssock->outer->lock);
-	while (atomic_load(&tlssock->outer->rchildren) != tlssock->outer->nchildren) {
-		WAIT(&tlssock->outer->cond, &tlssock->outer->lock);
-	}
-	result = tlssock->outer->result;
 	tlssock->result = result;
 	atomic_store(&tlssock->active, true);
 	INSIST(tlssock->outer->tlsstream.tlslistener == NULL);
 	isc__nmsocket_attach(tlssock, &tlssock->outer->tlsstream.tlslistener);
-	BROADCAST(&tlssock->outer->scond);
-	UNLOCK(&tlssock->outer->lock);
 	isc__nmsocket_detach(&tsock);
 	INSIST(result != ISC_R_UNSET);
 
