@@ -817,8 +817,7 @@ task_run(isc_task_t *task) {
 	 * and task lock to avoid deadlocks, just bail then.
 	 */
 	if (task->state != task_state_ready) {
-		UNLOCK(&task->lock);
-		return (ISC_R_SUCCESS);
+		goto done;
 	}
 
 	INSIST(task->state == task_state_ready);
@@ -884,7 +883,7 @@ task_run(isc_task_t *task) {
 				 * The task is done.
 				 */
 				XTRACE("done");
-				finished = true;
+				task->state = task_state_done;
 			} else {
 				if (task->state == task_state_running) {
 					XTRACE("idling");
@@ -917,10 +916,16 @@ task_run(isc_task_t *task) {
 			break;
 		}
 	}
+
+done:
+	if (isc_refcount_decrement(&task->running) == 1 &&
+	    task->state == task_state_done)
+	{
+		finished = true;
+	}
 	UNLOCK(&task->lock);
 
-	if (isc_refcount_decrement(&task->running) == 1 && finished) {
-		task->state = task_state_done;
+	if (finished) {
 		task_finished(task);
 	}
 
