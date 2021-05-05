@@ -633,7 +633,7 @@ isc_nm_listentls(isc_nm_t *mgr, isc_nmiface_t *iface,
 	tlssock->tlsstream.server_iface = *iface;
 	ISC_LINK_INIT(&tlssock->tlsstream.server_iface.addr, link);
 	tlssock->iface = &tlssock->tlsstream.server_iface;
-	tlssock->result = ISC_R_DEFAULT;
+	tlssock->result = ISC_R_UNSET;
 	tlssock->accept_cb = accept_cb;
 	tlssock->accept_cbarg = accept_cbarg;
 	tlssock->extrahandlesize = extrahandlesize;
@@ -667,7 +667,7 @@ isc_nm_listentls(isc_nm_t *mgr, isc_nmiface_t *iface,
 	BROADCAST(&tlssock->outer->scond);
 	UNLOCK(&tlssock->outer->lock);
 	isc__nmsocket_detach(&tsock);
-	INSIST(result != ISC_R_DEFAULT);
+	INSIST(result != ISC_R_UNSET);
 
 	if (result == ISC_R_SUCCESS) {
 		atomic_store(&tlssock->listening, true);
@@ -894,7 +894,7 @@ isc_nm_tlsconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 	ISC_LINK_INIT(&nsock->tlsstream.local_iface.addr, link);
 	nsock->iface = &nsock->tlsstream.local_iface;
 	nsock->extrahandlesize = extrahandlesize;
-	nsock->result = ISC_R_DEFAULT;
+	nsock->result = ISC_R_UNSET;
 	nsock->connect_cb = cb;
 	nsock->connect_cbarg = cbarg;
 	nsock->connect_timeout = timeout;
@@ -919,7 +919,7 @@ isc_nm_tlsconnect(isc_nm_t *mgr, isc_nmiface_t *local, isc_nmiface_t *peer,
 	}
 
 	LOCK(&nsock->lock);
-	while (nsock->result == ISC_R_DEFAULT) {
+	while (nsock->result == ISC_R_UNSET) {
 		WAIT(&nsock->cond, &nsock->lock);
 	}
 	atomic_store(&nsock->active, true);

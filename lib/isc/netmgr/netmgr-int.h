@@ -174,7 +174,6 @@ typedef struct isc__networker {
 	uv_async_t async; /* async channel to send
 			   * data to this networker */
 	isc_mutex_t lock;
-	isc_condition_t cond;
 	bool paused;
 	bool finished;
 	isc_thread_t thread;
@@ -185,6 +184,7 @@ typedef struct isc__networker {
 				    * used for listening etc.
 				    * can be processed while
 				    * worker is paused */
+	isc_condition_t cond_prio;
 	isc_refcount_t references;
 	atomic_int_fast64_t pktcount;
 	char *recvbuf;
@@ -671,7 +671,7 @@ struct isc_nm {
 	isc_mutex_t evlock;
 
 	uint_fast32_t workers_running;
-	uint_fast32_t workers_paused;
+	atomic_uint_fast32_t workers_paused;
 	atomic_uint_fast32_t maxudp;
 
 	atomic_bool paused;
@@ -701,6 +701,11 @@ struct isc_nm {
 	atomic_uint_fast32_t idle;
 	atomic_uint_fast32_t keepalive;
 	atomic_uint_fast32_t advertised;
+
+	uv_barrier_t startlistening;
+	uv_barrier_t stoplistening;
+	uv_barrier_t pausing;
+	uv_barrier_t resuming;
 
 #ifdef NETMGR_TRACE
 	ISC_LIST(isc_nmsocket_t) active_sockets;
@@ -930,7 +935,7 @@ struct isc_nmsocket {
 
 	/* Atomic */
 	/*% Number of running (e.g. listening) child sockets */
-	uint_fast32_t rchildren;
+	atomic_uint_fast32_t rchildren;
 
 	/*%
 	 * Socket is active if it's listening, working, etc. If it's
