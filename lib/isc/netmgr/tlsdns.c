@@ -452,9 +452,6 @@ isc_nm_listentlsdns(isc_nm_t *mgr, isc_nmiface_t *iface,
 	isc_result_t result = ISC_R_SUCCESS;
 	isc_nmsocket_t *sock = NULL;
 	size_t children_size = 0;
-#if !HAVE_SO_REUSEPORT_LB && !defined(WIN32)
-	uv_os_sock_t fd = -1;
-#endif
 
 	REQUIRE(VALID_NM(mgr));
 
