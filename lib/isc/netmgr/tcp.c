@@ -651,7 +651,15 @@ isc__nm_tcp_stoplistening(isc_nmsocket_t *sock) {
 		INSIST(0);
 		ISC_UNREACHABLE();
 	}
-	enqueue_stoplistening(sock);
+
+	if (!isc__nm_in_netthread()) {
+		enqueue_stoplistening(sock);
+	} else if (!isc__nm_acquire_interlocked(sock->mgr)) {
+		enqueue_stoplistening(sock);
+	} else {
+		stop_tcp_parent(sock);
+		isc__nm_drop_interlocked(sock->mgr);
+	}
 }
 
 void
@@ -669,7 +677,12 @@ isc__nm_async_tcpstop(isc__networker_t *worker, isc__netievent_t *ev0) {
 		return;
 	}
 
-	stop_tcp_parent(sock);
+	if (!isc__nm_acquire_interlocked(sock->mgr)) {
+		enqueue_stoplistening(sock);
+	} else {
+		stop_tcp_parent(sock);
+		isc__nm_drop_interlocked(sock->mgr);
+	}
 }
 
 void
