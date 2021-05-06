@@ -5,15 +5,18 @@ variables:
   SHOTGUN_SCENARIO:
     value: "udp"
     description: "protocol combination(s) to be tested, must be one of https://gitlab.nic.cz/knot/resolver-benchmarking/-/tree/master/roles/shotgun/files"
-  SHOTGUN_DURATION:
-    value: 60
-    description: "test length in seconds, max 900 s"
   SHOTGUN_TRAFFIC_MULTIPLIER:
     value: 10
     description: "client traffic volume multiplier(s); base value 1 = roughly 8 k QPS; start with multiplier 10; max. 40"
   SHOTGUN_ROUNDS:
     value: 3
-    description: "repeat test for each combination of (version, scenario, traffic multiplier) this many times; test against reference v9_11_31 is always run once; three runs recommended so we can detect noise"
+    description: "repeat test for each combination of (version, scenario, traffic multiplier) this many times; test against reference v9_11_31 is always run once; three runs recommended to detect noise"
+  SHOTGUN_DURATION:
+    value: 60
+    description: "test length in seconds, max 900 s"
+  EXAMPLE_SHOTGUN_TEST_VERSION_WITH_MULTIPLE_VALUES:
+    value: "['main', 'v9_16_15']"
+    description: "an example how to specify multiple values for version; works the same way for (scenario, traffic multiplier)"
 
 stages:
   - performance
