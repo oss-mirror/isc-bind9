@@ -18,7 +18,6 @@ resolver-shotgun-pipeline-generator:
   dependencies: []
   variables:
     GIT_STRATEGY: "none"
-    PARENT_PIPELINE_ID: "$CI_PIPELINE_ID"
   image: "$CI_REGISTRY/isc-projects/images/shotgun-controller"
   script:
     - echo "version under test $SHOTGUN_TEST_VERSION"
@@ -35,6 +34,8 @@ resolver-shotgun-pipeline-generator:
 
 resolver-shotgun-child-pipeline:
   stage: performance2
+  variables:
+    PARENT_PIPELINE_ID: $CI_PIPELINE_ID
   trigger:
     include:
       - artifact: child-pipeline.yaml
