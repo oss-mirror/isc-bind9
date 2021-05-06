@@ -35,6 +35,8 @@ resolver-shotgun-pipeline-generator:
 
 resolver-shotgun-child-pipeline:
   stage: performance2
+  tags:
+    - linux-benchmarking
   trigger:
     include:
       - artifact: child-pipeline.yaml
