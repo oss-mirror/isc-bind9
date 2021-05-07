@@ -40,8 +40,6 @@
 
 #include "uv-compat.h"
 
-#define ISC_NETMGR_QUANTUM_DEFAULT 1024
-
 #define ISC_NETMGR_TID_UNKNOWN -1
 
 /* Must be different from ISC_NETMGR_TID_UNKNOWN */
@@ -179,12 +177,16 @@ typedef struct isc__networker {
 	bool finished;
 	isc_thread_t thread;
 	isc_queue_t *ievents;	   /* incoming async events */
+	atomic_uint_fast32_t nievents;
 	isc_queue_t *ievents_priv; /* privileged async tasks */
+	atomic_uint_fast32_t nievents_priv;
 	isc_queue_t *ievents_task; /* async tasks */
+	atomic_uint_fast32_t nievents_task;
 	isc_queue_t *ievents_prio; /* priority async events
 				    * used for listening etc.
 				    * can be processed while
 				    * worker is paused */
+	atomic_uint_fast32_t nievents_prio;
 	isc_condition_t cond_prio;
 
 	isc_refcount_t references;
@@ -192,7 +194,6 @@ typedef struct isc__networker {
 	char *recvbuf;
 	char *sendbuf;
 	bool recvbuf_inuse;
-	unsigned int quantum;
 } isc__networker_t;
 
 /*
