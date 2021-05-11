@@ -1392,6 +1392,17 @@ AC_CHECK_HEADERS(locale.h)
 AC_CHECK_FUNCS(setlocale)
 
 #
+#
+#
+AC_MSG_CHECKING([for jemalloc])
+PKG_CHECK_MODULES([JEMALLOC], [jemalloc >= 5], []
+		  [AC_MSG_WARN([Using jemalloc 5 is recommended])
+		   PKG_CHECK_MODULES([JEMALLOC], [jemalloc], [],
+				     [AC_MSG_ERROR([jemalloc not found])])])
+AC_SUBST([JEMALLOC_CFLAGS])
+AC_SUBST([JEMALLOC_LIBS])
+
+#
 # was --with-tuning specified?
 #
 # [pairwise: --with-tuning=small, --without-tuning]
