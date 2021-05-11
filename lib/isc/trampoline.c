@@ -42,11 +42,7 @@ static size_t isc__trampoline_max = 65;
 /*
  * We can't use isc_mem API here, because it's called too
  * early and when the isc_mem_debugging flags are changed
- * later and ISC_MEM_DEBUGSIZE or ISC_MEM_DEBUGCTX flags are
- * added, neither isc_mem_put() nor isc_mem_free() can be used
- * to free up the memory allocated here because the flags were
- * not set when calling isc_mem_get() or isc_mem_allocate()
- * here.
+ * later.
  *
  * Actually, since this is a single allocation at library load
  * and deallocation at library unload, using the standard
