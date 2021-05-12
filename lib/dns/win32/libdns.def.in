@@ -265,7 +265,6 @@ dns_dispatch_getnext
 dns_dispatch_getsocket
 dns_dispatch_gettcp
 dns_dispatch_getudp
-dns_dispatch_getudp_dup
 dns_dispatch_importrecv
 dns_dispatch_removeresponse
 dns_dispatch_setdscp
