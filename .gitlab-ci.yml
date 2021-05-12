@@ -44,7 +44,7 @@ resolver-shotgun-pipeline-generator:
     paths:
       - child-pipeline.yaml
       - combinations.json
-    expire_in: "1 hour"
+    expire_in: "1 week"
   timeout: 5m
 
 resolver-shotgun-child-pipeline:
