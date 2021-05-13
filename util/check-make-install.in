@@ -10,8 +10,10 @@
 # information regarding copyright ownership.
 
 abs_top_srcdir=@abs_top_srcdir@
+abs_builddir=@abs_builddir@
 prefix=@prefix@
 includedir=@includedir@
+install_dir="${DESTDIR}@prefix@"
 
 headers_to_install() {
 	find "${abs_top_srcdir}/lib" -name "*.h" -or -name "*.h.in" |
@@ -32,24 +34,28 @@ for header in $(headers_to_install); do
 	fi
 done
 
-install_dir="${DESTDIR}${prefix}"
 named_binary_path="${install_dir}/sbin/named"
+if [ ! -x "${named_binary_path}" ]; then
+	echo "ERROR: ${named_binary_path} does not exist or is not executable"
+	status=1
+fi
+
 named_man_page_path="${install_dir}/share/man/man8/named.8"
-if [ ! -e "${named_binary_path}" ] || [ ! -e "${named_man_page_path}" ]; then
-	echo "ERROR: File ${named_binary_path} or ${named_man_page_path} does not exist"
+if [ ! -f "${named_man_page_path}" ]; then
+	echo "ERROR: ${named_man_page_path} does not exist"
 	status=1
 fi
-installed_dirs="${install_dir}/(bin|etc|include|lib|sbin|share)"
-destdir_list="$(find "${install_dir}" -maxdepth 1 -mindepth 1 -type d)"
-if [ "$(echo "${destdir_list}" | grep -c -x -E "${installed_dirs}")" -ne 6 ]; then
-	echo "ERROR: Some of ${installed_dirs} directories were not found in ${install_dir}"
-	status=1
-fi
+
 if [ -n "${DESTDIR}" ]; then
-	if [ "$(echo "${destdir_list}" | grep -v -c -x -E "${installed_dirs}")" -ne 0 ]; then
-		echo "ERROR: Directories other than ${installed_dirs} were found in ${install_dir}"
+	for expected_subdir in bin etc include lib sbin share; do
+		echo "${install_dir}/${expected_subdir}" >> "${abs_builddir}/expected_dirs"
+	done
+	find "${install_dir}" -maxdepth 1 -mindepth 1 -type d | sort > "${abs_builddir}/existing_dirs"
+	if ! diff -u "${abs_builddir}/expected_dirs" "${abs_builddir}/existing_dirs"; then
+		echo "ERROR: Contents of DESTDIR do not match expectations"
 		status=1
 	fi
+	rm -f "${abs_builddir}/expected_dirs" "${abs_builddir}/existing_dirs"
 fi
 
 exit $status
