@@ -42,8 +42,8 @@ resolver-shotgun-pipeline-generator:
     - bind-qa/shotgun/shotgunrunner.py > child-pipeline.yaml
   artifacts:
     paths:
-      - child-pipeline.yaml
-      - combinations.json
+      - "child-pipeline.yaml"
+      - "*.json"
     expire_in: "1 week"
   timeout: 5m
 
