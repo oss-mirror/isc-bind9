@@ -9,9 +9,9 @@
  * information regarding copyright ownership.
  */
 
-#ifndef ISC_UTIL_H
-#define ISC_UTIL_H 1
+#pragma once
 
+#include <assert.h>
 #include <inttypes.h>
 
 /*! \file isc/util.h
@@ -265,7 +265,7 @@ mock_assert(const int result, const char *const expression,
 	(((a) != (b)) ? (void)0 : (_assert_int_not_equal(a, b, f, l), abort()))
 #else /* UNIT_TESTING */
 
-#ifndef CPPCHECK
+#if !defined(CPPCHECK) || defined(NDEBUG)
 
 /*
  * Assertions
@@ -284,21 +284,13 @@ mock_assert(const int result, const char *const expression,
 #else /* CPPCHECK */
 
 /*% Require Assertion */
-#define REQUIRE(e) \
-	if (!(e))  \
-	abort()
+#define REQUIRE(e)   assert(e)
 /*% Ensure Assertion */
-#define ENSURE(e) \
-	if (!(e)) \
-	abort()
+#define ENSURE(e)    assert(e)
 /*% Insist Assertion */
-#define INSIST(e) \
-	if (!(e)) \
-	abort()
+#define INSIST(e)    assert(e)
 /*% Invariant Assertion */
-#define INVARIANT(e) \
-	if (!(e))    \
-	abort()
+#define INVARIANT(e) assert(e)
 
 #endif /* CPPCHECK */
 
@@ -323,13 +315,11 @@ mock_assert(const int result, const char *const expression,
 
 #else /* UNIT_TESTING */
 
-#ifndef CPPCHECK
+#if !defined(CPPCHECK) || defined(NDEBUG)
 /*% Runtime Check */
 #define RUNTIME_CHECK(cond) ISC_ERROR_RUNTIMECHECK(cond)
 #else /* ifndef CPPCHECK */
-#define RUNTIME_CHECK(e) \
-	if (!(e))        \
-	abort()
+#define RUNTIME_CHECK(e) assert(e)
 #endif /* ifndef CPPCHECK */
 
 #endif /* UNIT_TESTING */
@@ -354,5 +344,3 @@ mock_assert(const int result, const char *const expression,
  * Misc
  */
 #include <isc/deprecated.h>
-
-#endif /* ISC_UTIL_H */
