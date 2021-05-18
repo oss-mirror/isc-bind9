@@ -2135,10 +2135,23 @@ named_zone_reusable(dns_zone_t *zone, const cfg_obj_t *zconfig,
 	} else {
 		cfilename = NULL;
 	}
-	if (!((cfilename == NULL && zfilename == NULL) ||
-	      (cfilename != NULL && zfilename != NULL &&
-	       strcmp(cfilename, zfilename) == 0)))
-	{
+
+	if (cfilename == NULL && zfilename == NULL) {
+		return (true);
+	}
+
+	if (cfilename == NULL || zfilename == NULL) {
+		dns_zone_log(zone, ISC_LOG_DEBUG(1),
+			     "not reusable: filename mismatch");
+		return (false);
+	}
+
+	/*
+	 * There's a bug in Gcc Analyzer
+	 */
+	REQUIRE(cfilename != NULL);
+	REQUIRE(zfilename != NULL);
+	if (strcmp(cfilename, zfilename) != 0) {
 		dns_zone_log(zone, ISC_LOG_DEBUG(1),
 			     "not reusable: filename mismatch");
 		return (false);
