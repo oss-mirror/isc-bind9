@@ -105,6 +105,7 @@ render_message(dns_message_t **messagep) {
 
 	isc_buffer_init(&buffer, render_buf, sizeof(render_buf));
 
+	REQUIRE(message != NULL);
 	message->from_to_wire = DNS_MESSAGE_INTENTRENDER;
 	for (size_t i = 0; i < DNS_SECTION_MAX; i++) {
 		message->counts[i] = 0;

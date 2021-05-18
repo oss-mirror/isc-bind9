@@ -3697,7 +3697,6 @@ previous_closest_nsec(dns_rdatatype_t type, rbtdb_search_t *search,
 	isc_result_t result;
 
 	REQUIRE(nodep != NULL && *nodep == NULL);
-	REQUIRE(type == dns_rdatatype_nsec3 || firstp != NULL);
 
 	if (type == dns_rdatatype_nsec3) {
 		result = dns_rbtnodechain_prev(&search->chain, NULL, NULL);
@@ -3711,6 +3710,7 @@ previous_closest_nsec(dns_rdatatype_t type, rbtdb_search_t *search,
 
 	target = dns_fixedname_initname(&ftarget);
 
+	REQUIRE(firstp != NULL);
 	for (;;) {
 		if (*firstp) {
 			/*
@@ -6096,6 +6096,8 @@ update_recordsandxfrsize(bool add, rbtdb_version_t *rbtversion,
 	unsigned char *hdr = (unsigned char *)header;
 	size_t hdrsize = sizeof(*header);
 
+	REQUIRE(rbtversion != NULL);
+
 	RWLOCK(&rbtversion->rwlock, isc_rwlocktype_write);
 	if (add) {
 		rbtversion->records += dns_rdataslab_count(hdr, hdrsize);
@@ -6319,6 +6321,7 @@ find_header:
 		 */
 		if (merge) {
 			unsigned int flags = 0;
+			INSIST(rbtversion != NULL);
 			INSIST(rbtversion->serial >= header->serial);
 			merged = NULL;
 			result = ISC_R_SUCCESS;

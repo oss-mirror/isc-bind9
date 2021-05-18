@@ -1164,6 +1164,7 @@ dns_name_fromtext(dns_name_t *name, isc_buffer_t *source,
 				if (count == 0) {
 					return (DNS_R_EMPTYLABEL);
 				}
+				REQUIRE(label != NULL);
 				*label = count;
 				labels++;
 				INSIST(labels <= 127);

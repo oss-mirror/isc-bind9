@@ -329,7 +329,8 @@ async_query_done_begin(void *arg, void *cbdata, isc_result_t *resp) {
 
 	UNUSED(qctx);
 	UNUSED(cbdata);
-	UNUSED(state);
+
+	REQUIRE(state != NULL);
 
 	logmsg("done begin hook");
 	if (state->async) {

@@ -314,18 +314,15 @@ mock_assert(const int result, const char *const expression,
 #else
 /*% Unexpected Error */
 
-#define UNEXPECTED_ERROR(file, line, format, ...)                             \
-	{                                                                     \
-		fprintf(stderr, "%s:%d: " format, file, line, ##__VA_ARGS__); \
-		abort();                                                      \
-	}
+#define UNEXPECTED_ERROR(file, line, format, ...) \
+	fprintf(stderr, "%s:%d: " format, file, (int)line, ##__VA_ARGS__);
 
 /*% Fatal Error */
-#define FATAL_ERROR(file, line, format, ...)                               \
-	{                                                                  \
-		fprintf(stderr, "%s:%d: fatal error: " format, file, line, \
-			##__VA_ARGS__);                                    \
-		abort();                                                   \
+#define FATAL_ERROR(file, line, format, ...)                         \
+	{                                                            \
+		UNEXPECTED_ERROR(file, line, "fatal error: " format, \
+				 ##__VA_ARGS__);                     \
+		abort();                                             \
 	}
 #endif
 
