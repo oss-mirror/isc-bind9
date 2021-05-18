@@ -14657,6 +14657,8 @@ named_server_showzone(named_server_t *server, isc_lex_t *lex,
 	bool added, redirect;
 	ns_dzarg_t dzarg;
 
+	REQUIRE(text != NULL && *text != NULL);
+
 	/* Parse parameters */
 	CHECK(zone_from_args(server, lex, NULL, &zone, zonename, text, true));
 	if (zone == NULL) {
