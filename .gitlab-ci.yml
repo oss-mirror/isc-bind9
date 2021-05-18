@@ -1079,6 +1079,17 @@ unit:gcc:softhsm2.4:
     - job: gcc:softhsm2.4
       artifacts: true
 
+# Jobs for GCC analyzer builds on Fedora 33 (amd64)
+
+gcc:analyzer:
+  variables:
+    CC: gcc
+    CFLAGS: "${CFLAGS_COMMON} -O2 -fanalyzer -DCPPCHECK=1"
+    EXTRA_CONFIGURE: "--with-libidn2"
+  <<: *fedora_33_amd64_image
+  <<: *build_job
+  stage: postcheck
+
 # Jobs for PKCS#11-enabled GCC builds on Fedora 33 (amd64)
 
 gcc:softhsm2.6:
