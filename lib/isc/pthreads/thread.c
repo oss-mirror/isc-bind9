@@ -36,11 +36,11 @@
 #define THREAD_MINSTACKSIZE (1024U * 1024)
 #endif /* ifndef THREAD_MINSTACKSIZE */
 
-#define _FATAL(r, f)                                                          \
-	{                                                                     \
-		char strbuf[ISC_STRERRORSIZE];                                \
-		strerror_r(r, strbuf, sizeof(strbuf));                        \
-		isc_error_fatal(__FILE__, __LINE__, f " failed: %s", strbuf); \
+#define _FATAL(r, f)                                                      \
+	{                                                                 \
+		char strbuf[ISC_STRERRORSIZE];                            \
+		strerror_r(r, strbuf, sizeof(strbuf));                    \
+		FATAL_ERROR(__FILE__, __LINE__, f " failed: %s", strbuf); \
 	}
 
 void

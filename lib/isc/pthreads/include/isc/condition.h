@@ -25,14 +25,14 @@
 
 typedef pthread_cond_t isc_condition_t;
 
-#define isc_condition_init(cond)                                \
-	if (pthread_cond_init(cond, NULL) != 0) {               \
-		char isc_condition_strbuf[ISC_STRERRORSIZE];    \
-		strerror_r(errno, isc_condition_strbuf,         \
-			   sizeof(isc_condition_strbuf));       \
-		isc_error_fatal(__FILE__, __LINE__,             \
-				"pthread_cond_init failed: %s", \
-				isc_condition_strbuf);          \
+#define isc_condition_init(cond)                             \
+	if (pthread_cond_init(cond, NULL) != 0) {            \
+		char isc_condition_strbuf[ISC_STRERRORSIZE]; \
+		strerror_r(errno, isc_condition_strbuf,      \
+			   sizeof(isc_condition_strbuf));    \
+		FATAL_ERROR(__FILE__, __LINE__,              \
+			    "pthread_cond_init failed: %s",  \
+			    isc_condition_strbuf);           \
 	}
 
 #if ISC_MUTEX_PROFILE

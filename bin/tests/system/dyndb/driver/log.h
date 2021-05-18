@@ -10,7 +10,7 @@
 #include <dns/log.h>
 #include <dns/result.h>
 
-#define fatal_error(...) isc_error_fatal(__FILE__, __LINE__, __VA_ARGS__)
+#define fatal_error(...) FATAL_ERROR(__FILE__, __LINE__, __VA_ARGS__)
 
 #define log_error_r(fmt, ...) \
 	log_error(fmt ": %s", ##__VA_ARGS__, dns_result_totext(result))

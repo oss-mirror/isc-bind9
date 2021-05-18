@@ -39,8 +39,8 @@ isc_condition_init(isc_condition_t *cond) {
 		char strbuf[ISC_STRERRORSIZE];
 		DWORD err = GetLastError();
 		strerror_r(err, strbuf, sizeof(strbuf));
-		isc_error_fatal(__FILE__, __LINE__, "CreateEvent failed: %s",
-				strbuf);
+		FATAL_ERROR(__FILE__, __LINE__, "CreateEvent failed: %s",
+			    strbuf);
 	}
 	cond->events[LSIGNAL] = h;
 

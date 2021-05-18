@@ -428,8 +428,7 @@ default_memalloc(size_t size) {
 	if (ptr == NULL && size != 0) {
 		char strbuf[ISC_STRERRORSIZE];
 		strerror_r(errno, strbuf, sizeof(strbuf));
-		isc_error_fatal(__FILE__, __LINE__, "malloc failed: %s",
-				strbuf);
+		FATAL_ERROR(__FILE__, __LINE__, "malloc failed: %s", strbuf);
 	}
 
 	return (ptr);

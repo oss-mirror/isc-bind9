@@ -155,8 +155,8 @@ pk11_mem_get(size_t size) {
 		if (ptr == NULL && size != 0) {
 			char strbuf[ISC_STRERRORSIZE];
 			strerror_r(errno, strbuf, sizeof(strbuf));
-			isc_error_fatal(__FILE__, __LINE__, "malloc failed: %s",
-					strbuf);
+			FATAL_ERROR(__FILE__, __LINE__, "malloc failed: %s",
+				    strbuf);
 		}
 	}
 	UNLOCK(&alloclock);
@@ -1065,7 +1065,7 @@ err:
 void
 pk11_error_fatalcheck(const char *file, int line, const char *funcname,
 		      CK_RV rv) {
-	isc_error_fatal(file, line, "%s: Error = 0x%.8lX\n", funcname, rv);
+	FATAL_ERROR(file, line, "%s: Error = 0x%.8lX\n", funcname, rv);
 }
 
 void

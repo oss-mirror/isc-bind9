@@ -301,10 +301,27 @@ mock_assert(const int result, const char *const expression,
  */
 #include <isc/error.h> /* Contractual promise. */
 
+#if !defined(CPPCHECK) || defined(NDEBUG)
 /*% Unexpected Error */
 #define UNEXPECTED_ERROR isc_error_unexpected
 /*% Fatal Error */
 #define FATAL_ERROR isc_error_fatal
+#else
+/*% Unexpected Error */
+#define UNEXPECTED_ERROR(file, line, format, ...)                            \
+	{                                                                    \
+		fprintf(stderr, "%s:%d: "##format, file, line, __VA_ARGS__); \
+		abort();                                                     \
+	}
+
+/*% Fatal Error */
+#define FATAL_ERROR(file, line, format, ...)                                \
+	{                                                                   \
+		fprintf(stderr, "%s:%d: fatal error: "##format, file, line, \
+			__VA_ARGS__);                                       \
+		abort();                                                    \
+	}
+#endif
 
 #ifdef UNIT_TESTING
 

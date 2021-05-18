@@ -41,8 +41,8 @@ isc_stdtime_get(isc_stdtime_t *t) {
 	if (clock_gettime(CLOCKSOURCE, &ts) == -1) {
 		char strbuf[ISC_STRERRORSIZE];
 		strerror_r(errno, strbuf, sizeof(strbuf));
-		isc_error_fatal(__FILE__, __LINE__, "clock_gettime failed: %s",
-				strbuf);
+		FATAL_ERROR(__FILE__, __LINE__, "clock_gettime failed: %s",
+			    strbuf);
 	}
 
 	REQUIRE(ts.tv_sec > 0 && ts.tv_nsec >= 0 && ts.tv_nsec < NS_PER_S);

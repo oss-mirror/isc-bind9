@@ -33,8 +33,8 @@ isc_thread_create(isc_threadfunc_t start, isc_threadarg_t arg,
 	if (thread == NULL) {
 		char strbuf[ISC_STRERRORSIZE];
 		strerror_r(errno, strbuf, sizeof(strbuf));
-		isc_error_fatal(__FILE__, __LINE__, "_beginthreadex failed: %s",
-				strbuf);
+		FATAL_ERROR(__FILE__, __LINE__, "_beginthreadex failed: %s",
+			    strbuf);
 	}
 
 	*threadp = thread;
@@ -48,13 +48,12 @@ isc_thread_join(isc_thread_t thread, isc_threadresult_t *rp) {
 
 	result = WaitForSingleObject(thread, INFINITE);
 	if (result != WAIT_OBJECT_0) {
-		isc_error_fatal(__FILE__, __LINE__,
-				"WaitForSingleObject() != WAIT_OBJECT_0");
+		FATAL_ERROR(__FILE__, __LINE__,
+			    "WaitForSingleObject() != WAIT_OBJECT_0");
 	}
 	if (rp != NULL && !GetExitCodeThread(thread, rp)) {
-		isc_error_fatal(__FILE__, __LINE__,
-				"GetExitCodeThread() failed: %d",
-				GetLastError());
+		FATAL_ERROR(__FILE__, __LINE__,
+			    "GetExitCodeThread() failed: %d", GetLastError());
 	}
 	(void)CloseHandle(thread);
 }

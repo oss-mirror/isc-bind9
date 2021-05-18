@@ -102,8 +102,8 @@ handle_signal(int sig, void (*handler)(int)) {
 	if (sigfillset(&sa.sa_mask) != 0 || sigaction(sig, &sa, NULL) < 0) {
 		char strbuf[ISC_STRERRORSIZE];
 		strerror_r(errno, strbuf, sizeof(strbuf));
-		isc_error_fatal(__FILE__, __LINE__,
-				"handle_signal() %d setup: %s", sig, strbuf);
+		FATAL_ERROR(__FILE__, __LINE__, "handle_signal() %d setup: %s",
+			    sig, strbuf);
 	}
 }
 #endif /* ifndef WIN32 */
@@ -166,14 +166,14 @@ isc_app_ctxstart(isc_appctx_t *ctx) {
 	    sigaddset(&sset, SIGINT) != 0 || sigaddset(&sset, SIGTERM) != 0)
 	{
 		strerror_r(errno, strbuf, sizeof(strbuf));
-		isc_error_fatal(__FILE__, __LINE__,
-				"isc_app_start() sigsetops: %s", strbuf);
+		FATAL_ERROR(__FILE__, __LINE__, "isc_app_start() sigsetops: %s",
+			    strbuf);
 	}
 	presult = pthread_sigmask(SIG_BLOCK, &sset, NULL);
 	if (presult != 0) {
 		strerror_r(presult, strbuf, sizeof(strbuf));
-		isc_error_fatal(__FILE__, __LINE__,
-				"isc_app_start() pthread_sigmask: %s", strbuf);
+		FATAL_ERROR(__FILE__, __LINE__,
+			    "isc_app_start() pthread_sigmask: %s", strbuf);
 	}
 
 #endif /* WIN32 */
@@ -304,9 +304,9 @@ isc_app_ctxrun(isc_appctx_t *ctx) {
 			{
 				char strbuf[ISC_STRERRORSIZE];
 				strerror_r(errno, strbuf, sizeof(strbuf));
-				isc_error_fatal(__FILE__, __LINE__,
-						"isc_app_run() sigsetops: %s",
-						strbuf);
+				FATAL_ERROR(__FILE__, __LINE__,
+					    "isc_app_run() sigsetops: %s",
+					    strbuf);
 			}
 
 			if (sigwait(&sset, &sig) == 0) {
@@ -396,10 +396,10 @@ isc_app_ctxshutdown(isc_appctx_t *ctx) {
 			if (kill(getpid(), SIGTERM) < 0) {
 				char strbuf[ISC_STRERRORSIZE];
 				strerror_r(errno, strbuf, sizeof(strbuf));
-				isc_error_fatal(__FILE__, __LINE__,
-						"isc_app_shutdown() "
-						"kill: %s",
-						strbuf);
+				FATAL_ERROR(__FILE__, __LINE__,
+					    "isc_app_shutdown() "
+					    "kill: %s",
+					    strbuf);
 			}
 		} else {
 			/* External, multiple contexts */
@@ -436,10 +436,10 @@ isc_app_ctxsuspend(isc_appctx_t *ctx) {
 			if (kill(getpid(), SIGHUP) < 0) {
 				char strbuf[ISC_STRERRORSIZE];
 				strerror_r(errno, strbuf, sizeof(strbuf));
-				isc_error_fatal(__FILE__, __LINE__,
-						"isc_app_reload() "
-						"kill: %s",
-						strbuf);
+				FATAL_ERROR(__FILE__, __LINE__,
+					    "isc_app_reload() "
+					    "kill: %s",
+					    strbuf);
 			}
 		} else {
 			/* External, multiple contexts */

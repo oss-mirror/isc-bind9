@@ -86,8 +86,8 @@ isc_mutex_init_profile(isc_mutex_t *mp, const char *file, int line) {
 	err = pthread_mutex_init(&mp->mutex, NULL);
 	if (err != 0) {
 		strerror_r(err, strbuf, sizeof(strbuf));
-		isc_error_fatal(file, line, "pthread_mutex_init failed: %s",
-				strbuf);
+		FATAL_ERROR(file, line, "pthread_mutex_init failed: %s",
+			    strbuf);
 	}
 
 	RUNTIME_CHECK(pthread_mutex_lock(&statslock) == 0);
@@ -243,8 +243,8 @@ isc_mutex_init_errcheck(isc_mutex_t *mp) {
 	err = pthread_mutex_init(mp, &errcheck);
 	if (err != 0) {
 		strerror_r(err, strbuf, sizeof(strbuf));
-		isc_error_fatal(file, line, "pthread_mutex_init failed: %s",
-				strbuf);
+		FATAL_ERROR(file, line, "pthread_mutex_init failed: %s",
+			    strbuf);
 	}
 }
 #endif /* if ISC_MUTEX_DEBUG && defined(PTHREAD_MUTEX_ERRORCHECK) */
@@ -292,8 +292,8 @@ isc__mutex_init(isc_mutex_t *mp, const char *file, unsigned int line) {
 	if (err != 0) {
 		char strbuf[ISC_STRERRORSIZE];
 		strerror_r(err, strbuf, sizeof(strbuf));
-		isc_error_fatal(file, line, "pthread_mutex_init failed: %s",
-				strbuf);
+		FATAL_ERROR(file, line, "pthread_mutex_init failed: %s",
+			    strbuf);
 	}
 }
 #endif /* if !(ISC_MUTEX_DEBUG && defined(PTHREAD_MUTEX_ERRORCHECK)) && \
