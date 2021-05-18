@@ -109,7 +109,8 @@ main(int argc, char **argv) {
 	file = argv[0];
 
 	isc_mem_create(&mctx);
-	RUNTIME_CHECK(setup_logging(mctx, stderr, &lctx) == ISC_R_SUCCESS);
+	result = setup_logging(mctx, stderr, &lctx);
+	RUNTIME_CHECK(result == ISC_R_SUCCESS);
 
 	if (upgrade) {
 		flags = DNS_JOURNAL_COMPACTALL;

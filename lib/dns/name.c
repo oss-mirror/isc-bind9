@@ -2520,12 +2520,15 @@ dns_name_copy(const dns_name_t *source, dns_name_t *dest,
 
 void
 dns_name_copynf(const dns_name_t *source, dns_name_t *dest) {
+	isc_result_t result;
+
 	REQUIRE(VALID_NAME(source));
 	REQUIRE(VALID_NAME(dest));
 	REQUIRE(dest->buffer != NULL);
 
 	isc_buffer_clear(dest->buffer);
-	RUNTIME_CHECK(name_copy(source, dest, dest->buffer) == ISC_R_SUCCESS);
+	result = name_copy(source, dest, dest->buffer);
+	RUNTIME_CHECK(result == ISC_R_SUCCESS);
 }
 
 /*

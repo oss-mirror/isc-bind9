@@ -175,11 +175,15 @@ parse_output(const char *input) {
 static void
 parse_options(int argc, char **argv) {
 	char buf[ISC_NETADDR_FORMATSIZE];
+	isc_result_t result;
 
 	/* Set defaults */
-	RUNTIME_CHECK(parse_protocol("UDP") == ISC_R_SUCCESS);
-	RUNTIME_CHECK(parse_port("53000") == ISC_R_SUCCESS);
-	RUNTIME_CHECK(parse_address("::0") == ISC_R_SUCCESS);
+	result = parse_protocol("UDP");
+	RUNTIME_CHECK(result == ISC_R_SUCCESS);
+	result = parse_port("53000");
+	RUNTIME_CHECK(result == ISC_R_SUCCESS);
+	result = parse_address("::0");
+	RUNTIME_CHECK(result == ISC_R_SUCCESS);
 	workers = isc_os_ncpus();
 
 	while (true) {
@@ -204,31 +208,38 @@ parse_options(int argc, char **argv) {
 
 		switch (c) {
 		case 'a':
-			RUNTIME_CHECK(parse_address(optarg) == ISC_R_SUCCESS);
+			result = parse_address(optarg);
+			RUNTIME_CHECK(result == ISC_R_SUCCESS);
 			break;
 
 		case 'p':
-			RUNTIME_CHECK(parse_port(optarg) == ISC_R_SUCCESS);
+			result = parse_port(optarg);
+			RUNTIME_CHECK(result == ISC_R_SUCCESS);
 			break;
 
 		case 'P':
-			RUNTIME_CHECK(parse_protocol(optarg) == ISC_R_SUCCESS);
+			result = parse_protocol(optarg);
+			RUNTIME_CHECK(result == ISC_R_SUCCESS);
 			break;
 
 		case 'w':
-			RUNTIME_CHECK(parse_workers(optarg) == ISC_R_SUCCESS);
+			result = parse_workers(optarg);
+			RUNTIME_CHECK(result == ISC_R_SUCCESS);
 			break;
 
 		case 't':
-			RUNTIME_CHECK(parse_timeout(optarg) == ISC_R_SUCCESS);
+			result = parse_timeout(optarg);
+			RUNTIME_CHECK(result == ISC_R_SUCCESS);
 			break;
 
 		case 'i':
-			RUNTIME_CHECK(parse_input(optarg) == ISC_R_SUCCESS);
+			result = parse_input(optarg);
+			RUNTIME_CHECK(result == ISC_R_SUCCESS);
 			break;
 
 		case 'o':
-			RUNTIME_CHECK(parse_output(optarg) == ISC_R_SUCCESS);
+			result = parse_output(optarg);
+			RUNTIME_CHECK(result == ISC_R_SUCCESS);
 			break;
 
 		default:
@@ -242,17 +253,16 @@ parse_options(int argc, char **argv) {
 			.ai_socktype = (protocol == UDP) ? SOCK_DGRAM
 							 : SOCK_STREAM,
 		};
-		struct addrinfo *result = NULL;
-		int r = getaddrinfo(address, NULL, &hints, &result);
+		struct addrinfo *ai = NULL;
+		int r = getaddrinfo(address, NULL, &hints, &ai);
 		RUNTIME_CHECK(r == 0);
 
-		for (struct addrinfo *rp = result; rp != NULL; rp = rp->ai_next)
-		{
+		for (struct addrinfo *rp = ai; rp != NULL; rp = rp->ai_next) {
 			RUNTIME_CHECK(isc_sockaddr_fromsockaddr(&sockaddr_local,
 								rp->ai_addr) ==
 				      ISC_R_SUCCESS);
 		}
-		freeaddrinfo(result);
+		freeaddrinfo(ai);
 	}
 
 	{
@@ -261,17 +271,16 @@ parse_options(int argc, char **argv) {
 			.ai_socktype = (protocol == UDP) ? SOCK_DGRAM
 							 : SOCK_STREAM,
 		};
-		struct addrinfo *result = NULL;
-		int r = getaddrinfo(argv[optind], port, &hints, &result);
+		struct addrinfo *ai = NULL;
+		int r = getaddrinfo(argv[optind], port, &hints, &ai);
 		RUNTIME_CHECK(r == 0);
 
-		for (struct addrinfo *rp = result; rp != NULL; rp = rp->ai_next)
-		{
+		for (struct addrinfo *rp = ai; rp != NULL; rp = rp->ai_next) {
 			RUNTIME_CHECK(isc_sockaddr_fromsockaddr(
 					      &sockaddr_remote, rp->ai_addr) ==
 				      ISC_R_SUCCESS);
 		}
-		freeaddrinfo(result);
+		freeaddrinfo(ai);
 	}
 
 	isc_sockaddr_format(&sockaddr_local, buf, sizeof(buf));

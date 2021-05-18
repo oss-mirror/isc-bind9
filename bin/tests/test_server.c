@@ -110,11 +110,15 @@ parse_workers(const char *input) {
 static void
 parse_options(int argc, char **argv) {
 	char buf[ISC_NETADDR_FORMATSIZE];
+	isc_result_t result;
 
 	/* Set defaults */
-	RUNTIME_CHECK(parse_protocol("UDP") == ISC_R_SUCCESS);
-	RUNTIME_CHECK(parse_port("53000") == ISC_R_SUCCESS);
-	RUNTIME_CHECK(parse_address("::1") == ISC_R_SUCCESS);
+	result = parse_protocol("UDP");
+	RUNTIME_CHECK(result == ISC_R_SUCCESS);
+	result = parse_port("53000");
+	RUNTIME_CHECK(result == ISC_R_SUCCESS);
+	result = parse_address("::1");
+	RUNTIME_CHECK(result == ISC_R_SUCCESS);
 	workers = isc_os_ncpus();
 
 	while (true) {
@@ -140,15 +144,18 @@ parse_options(int argc, char **argv) {
 			break;
 
 		case 'p':
-			RUNTIME_CHECK(parse_port(optarg) == ISC_R_SUCCESS);
+			result = parse_port(optarg);
+			RUNTIME_CHECK(result == ISC_R_SUCCESS);
 			break;
 
 		case 'P':
-			RUNTIME_CHECK(parse_protocol(optarg) == ISC_R_SUCCESS);
+			result = parse_protocol(optarg);
+			RUNTIME_CHECK(result == ISC_R_SUCCESS);
 			break;
 
 		case 'w':
-			RUNTIME_CHECK(parse_workers(optarg) == ISC_R_SUCCESS);
+			result = parse_workers(optarg);
+			RUNTIME_CHECK(result == ISC_R_SUCCESS);
 			break;
 
 		default:

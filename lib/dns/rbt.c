@@ -1029,7 +1029,9 @@ dns_rbt_create(isc_mem_t *mctx, dns_rbtdeleter_t deleter, void *deleter_arg,
  */
 void
 dns_rbt_destroy(dns_rbt_t **rbtp) {
-	RUNTIME_CHECK(dns_rbt_destroy2(rbtp, 0) == ISC_R_SUCCESS);
+	isc_result_t result = dns_rbt_destroy2(rbtp, 0);
+
+	RUNTIME_CHECK(result == ISC_R_SUCCESS);
 }
 
 isc_result_t

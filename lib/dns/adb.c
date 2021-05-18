@@ -2432,8 +2432,8 @@ check_stale_name(dns_adb_t *adb, int bucket, isc_stdtime_t now) {
 		if (!NAME_FETCH(victim) &&
 		    (overmem || victim->last_used + ADB_STALE_MARGIN <= now))
 		{
-			RUNTIME_CHECK(
-				!kill_name(&victim, DNS_EVENT_ADBCANCELED));
+			bool r = kill_name(&victim, DNS_EVENT_ADBCANCELED);
+			RUNTIME_CHECK(r == false);
 			victims++;
 		}
 
@@ -3075,9 +3075,11 @@ dns_adb_createfind(dns_adb_t *adb, isc_task_t *task, isc_taskaction_t action,
 	adbname = find_name_and_lock(adb, name, find->options, &bucket);
 	INSIST(bucket != DNS_ADB_INVALIDBUCKET);
 	if (adb->name_sd[bucket]) {
+		bool r;
 		DP(DEF_LEVEL, "dns_adb_createfind: returning "
 			      "ISC_R_SHUTTINGDOWN");
-		RUNTIME_CHECK(!free_adbfind(adb, &find));
+		r = free_adbfind(adb, &find);
+		RUNTIME_CHECK(r == false);
 		result = ISC_R_SHUTTINGDOWN;
 		goto out;
 	}
@@ -3094,7 +3096,8 @@ dns_adb_createfind(dns_adb_t *adb, isc_task_t *task, isc_taskaction_t action,
 
 		adbname = new_adbname(adb, name);
 		if (adbname == NULL) {
-			RUNTIME_CHECK(!free_adbfind(adb, &find));
+			bool r = free_adbfind(adb, &find);
+			RUNTIME_CHECK(r == false);
 			result = ISC_R_NOMEMORY;
 			goto out;
 		}
@@ -3394,11 +3397,13 @@ dns_adb_destroyfind(dns_adbfind_t **findp) {
 	overmem = isc_mem_isovermem(adb->mctx);
 	ai = ISC_LIST_HEAD(find->list);
 	while (ai != NULL) {
+		bool r;
 		ISC_LIST_UNLINK(find->list, ai, publink);
 		entry = ai->entry;
 		ai->entry = NULL;
 		INSIST(DNS_ADBENTRY_VALID(entry));
-		RUNTIME_CHECK(!dec_entry_refcnt(adb, overmem, entry, true));
+		r = dec_entry_refcnt(adb, overmem, entry, true);
+		RUNTIME_CHECK(r == false);
 		free_adbaddrinfo(adb, &ai);
 		ai = ISC_LIST_HEAD(find->list);
 	}
@@ -4726,8 +4731,8 @@ dns_adb_flushname(dns_adb_t *adb, const dns_name_t *name) {
 		nextname = ISC_LIST_NEXT(adbname, plink);
 		if (!NAME_DEAD(adbname) && dns_name_equal(name, &adbname->name))
 		{
-			RUNTIME_CHECK(
-				!kill_name(&adbname, DNS_EVENT_ADBCANCELED));
+			bool r = kill_name(&adbname, DNS_EVENT_ADBCANCELED);
+			RUNTIME_CHECK(r == false);
 		}
 		adbname = nextname;
 	}

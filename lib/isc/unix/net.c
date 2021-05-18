@@ -281,8 +281,8 @@ close:
 
 static void
 initialize_ipv6only(void) {
-	RUNTIME_CHECK(isc_once_do(&once_ipv6only, try_ipv6only) ==
-		      ISC_R_SUCCESS);
+	isc_result_t result = isc_once_do(&once_ipv6only, try_ipv6only);
+	RUNTIME_CHECK(result == ISC_R_SUCCESS);
 }
 
 #ifdef __notyet__

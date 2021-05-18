@@ -1117,6 +1117,7 @@ zone_free(dns_zone_t *zone) {
 	dns_nsec3chain_t *nsec3chain;
 	isc_event_t *event;
 	dns_include_t *include;
+	isc_result_t result;
 
 	REQUIRE(DNS_ZONE_VALID(zone));
 	isc_refcount_destroy(&zone->erefs);
@@ -1229,10 +1230,10 @@ zone_free(dns_zone_t *zone) {
 		dns_catz_catzs_detach(&zone->catzs);
 	}
 	zone_freedbargs(zone);
-	RUNTIME_CHECK(dns_zone_setprimaries(zone, NULL, NULL, NULL, 0) ==
-		      ISC_R_SUCCESS);
-	RUNTIME_CHECK(dns_zone_setalsonotify(zone, NULL, NULL, NULL, NULL, 0) ==
-		      ISC_R_SUCCESS);
+	result = dns_zone_setprimaries(zone, NULL, NULL, NULL, 0);
+	RUNTIME_CHECK(result == ISC_R_SUCCESS);
+	result = dns_zone_setalsonotify(zone, NULL, NULL, NULL, NULL, 0);
+	RUNTIME_CHECK(result == ISC_R_SUCCESS);
 	zone->check_names = dns_severity_ignore;
 	if (zone->update_acl != NULL) {
 		dns_acl_detach(&zone->update_acl);

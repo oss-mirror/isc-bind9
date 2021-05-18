@@ -124,7 +124,8 @@ isc_lex_destroy(isc_lex_t **lexp) {
 	REQUIRE(VALID_LEX(lex));
 
 	while (!EMPTY(lex->sources)) {
-		RUNTIME_CHECK(isc_lex_close(lex) == ISC_R_SUCCESS);
+		isc_result_t result = isc_lex_close(lex);
+		RUNTIME_CHECK(result == ISC_R_SUCCESS);
 	}
 	if (lex->data != NULL) {
 		isc_mem_put(lex->mctx, lex->data, lex->max_token + 1);
