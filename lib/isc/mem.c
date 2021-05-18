@@ -476,6 +476,7 @@ mem_create(isc_mem_t **ctxp, unsigned int flags) {
 		      "alignment size too small");
 
 	ctx = default_memalloc(sizeof(*ctx));
+	INSIST(ctx != NULL); /* to silence Gcc analyzer */
 
 	*ctx = (isc_mem_t){
 		.magic = MEM_MAGIC,
@@ -906,6 +907,10 @@ isc_mem_stats(isc_mem_t *ctx, FILE *out) {
  * size of the object allocated (with some additional overhead).
  */
 
+#if __GNUC__ > 10
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
+#endif /* __GNUC__ > 10 */
 static void *
 mem_allocateunlocked(isc_mem_t *ctx, size_t size) {
 	size_info *si;
@@ -924,6 +929,9 @@ mem_allocateunlocked(isc_mem_t *ctx, size_t size) {
 	si->size = size;
 	return (&si[1]);
 }
+#if __GNUC__ > 10
+#pragma GCC diagnostic pop
+#endif /* __GNUC__ > 10 */
 
 void *
 isc__mem_allocate(isc_mem_t *ctx, size_t size FLARG) {
