@@ -71,6 +71,7 @@ uint8_t dtype[8];
 
 static fatalcallback_t *fatalcallback = NULL;
 
+#if !defined(CPPCHECK)
 void
 fatal(const char *format, ...) {
 	va_list args;
@@ -85,6 +86,7 @@ fatal(const char *format, ...) {
 	}
 	exit(1);
 }
+#endif
 
 void
 setfatalcallback(fatalcallback_t *callback) {

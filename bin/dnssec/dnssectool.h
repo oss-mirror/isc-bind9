@@ -47,7 +47,7 @@ typedef void(fatalcallback_t)(void);
 ISC_NORETURN void
 fatal(const char *format, ...) ISC_FORMAT_PRINTF(1, 2);
 #else /* CPPCHECK */
-#define fatal(...) exit(1)
+#define fatal(...) isc_error_fatal(__FILE__, __LINE__, __VA_ARGS__)
 #endif
 
 void
