@@ -2278,10 +2278,10 @@ ns__client_setup(ns_client_t *client, ns_clientmgr_t *mgr, bool new) {
 	 * The caller is responsible for that.
 	 */
 
-	REQUIRE(NS_CLIENT_VALID(client) || (new &&client != NULL));
-	REQUIRE(VALID_MANAGER(mgr) || !new);
-
 	if (new) {
+		REQUIRE(VALID_MANAGER(mgr));
+		REQUIRE(client != NULL);
+
 		*client = (ns_client_t){ .magic = 0 };
 
 		get_clientmctx(mgr, &client->mctx);
@@ -2304,6 +2304,8 @@ ns__client_setup(ns_client_t *client, ns_clientmgr_t *mgr, bool new) {
 			goto cleanup;
 		}
 	} else {
+		REQUIRE(NS_CLIENT_VALID(client));
+
 		ns_clientmgr_t *oldmgr = client->manager;
 		ns_server_t *sctx = client->sctx;
 		isc_task_t *task = client->task;
