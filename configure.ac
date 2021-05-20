@@ -170,6 +170,7 @@ AS_IF([test "$enable_developer" = "yes"],
        test "${with_dlz_filesystem+set}" = set || with_dlz_filesystem=yes
        test "${with_zlib+set}" = set || with_zlib=yes
        test "${enable_warn_error+set}" = set || enable_warn_error=yes
+       test "${enable_extended_mctx_stats+set}" = set || enable_extended_mctx_stats=yes
        ])
 
 AC_SUBST([DEVELOPER_MODE])
@@ -1283,6 +1284,18 @@ AS_IF([test "$enable_fixed_rrset" = "yes"],
 		 [Define to enable "rrset-order fixed" syntax.])])
 
 #
+# Enable emitting memory context size stats in stats-channel output, or not?
+#
+# [pairwise: --enable-extended-mctx-stats, --disable-extended-mctx-stats]
+AC_ARG_ENABLE([extended-mctx-stats],
+	      [AS_HELP_STRING([--enable-extended-mctx-stats],
+			     [enable including size-specific stats for memory contexts in stats-channel output [default=no]])],
+	      [], [enable_extended_mctx_stats="no"])
+AS_IF([test "$enable_extended_mctx_stats" = "yes"],
+      [AC_DEFINE([ISC_MEM_EXTENDED_REPORTING], [1],
+		 [Define to include memory context size-specific stats in stats-channel output.])])
+
+#
 # Activate dnstap?
 #
 # [pairwise: --enable-dnstap, --disable-dnstap]
@@ -1744,6 +1757,8 @@ report() {
 	echo "    Very verbose query trace logging (--enable-querytrace)"
     test "yes" = "$enable_singletrace" && \
 	echo "    Single-query trace logging (--enable-singletrace)"
+    test "yes" = "$enable_extended_mctx_stats" && \
+	echo "    Additional stats by allocation size in stats channel (--enable-extended-mctx-stats)"
     test -z "$HAVE_CMOCKA" || echo "    CMocka Unit Testing Framework (--with-cmocka)"
 
     test "auto" = "$validation_default" && echo "    DNSSEC validation active by default (--enable-auto-validation)"
@@ -1797,6 +1812,9 @@ report() {
 	echo "    Very verbose query trace logging (--enable-querytrace)"
     test "yes" = "$enable_singletrace" || \
 	echo "    Single-query trace logging (--enable-singletrace)"
+
+    test "yes" = "$enable_extended_mctx_stats" || \
+	echo "    Additional stats by allocation size in stats channel (--enable-extended-mctx-stats)"
 
     test "no" = "$with_cmocka" && echo "    CMocka Unit Testing Framework (--with-cmocka)"
 
