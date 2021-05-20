@@ -36,10 +36,12 @@ resolver-shotgun-pipeline-generator:
   image: "$CI_REGISTRY/isc-projects/images/shotgun-controller"
   script:
     - echo "version under test $SHOTGUN_TEST_VERSION"
-    - test -d bind-qa && git fetch -C bind-qa || git clone --single-branch --branch=shotgun --depth=1 https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.isc.org/isc-private/bind-qa.git
+    - test -d bind-qa && git fetch -C bind-qa || git clone --single-branch --branch=shotgun-experiment-resolvers --depth=1 https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.isc.org/isc-private/bind-qa.git
     - git -C bind-qa clean -ffxdq
-    - git -C bind-qa reset --hard origin/shotgun
+    - git -C bind-qa reset --hard origin/shotgun-experiment-resolvers
     - bind-qa/shotgun/shotgunrunner.py > child-pipeline.yaml
+    - git -C /root/resolver-benchmarking fetch -a
+    - git -C /root/resolver-benchmarking checkout ecd3666f807ebd1189d11c9eb2ddb5c104ac8ddc
   artifacts:
     paths:
       - child-pipeline.yaml
