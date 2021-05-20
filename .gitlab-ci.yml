@@ -40,8 +40,6 @@ resolver-shotgun-pipeline-generator:
     - git -C bind-qa clean -ffxdq
     - git -C bind-qa reset --hard origin/shotgun-experiment-resolvers
     - bind-qa/shotgun/shotgunrunner.py > child-pipeline.yaml
-    - git -C /root/resolver-benchmarking fetch -a
-    - git -C /root/resolver-benchmarking checkout ecd3666f807ebd1189d11c9eb2ddb5c104ac8ddc
   artifacts:
     paths:
       - child-pipeline.yaml
