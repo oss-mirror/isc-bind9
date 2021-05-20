@@ -1,3 +1,6 @@
+5689.	[func]		Remove native PKCS#11 support in favour of OpenSSL
+			engine_pkcs11 from OpenSC project. [GL #2691]
+
 5688.	[bug]		Inline and dnssec-policy zones could fail to apply
 			changes from the unsigned zone to the signed zone
 			under certain cirumstances. [GL #2735]

@@ -40,6 +40,11 @@ Removed Features
 
 - None.
 
+- Remove native PKCS#11 support in favour of OpenSSL engine_pkcs11 from
+  OpenSC project that's better maintained, more performant and easier to
+  use.  See the respective chapter in BIND 9 ARM for instructions how to
+  use the OpenSSL engine. :gl:`2691`
+
 Feature Changes
 ~~~~~~~~~~~~~~~
 
