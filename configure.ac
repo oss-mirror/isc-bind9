@@ -103,6 +103,7 @@ AS_IF([test "$enable_developer" = "yes"],
        test "${enable_warn_error+set}" = set || enable_warn_error=yes
        test "${enable_warn_shadow+set}" = set || enable_warn_shadow=yes
        test "${with_zlib+set}" = set || with_zlib=yes
+       test "${enable_extended_mctx_stats+set}" = set || enable_extended_mctx_stats=yes
        XTARGETS='${XTARGETS}'
        ])
 AC_SUBST([XTARGETS])
@@ -1552,6 +1553,25 @@ case $use_profiler in
 		;;
 	*)
 		AC_MSG_RESULT(no)
+		;;
+esac
+
+#
+# Enable emitting memory context size stats in stats-channel output, or not?
+#
+# [pairwise: --enable-extended-mctx-stats, --disable-extended-mctx-stats]
+AC_ARG_ENABLE(extended-mctx-stats,
+	      AS_HELP_STRING([--enable-extended-mctx-stats],
+			     [enable including size-specific stats for memory contexts in stats-channel output [default=no]]),
+	      enable_extended_mctx_stats="$enableval", enable_extended_mctx_stats="no")
+case "$enable_extended_mctx_stats" in
+	yes)
+		AC_DEFINE(ISC_MEM_EXTENDED_REPORTING, 1,
+			  [Define to include memory context size-specific stats in stats-channel output.])
+		;;
+	no)
+		;;
+	*)
 		;;
 esac
 

@@ -52,6 +52,10 @@
 LIBISC_EXTERNAL_DATA unsigned int isc_mem_debugging = ISC_MEM_DEBUGGING;
 LIBISC_EXTERNAL_DATA unsigned int isc_mem_defaultflags = ISC_MEMFLAG_DEFAULT;
 
+#ifndef ISC_MEM_EXTENDED_REPORTING
+#define ISC_MEM_EXTENDED_REPORTING 0
+#endif /* ifndef ISC_MEM_EXTENDED_REPORTING */
+
 /*
  * Constants.
  */
@@ -2211,6 +2215,11 @@ xml_renderctx(isc__mem_t *ctx, summarystat_t *summary,
 
 	int xmlrc;
 
+#ifdef ISC_MEM_EXTENDED_REPORTING
+	size_t i;
+	const struct stats *stats;
+#endif /* ifdef ISC_MEM_EXTENDED_REPORTING */
+
 	MCTXLOCK(ctx);
 
 	TRY0(xmlTextWriterStartElement(writer, ISC_XMLCHAR "context"));
@@ -2298,6 +2307,42 @@ xml_renderctx(isc__mem_t *ctx, summarystat_t *summary,
 					    (uint64_t)ctx->lo_water));
 	TRY0(xmlTextWriterEndElement(writer)); /* lowater */
 
+#ifdef ISC_MEM_EXTENDED_REPORTING
+	TRY0(xmlTextWriterStartElement(writer, ISC_XMLCHAR "sizestats"));
+	for (i = 0; i <= ctx->max_size; i++) {
+		stats = &ctx->stats[i];
+
+		if (stats->totalgets == 0U && stats->gets == 0U &&
+		    stats->blocks == 0U) {
+			continue;
+		}
+		TRY0(xmlTextWriterStartElement(writer, ISC_XMLCHAR "sizestat"));
+
+		TRY0(xmlTextWriterStartElement(writer, ISC_XMLCHAR "size"));
+		TRY0(xmlTextWriterWriteFormatString(writer, "%zu", i));
+		TRY0(xmlTextWriterEndElement(writer)); /* size */
+
+		TRY0(xmlTextWriterStartElement(writer, ISC_XMLCHAR "gets"));
+		TRY0(xmlTextWriterWriteFormatString(writer, "%lu",
+						    stats->gets));
+		TRY0(xmlTextWriterEndElement(writer)); /* gets */
+
+		TRY0(xmlTextWriterStartElement(writer,
+					       ISC_XMLCHAR "totalgets"));
+		TRY0(xmlTextWriterWriteFormatString(writer, "%lu",
+						    stats->totalgets));
+		TRY0(xmlTextWriterEndElement(writer)); /* totalgets */
+
+		TRY0(xmlTextWriterStartElement(writer, ISC_XMLCHAR "blocks"));
+		TRY0(xmlTextWriterWriteFormatString(writer, "%lu",
+						    stats->blocks));
+		TRY0(xmlTextWriterEndElement(writer)); /* blocks */
+
+		TRY0(xmlTextWriterEndElement(writer)); /* sizestat */
+	}
+	TRY0(xmlTextWriterEndElement(writer)); /* sizestats */
+#endif /* ifdef ISC_MEM_EXTENDED_REPORTING */
+
 	TRY0(xmlTextWriterEndElement(writer)); /* context */
 
 error:
@@ -2382,6 +2427,12 @@ json_renderctx(isc__mem_t *ctx, summarystat_t *summary, json_object *array) {
 	json_object *ctxobj, *obj;
 	char buf[1024];
 
+#ifdef ISC_MEM_EXTENDED_REPORTING
+	size_t i;
+	const struct stats *stats;
+	json_object *sizestats_array, *sizestat_obj;
+#endif /* ifdef ISC_MEM_EXTENDED_REPORTING */
+
 	MCTXLOCK(ctx);
 
 	summary->contextsize += sizeof(*ctx) +
@@ -2463,6 +2514,43 @@ json_renderctx(isc__mem_t *ctx, summarystat_t *summary, json_object *array) {
 	obj = json_object_new_int64(ctx->lo_water);
 	CHECKMEM(obj);
 	json_object_object_add(ctxobj, "lowater", obj);
+
+#ifdef ISC_MEM_EXTENDED_REPORTING
+	sizestats_array = json_object_new_array();
+	CHECKMEM(sizestats_array);
+
+	for (i = 0; i <= ctx->max_size; i++) {
+		stats = &ctx->stats[i];
+
+		if (stats->totalgets == 0U && stats->gets == 0U &&
+		    stats->blocks == 0U) {
+			continue;
+		}
+
+		sizestat_obj = json_object_new_object();
+		CHECKMEM(sizestat_obj);
+
+		obj = json_object_new_int64(i);
+		CHECKMEM(obj);
+		json_object_object_add(sizestat_obj, "size", obj);
+
+		obj = json_object_new_int64(stats->gets);
+		CHECKMEM(obj);
+		json_object_object_add(sizestat_obj, "gets", obj);
+
+		obj = json_object_new_int64(stats->totalgets);
+		CHECKMEM(obj);
+		json_object_object_add(sizestat_obj, "totalgets", obj);
+
+		obj = json_object_new_int64(stats->blocks);
+		CHECKMEM(obj);
+		json_object_object_add(sizestat_obj, "blocks", obj);
+
+		json_object_array_add(sizestats_array, sizestat_obj);
+	}
+
+	json_object_object_add(ctxobj, "sizestats", sizestats_array);
+#endif /* ifdef ISC_MEM_EXTENDED_REPORTING */
 
 	MCTXUNLOCK(ctx);
 	json_object_array_add(array, ctxobj);
