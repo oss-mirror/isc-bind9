@@ -412,7 +412,7 @@ ns_client_send(ns_client_t *client) {
 	 * Delay the response according to the -T delay option
 	 */
 
-	env = ns_interfacemgr_getaclenv(client->manager->interfacemgr);
+	env = client->manager->aclenv;
 
 	CTRACE("send");
 
@@ -891,7 +891,7 @@ ns_client_addopt(ns_client_t *client, dns_message_t *message,
 	REQUIRE(opt != NULL && *opt == NULL);
 	REQUIRE(message != NULL);
 
-	env = ns_interfacemgr_getaclenv(client->manager->interfacemgr);
+	env = client->manager->aclenv;
 	view = client->view;
 	resolver = (view != NULL) ? view->resolver : NULL;
 	if (resolver != NULL) {
@@ -1704,7 +1704,7 @@ ns__client_request(isc_nmhandle_t *handle, isc_result_t eresult,
 	}
 #endif /* if NS_CLIENT_DROPPORT */
 
-	env = ns_interfacemgr_getaclenv(client->manager->interfacemgr);
+	env = client->manager->aclenv;
 	if (client->sctx->blackholeacl != NULL &&
 	    (dns_acl_match(&netaddr, NULL, client->sctx->blackholeacl, env,
 			   &match, NULL) == ISC_R_SUCCESS) &&
@@ -2338,6 +2338,8 @@ clientmgr_destroy(ns_clientmgr_t *manager) {
 	isc_refcount_destroy(&manager->references);
 	manager->magic = 0;
 
+	dns_aclenv_detach(&manager->aclenv);
+
 	isc_mutex_destroy(&manager->lock);
 	isc_mutex_destroy(&manager->reclock);
 
@@ -2353,8 +2355,8 @@ clientmgr_destroy(ns_clientmgr_t *manager) {
 
 isc_result_t
 ns_clientmgr_create(ns_server_t *sctx, isc_taskmgr_t *taskmgr,
-		    isc_timermgr_t *timermgr, ns_interfacemgr_t *interfacemgr,
-		    int tid, ns_clientmgr_t **managerp) {
+		    isc_timermgr_t *timermgr, dns_aclenv_t *aclenv, int tid,
+		    ns_clientmgr_t **managerp) {
 	ns_clientmgr_t *manager = NULL;
 	isc_mem_t *mctx = NULL;
 	isc_result_t result;
@@ -2377,7 +2379,7 @@ ns_clientmgr_create(ns_server_t *sctx, isc_taskmgr_t *taskmgr,
 	manager->timermgr = timermgr;
 	manager->tid = tid;
 
-	manager->interfacemgr = interfacemgr;
+	dns_aclenv_attach(aclenv, &manager->aclenv);
 
 	manager->exiting = false;
 	result = isc_task_create_bound(manager->taskmgr, 20, &manager->task,
@@ -2455,8 +2457,7 @@ isc_result_t
 ns_client_checkaclsilent(ns_client_t *client, isc_netaddr_t *netaddr,
 			 dns_acl_t *acl, bool default_allow) {
 	isc_result_t result;
-	dns_aclenv_t *env =
-		ns_interfacemgr_getaclenv(client->manager->interfacemgr);
+	dns_aclenv_t *env = client->manager->aclenv;
 	isc_netaddr_t tmpnetaddr;
 	int match;
 

@@ -617,11 +617,14 @@ dns_acl_allowed(isc_netaddr_t *addr, const dns_name_t *signer, dns_acl_t *acl,
  * Initialize ACL environment, setting up localhost and localnets ACLs
  */
 isc_result_t
-dns_aclenv_init(isc_mem_t *mctx, dns_aclenv_t *env) {
+dns_aclenv_create(isc_mem_t *mctx, dns_aclenv_t **envp) {
 	isc_result_t result;
+	dns_aclenv_t *env = isc_mem_get(mctx, sizeof(*env));
+	*env = (dns_aclenv_t){ 0 };
 
-	env->localhost = NULL;
-	env->localnets = NULL;
+	isc_mem_attach(mctx, &env->mctx);
+	isc_refcount_init(&env->references, 1);
+
 	result = dns_acl_create(mctx, 0, &env->localhost);
 	if (result != ISC_R_SUCCESS) {
 		goto cleanup_nothing;
@@ -634,6 +637,8 @@ dns_aclenv_init(isc_mem_t *mctx, dns_aclenv_t *env) {
 #if defined(HAVE_GEOIP2)
 	env->geoip = NULL;
 #endif /* if defined(HAVE_GEOIP2) */
+	*envp = env;
+
 	return (ISC_R_SUCCESS);
 
 cleanup_localhost:
@@ -654,12 +659,33 @@ dns_aclenv_copy(dns_aclenv_t *t, dns_aclenv_t *s) {
 #endif /* if defined(HAVE_GEOIP2) */
 }
 
-void
-dns_aclenv_destroy(dns_aclenv_t *env) {
-	if (env->localhost != NULL) {
-		dns_acl_detach(&env->localhost);
+static void
+dns__aclenv_destroy(dns_aclenv_t *aclenv) {
+	if (aclenv->localhost != NULL) {
+		dns_acl_detach(&aclenv->localhost);
 	}
-	if (env->localnets != NULL) {
-		dns_acl_detach(&env->localnets);
+	if (aclenv->localnets != NULL) {
+		dns_acl_detach(&aclenv->localnets);
+	}
+	isc_mem_putanddetach(&aclenv->mctx, aclenv, sizeof(*aclenv));
+}
+
+void
+dns_aclenv_attach(dns_aclenv_t *source, dns_aclenv_t **targetp) {
+	REQUIRE(source != NULL);
+	REQUIRE(targetp != NULL && *targetp == NULL);
+
+	isc_refcount_increment(&source->references);
+	*targetp = source;
+}
+
+void
+dns_aclenv_detach(dns_aclenv_t **aclenvp) {
+	REQUIRE(aclenvp != NULL && *aclenvp != NULL);
+
+	dns_aclenv_t *aclenv = *aclenvp;
+	*aclenvp = NULL;
+	if (isc_refcount_decrement(&aclenv->references) == 1) {
+		dns__aclenv_destroy(aclenv);
 	}
 }
