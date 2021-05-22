@@ -55,18 +55,18 @@
 
 #define TIMEOUT 30
 
-static char *ip_address;
+static char *ip_address = NULL;
 static int port;
-static isc_mem_t *mctx;
-static dns_tsigkey_t *tsigkey;
-static dns_tsig_keyring_t *ring;
-static dns_requestmgr_t *requestmgr;
+static isc_mem_t *mctx = NULL;
+static dns_tsigkey_t *tsigkey = NULL;
+static dns_tsig_keyring_t *ring = NULL;
+static dns_requestmgr_t *requestmgr = NULL;
 
 static void
 recvquery(isc_task_t *task, isc_event_t *event) {
 	dns_requestevent_t *reqev = (dns_requestevent_t *)event;
 	isc_result_t result;
-	dns_message_t *query, *response;
+	dns_message_t *query = NULL, *response = NULL;
 
 	UNUSED(task);
 
@@ -80,8 +80,7 @@ recvquery(isc_task_t *task, isc_event_t *event) {
 
 	query = reqev->ev_arg;
 
-	response = NULL;
-	dns_message_create(mctx, DNS_MESSAGE_INTENTPARSE, &response);
+	dns_message_create(mctx, DNS_MESSAGE_INTENTPARSE, NULL, &response);
 
 	result = dns_request_getresponse(reqev->request, response,
 					 DNS_MESSAGEPARSE_PRESERVEORDER);
@@ -110,8 +109,8 @@ sendquery(isc_task_t *task, isc_event_t *event) {
 	struct in_addr inaddr;
 	isc_sockaddr_t address;
 	isc_result_t result;
-	dns_message_t *query;
-	dns_request_t *request;
+	dns_message_t *query = NULL;
+	dns_request_t *request = NULL;
 
 	isc_event_free(&event);
 
@@ -121,13 +120,11 @@ sendquery(isc_task_t *task, isc_event_t *event) {
 	}
 	isc_sockaddr_fromin(&address, &inaddr, port);
 
-	query = NULL;
-	dns_message_create(mctx, DNS_MESSAGE_INTENTRENDER, &query);
+	dns_message_create(mctx, DNS_MESSAGE_INTENTRENDER, NULL, &query);
 
 	result = dns_tkey_builddeletequery(query, tsigkey);
 	CHECK("dns_tkey_builddeletequery", result);
 
-	request = NULL;
 	result = dns_request_create(requestmgr, query, &address,
 				    DNS_REQUESTOPT_TCP, tsigkey, TIMEOUT, task,
 				    recvquery, query, &request);
@@ -171,11 +168,8 @@ main(int argc, char **argv) {
 
 	dns_result_register();
 
-	mctx = NULL;
 	isc_mem_create(&mctx);
 
-	log = NULL;
-	logconfig = NULL;
 	isc_log_create(mctx, &log, &logconfig);
 
 	RUNCHECK(dst_lib_init(mctx, NULL));
@@ -190,31 +184,24 @@ main(int argc, char **argv) {
 		DNS_DISPATCHATTR_IPV4;
 	attrmask = DNS_DISPATCHATTR_UDP | DNS_DISPATCHATTR_TCP |
 		   DNS_DISPATCHATTR_IPV4 | DNS_DISPATCHATTR_IPV6;
-	dispatchv4 = NULL;
 	RUNCHECK(dns_dispatch_getudp(dispatchmgr, socketmgr, taskmgr, &bind_any,
 				     4096, 4, 2, 3, 5, attrs, attrmask,
 				     &dispatchv4));
-	requestmgr = NULL;
 	RUNCHECK(dns_requestmgr_create(mctx, timermgr, socketmgr, taskmgr,
 				       dispatchmgr, dispatchv4, NULL,
 				       &requestmgr));
 
-	ring = NULL;
 	RUNCHECK(dns_tsigkeyring_create(mctx, &ring));
-	tctx = NULL;
 	RUNCHECK(dns_tkeyctx_create(mctx, &tctx));
 
-	view = NULL;
 	RUNCHECK(dns_view_create(mctx, 0, "_test", &view));
 	dns_view_setkeyring(view, ring);
 
-	sock = NULL;
 	RUNCHECK(isc_socket_create(socketmgr, PF_INET, isc_sockettype_udp,
 				   &sock));
 
 	RUNCHECK(isc_app_onrun(mctx, task, sendquery, NULL));
 
-	dstkey = NULL;
 	type = DST_TYPE_PUBLIC | DST_TYPE_PRIVATE | DST_TYPE_KEY;
 	result = dst_key_fromnamedfile(keyname, NULL, type, mctx, &dstkey);
 	CHECK("dst_key_fromnamedfile", result);

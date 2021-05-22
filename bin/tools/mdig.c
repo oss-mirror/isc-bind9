@@ -216,7 +216,7 @@ recvresponse(isc_task_t *task, isc_event_t *event) {
 		}
 	}
 
-	dns_message_create(mctx, DNS_MESSAGE_INTENTPARSE, &response);
+	dns_message_create(mctx, DNS_MESSAGE_INTENTPARSE, NULL, &response);
 
 	parseflags |= DNS_MESSAGEPARSE_PRESERVEORDER;
 	if (besteffort) {
@@ -598,7 +598,7 @@ sendquery(struct query *query, isc_task_t *task) {
 				   dns_rootname, 0, NULL);
 	CHECK("dns_name_fromtext", result);
 
-	dns_message_create(mctx, DNS_MESSAGE_INTENTRENDER, &message);
+	dns_message_create(mctx, DNS_MESSAGE_INTENTRENDER, NULL, &message);
 
 	message->opcode = dns_opcode_query;
 	if (query->recurse) {

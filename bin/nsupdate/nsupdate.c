@@ -359,7 +359,8 @@ reset_system(void) {
 	if (updatemsg != NULL) {
 		dns_message_reset(updatemsg, DNS_MESSAGE_INTENTRENDER);
 	} else {
-		dns_message_create(gmctx, DNS_MESSAGE_INTENTRENDER, &updatemsg);
+		dns_message_create(gmctx, DNS_MESSAGE_INTENTRENDER, NULL,
+				   &updatemsg);
 	}
 	updatemsg->opcode = dns_opcode_update;
 	if (usegsstsig) {
@@ -2414,7 +2415,7 @@ update_completed(isc_task_t *task, isc_event_t *event) {
 	}
 
 	LOCK(&answer_lock);
-	dns_message_create(gmctx, DNS_MESSAGE_INTENTPARSE, &answer);
+	dns_message_create(gmctx, DNS_MESSAGE_INTENTPARSE, NULL, &answer);
 	result = dns_request_getresponse(request, answer,
 					 DNS_MESSAGEPARSE_PRESERVEORDER);
 	switch (result) {
@@ -2606,7 +2607,7 @@ recvsoa(isc_task_t *task, isc_event_t *event) {
 	reqev = NULL;
 
 	ddebug("About to create rcvmsg");
-	dns_message_create(gmctx, DNS_MESSAGE_INTENTPARSE, &rcvmsg);
+	dns_message_create(gmctx, DNS_MESSAGE_INTENTPARSE, NULL, &rcvmsg);
 	result = dns_request_getresponse(request, rcvmsg,
 					 DNS_MESSAGEPARSE_PRESERVEORDER);
 	if (result == DNS_R_TSIGERRORSET && servers != NULL) {
@@ -2911,7 +2912,7 @@ start_gssrequest(dns_name_t *master) {
 	uint32_t val = 0;
 	dns_message_t *rmsg = NULL;
 	dns_request_t *request = NULL;
-	dns_name_t *servname;
+	dns_name_t *servname = NULL;
 	dns_fixedname_t fname;
 	char namestr[DNS_NAME_FORMATSIZE];
 	char mykeystr[DNS_NAME_FORMATSIZE];
@@ -2975,8 +2976,7 @@ start_gssrequest(dns_name_t *master) {
 	/* Windows doesn't recognize name compression in the key name. */
 	keyname->attributes |= DNS_NAMEATTR_NOCOMPRESS;
 
-	rmsg = NULL;
-	dns_message_create(gmctx, DNS_MESSAGE_INTENTRENDER, &rmsg);
+	dns_message_create(gmctx, DNS_MESSAGE_INTENTRENDER, NULL, &rmsg);
 
 	/* Build first request. */
 	context = GSS_C_NO_CONTEXT;
@@ -3102,7 +3102,7 @@ recvgss(isc_task_t *task, isc_event_t *event) {
 	reqev = NULL;
 
 	ddebug("recvgss creating rcvmsg");
-	dns_message_create(gmctx, DNS_MESSAGE_INTENTPARSE, &rcvmsg);
+	dns_message_create(gmctx, DNS_MESSAGE_INTENTPARSE, NULL, &rcvmsg);
 
 	result = dns_request_getresponse(request, rcvmsg,
 					 DNS_MESSAGEPARSE_PRESERVEORDER);
@@ -3227,7 +3227,7 @@ start_update(void) {
 		return;
 	}
 
-	dns_message_create(gmctx, DNS_MESSAGE_INTENTRENDER, &soaquery);
+	dns_message_create(gmctx, DNS_MESSAGE_INTENTRENDER, NULL, &soaquery);
 
 	if (default_servers) {
 		soaquery->flags |= DNS_MESSAGEFLAG_RD;

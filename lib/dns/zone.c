@@ -12731,7 +12731,8 @@ create_query(dns_zone_t *zone, dns_rdatatype_t rdtype, dns_name_t *name,
 	dns_rdataset_t *qrdataset = NULL;
 	isc_result_t result;
 
-	dns_message_create(zone->mctx, DNS_MESSAGE_INTENTRENDER, &message);
+	dns_message_create(zone->mctx, DNS_MESSAGE_INTENTRENDER, NULL,
+			   &message);
 
 	message->opcode = dns_opcode_query;
 	message->rdclass = zone->rdclass;
@@ -12903,7 +12904,7 @@ stub_glue_response_cb(isc_task_t *task, isc_event_t *event) {
 		goto cleanup;
 	}
 
-	dns_message_create(zone->mctx, DNS_MESSAGE_INTENTPARSE, &msg);
+	dns_message_create(zone->mctx, DNS_MESSAGE_INTENTPARSE, NULL, &msg);
 	result = dns_request_getresponse(revent->request, msg, 0);
 	if (result != ISC_R_SUCCESS) {
 		dns_zone_log(zone, ISC_LOG_INFO,
@@ -13317,7 +13318,7 @@ stub_callback(isc_task_t *task, isc_event_t *event) {
 		goto next_master;
 	}
 
-	dns_message_create(zone->mctx, DNS_MESSAGE_INTENTPARSE, &msg);
+	dns_message_create(zone->mctx, DNS_MESSAGE_INTENTPARSE, NULL, &msg);
 
 	result = dns_request_getresponse(revent->request, msg, 0);
 	if (result != ISC_R_SUCCESS) {
@@ -13703,7 +13704,7 @@ refresh_callback(isc_task_t *task, isc_event_t *event) {
 		goto next_master;
 	}
 
-	dns_message_create(zone->mctx, DNS_MESSAGE_INTENTPARSE, &msg);
+	dns_message_create(zone->mctx, DNS_MESSAGE_INTENTPARSE, NULL, &msg);
 	result = dns_request_getresponse(revent->request, msg, 0);
 	if (result != ISC_R_SUCCESS) {
 		dns_zone_log(zone, ISC_LOG_INFO,
@@ -14943,7 +14944,8 @@ notify_createmessage(dns_zone_t *zone, unsigned int flags,
 	REQUIRE(DNS_ZONE_VALID(zone));
 	REQUIRE(messagep != NULL && *messagep == NULL);
 
-	dns_message_create(zone->mctx, DNS_MESSAGE_INTENTRENDER, &message);
+	dns_message_create(zone->mctx, DNS_MESSAGE_INTENTRENDER, NULL,
+			   &message);
 
 	message->opcode = dns_opcode_notify;
 	message->flags |= DNS_MESSAGEFLAG_AA;
@@ -15897,7 +15899,7 @@ notify_done(isc_task_t *task, isc_event_t *event) {
 
 	isc_buffer_init(&buf, rcode, sizeof(rcode));
 	isc_sockaddr_format(&notify->dst, addrbuf, sizeof(addrbuf));
-	dns_message_create(notify->zone->mctx, DNS_MESSAGE_INTENTPARSE,
+	dns_message_create(notify->zone->mctx, DNS_MESSAGE_INTENTPARSE, NULL,
 			   &message);
 
 	result = revent->result;
@@ -17941,7 +17943,7 @@ forward_callback(isc_task_t *task, isc_event_t *event) {
 		goto next_master;
 	}
 
-	dns_message_create(zone->mctx, DNS_MESSAGE_INTENTPARSE, &msg);
+	dns_message_create(zone->mctx, DNS_MESSAGE_INTENTPARSE, NULL, &msg);
 
 	result = dns_request_getresponse(revent->request, msg,
 					 DNS_MESSAGEPARSE_PRESERVEORDER |

@@ -597,7 +597,7 @@ attach_query_msg_to_client(ns_client_t *client, const char *qnamestr,
 	/*
 	 * Create a new DNS message holding a query.
 	 */
-	dns_message_create(mctx, DNS_MESSAGE_INTENTRENDER, &message);
+	dns_message_create(mctx, DNS_MESSAGE_INTENTRENDER, NULL, &message);
 
 	/*
 	 * Set query ID to a random value.

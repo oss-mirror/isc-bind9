@@ -2207,7 +2207,7 @@ ns__client_setup(ns_client_t *client, ns_clientmgr_t *mgr, bool new) {
 		ns_server_attach(mgr->sctx, &client->sctx);
 		isc_task_attach(mgr->task, &client->task);
 
-		dns_message_create(client->mctx, DNS_MESSAGE_INTENTPARSE,
+		dns_message_create(client->mctx, DNS_MESSAGE_INTENTPARSE, NULL,
 				   &client->message);
 
 		client->sendbuf = isc_mem_get(client->mctx,

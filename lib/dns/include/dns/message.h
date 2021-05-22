@@ -248,6 +248,7 @@ struct dns_message {
 
 	isc_mem_t *    mctx;
 	isc_mempool_t *pool;
+	bool	       localpool;
 
 	isc_bufferlist_t scratchpad;
 	isc_bufferlist_t cleanup;
@@ -300,13 +301,19 @@ union dns_msgresource {
 ISC_LANG_BEGINDECLS
 
 void
-dns_message_create(isc_mem_t *mctx, unsigned int intent, dns_message_t **msgp);
+dns_message_create(isc_mem_t *mctx, unsigned int intent, isc_mempool_t *rpool,
+		   dns_message_t **msgp);
 
 /*%<
  * Create msg structure.
  *
  * This function will allocate some internal blocks of memory that are
  * expected to be needed for parsing or rendering nearly any type of message.
+ *
+ * If 'rpool' is not NULL, then it must point to an existing memory pool
+ * of dns_msgresource_t objects, which can be used to hold names and
+ * rdatasets while the message is being processed. If 'rpool' is NULL,
+ * then a pool will be created and used until the message is destroyed.
  *
  * Requires:
  *\li	'mctx' be a valid memory context.

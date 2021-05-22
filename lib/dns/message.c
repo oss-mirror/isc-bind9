@@ -702,7 +702,8 @@ spacefortsig(dns_tsigkey_t *key, int otherlen) {
 }
 
 void
-dns_message_create(isc_mem_t *mctx, unsigned int intent, dns_message_t **msgp) {
+dns_message_create(isc_mem_t *mctx, unsigned int intent, isc_mempool_t *rpool,
+		   dns_message_t **msgp) {
 	dns_message_t *m = NULL;
 	isc_buffer_t *dynbuf = NULL;
 	unsigned int i;
@@ -730,10 +731,16 @@ dns_message_create(isc_mem_t *mctx, unsigned int intent, dns_message_t **msgp) {
 	ISC_LIST_INIT(m->freerdata);
 	ISC_LIST_INIT(m->freerdatalist);
 
-	isc_mempool_create(m->mctx, sizeof(dns_msgresource_t), &m->pool);
-	isc_mempool_setfillcount(m->pool, RESOURCE_COUNT);
-	isc_mempool_setfreemax(m->pool, RESOURCE_COUNT);
-	isc_mempool_setname(m->pool, "msg:resources");
+	if (rpool != NULL) {
+		m->pool = rpool;
+	} else {
+		isc_mempool_create(m->mctx, sizeof(dns_msgresource_t),
+				   &m->pool);
+		isc_mempool_setfillcount(m->pool, RESOURCE_COUNT);
+		isc_mempool_setfreemax(m->pool, RESOURCE_COUNT);
+		isc_mempool_setname(m->pool, "msg:resources");
+		m->localpool = true;
+	}
 
 	isc_buffer_allocate(mctx, &dynbuf, SCRATCHPAD_SIZE);
 	ISC_LIST_APPEND(m->scratchpad, dynbuf, link);
@@ -760,8 +767,11 @@ dns__message_destroy(dns_message_t *msg) {
 	REQUIRE(DNS_MESSAGE_VALID(msg));
 
 	msgreset(msg, true);
-	isc_mempool_destroy(&msg->pool);
 	isc_refcount_destroy(&msg->refcount);
+	if (msg->localpool) {
+		isc_mempool_destroy(&msg->pool);
+	}
+
 	msg->magic = 0;
 	isc_mem_putanddetach(&msg->mctx, msg, sizeof(dns_message_t));
 }
