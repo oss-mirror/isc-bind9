@@ -319,10 +319,10 @@ client_sendpkg(ns_client_t *client, isc_buffer_t *buffer) {
 void
 ns_client_sendraw(ns_client_t *client, dns_message_t *message) {
 	isc_result_t result;
-	unsigned char *data;
+	unsigned char *data = NULL;
 	isc_buffer_t buffer;
 	isc_region_t r;
-	isc_region_t *mr;
+	isc_region_t *mr = NULL;
 
 	REQUIRE(NS_CLIENT_VALID(client));
 
@@ -385,7 +385,7 @@ done:
 void
 ns_client_send(ns_client_t *client) {
 	isc_result_t result;
-	unsigned char *data;
+	unsigned char *data = NULL;
 	isc_buffer_t buffer = { .magic = 0 };
 	isc_region_t r;
 	dns_compress_t cctx;
@@ -394,7 +394,7 @@ ns_client_send(ns_client_t *client) {
 	unsigned int preferred_glue;
 	bool opt_included = false;
 	size_t respsize;
-	dns_aclenv_t *env;
+	dns_aclenv_t *env = NULL;
 #ifdef HAVE_DNSTAP
 	unsigned char zone[DNS_NAME_MAXWIRE];
 	dns_dtmsgtype_t dtmsgtype;
@@ -874,18 +874,18 @@ isc_result_t
 ns_client_addopt(ns_client_t *client, dns_message_t *message,
 		 dns_rdataset_t **opt) {
 	unsigned char ecs[ECS_SIZE];
-	char nsid[BUFSIZ], *nsidp;
+	char nsid[BUFSIZ], *nsidp = NULL;
 	unsigned char cookie[COOKIE_SIZE];
 	isc_result_t result;
-	dns_view_t *view;
-	dns_resolver_t *resolver;
+	dns_view_t *view = NULL;
+	dns_resolver_t *resolver = NULL;
 	uint16_t udpsize;
 	dns_ednsopt_t ednsopts[DNS_EDNSOPTIONS];
 	int count = 0;
 	unsigned int flags;
 	unsigned char expire[4];
 	unsigned char advtimo[2];
-	dns_aclenv_t *env;
+	dns_aclenv_t *env = NULL;
 
 	REQUIRE(NS_CLIENT_VALID(client));
 	REQUIRE(opt != NULL && *opt == NULL);
@@ -1635,7 +1635,8 @@ ns__client_request(isc_nmhandle_t *handle, isc_result_t eresult,
 	client = isc_nmhandle_getdata(handle);
 	if (client == NULL) {
 		ns_interface_t *ifp = (ns_interface_t *)arg;
-		ns_clientmgr_t *clientmgr = ns_interfacemgr_getclientmgr(ifp->mgr);
+		ns_clientmgr_t *clientmgr =
+			ns_interfacemgr_getclientmgr(ifp->mgr);
 
 		INSIST(VALID_MANAGER(clientmgr));
 
@@ -2354,9 +2355,9 @@ isc_result_t
 ns_clientmgr_create(ns_server_t *sctx, isc_taskmgr_t *taskmgr,
 		    isc_timermgr_t *timermgr, ns_interfacemgr_t *interfacemgr,
 		    int tid, ns_clientmgr_t **managerp) {
-	ns_clientmgr_t *manager;
-	isc_result_t result;
+	ns_clientmgr_t *manager = NULL;
 	isc_mem_t *mctx = NULL;
+	isc_result_t result;
 
 	isc_mem_create(&mctx);
 
@@ -2379,8 +2380,8 @@ ns_clientmgr_create(ns_server_t *sctx, isc_taskmgr_t *taskmgr,
 	manager->interfacemgr = interfacemgr;
 
 	manager->exiting = false;
-	result = isc_task_create_bound(manager->taskmgr, 20,
-				       &manager->task, manager->tid);
+	result = isc_task_create_bound(manager->taskmgr, 20, &manager->task,
+				       manager->tid);
 	RUNTIME_CHECK(result == ISC_R_SUCCESS);
 
 	isc_refcount_init(&manager->references, 1);

@@ -67,29 +67,28 @@
 
 /*% nameserver interface manager structure */
 struct ns_interfacemgr {
-	unsigned int magic; /*%< Magic number. */
+	unsigned int magic; /*%< Magic number */
 	isc_refcount_t references;
 	isc_mutex_t lock;
-	isc_mem_t *mctx;	    /*%< Memory context. */
-	ns_server_t *sctx;	    /*%< Server context. */
-	isc_taskmgr_t *taskmgr;	    /*%< Task manager. */
-	isc_task_t *excl;	    /*%< Exclusive task. */
-	isc_timermgr_t *timermgr;   /*%< Timer manager. */
-	isc_socketmgr_t *socketmgr; /*%< Socket manager. */
-	isc_nm_t *nm;		    /*%< Net manager. */
-	int ncpus;		    /*%< Number of workers . */
+	isc_mem_t *mctx;	    /*%< Memory context */
+	ns_server_t *sctx;	    /*%< Server context */
+	isc_taskmgr_t *taskmgr;	    /*%< Task manager */
+	isc_task_t *excl;	    /*%< Exclusive task */
+	isc_timermgr_t *timermgr;   /*%< Timer manager */
+	isc_socketmgr_t *socketmgr; /*%< Socket manager */
+	isc_nm_t *nm;		    /*%< Net manager */
+	int ncpus;		    /*%< Number of workers */
 	dns_dispatchmgr_t *dispatchmgr;
-	unsigned int generation; /*%< Current generation no. */
+	unsigned int generation; /*%< Current generation no */
 	ns_listenlist_t *listenon4;
 	ns_listenlist_t *listenon6;
 	dns_aclenv_t aclenv;		     /*%< Localhost/localnets ACLs */
-	ISC_LIST(ns_interface_t) interfaces; /*%< List of interfaces. */
+	ISC_LIST(ns_interface_t) interfaces; /*%< List of interfaces */
 	ISC_LIST(isc_sockaddr_t) listenon;
-	int backlog;		  /*%< Listen queue size */
-	unsigned int udpdisp;	  /*%< UDP dispatch count */
-	atomic_bool shuttingdown; /*%< Interfacemgr is shutting
-				   * down */
-	ns_clientmgr_t **clientmgrs;     /*%< Client manager. */
+	int backlog;		     /*%< Listen queue size */
+	unsigned int udpdisp;	     /*%< UDP dispatch count */
+	atomic_bool shuttingdown;    /*%< Interfacemgr shutting down */
+	ns_clientmgr_t **clientmgrs; /*%< Client managers */
 #ifdef USE_ROUTE_SOCKET
 	isc_task_t *task;
 	isc_socket_t *route;
@@ -230,7 +229,8 @@ ns_interfacemgr_create(isc_mem_t *mctx, ns_server_t *sctx,
 	ISC_LIST_INIT(mgr->interfaces);
 	ISC_LIST_INIT(mgr->listenon);
 
-	mgr->clientmgrs = isc_mem_get(mgr->mctx, mgr->ncpus * sizeof(*mgr->clientmgrs[0]));
+	mgr->clientmgrs = isc_mem_get(mgr->mctx,
+				      mgr->ncpus * sizeof(*mgr->clientmgrs[0]));
 	for (size_t i = 0; i < (size_t)mgr->ncpus; i++) {
 		result = ns_clientmgr_create(mgr->sctx, mgr->taskmgr,
 					     mgr->timermgr, mgr, (int)i,
@@ -310,7 +310,8 @@ cleanup_clientmgr:
 	for (size_t i = 0; i < (size_t)mgr->ncpus; i++) {
 		ns_clientmgr_destroy(&mgr->clientmgrs[i]);
 	}
-	isc_mem_put(mgr->mctx, mgr->clientmgrs, mgr->ncpus * sizeof(*mgr->clientmgrs[0]));
+	isc_mem_put(mgr->mctx, mgr->clientmgrs,
+		    mgr->ncpus * sizeof(*mgr->clientmgrs[0]));
 	ns_server_detach(&mgr->sctx);
 	isc_mem_putanddetach(&mgr->mctx, mgr, sizeof(*mgr));
 	return (result);
@@ -338,7 +339,8 @@ ns_interfacemgr_destroy(ns_interfacemgr_t *mgr) {
 	for (size_t i = 0; i < (size_t)mgr->ncpus; i++) {
 		ns_clientmgr_destroy(&mgr->clientmgrs[i]);
 	}
-	isc_mem_put(mgr->mctx, mgr->clientmgrs, mgr->ncpus * sizeof(*mgr->clientmgrs[0]));
+	isc_mem_put(mgr->mctx, mgr->clientmgrs,
+		    mgr->ncpus * sizeof(*mgr->clientmgrs[0]));
 	if (mgr->sctx != NULL) {
 		ns_server_detach(&mgr->sctx);
 	}

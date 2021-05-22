@@ -150,7 +150,7 @@ struct ns_clientmgr {
 	isc_timermgr_t *timermgr;
 	isc_task_t *	excl;
 	isc_refcount_t	references;
-	int             tid;
+	int		tid;
 
 	/* Attached by clients, needed for e.g. recursion */
 	isc_task_t *task;
@@ -170,7 +170,7 @@ struct ns_clientmgr {
 struct ns_client {
 	unsigned int	 magic;
 	isc_mem_t *	 mctx;
-	int tid;
+	int		 tid;
 	bool		 allocated; /* Do we need to free it? */
 	ns_server_t *	 sctx;
 	ns_clientmgr_t * manager;

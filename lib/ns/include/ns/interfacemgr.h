@@ -90,7 +90,7 @@ struct ns_interface {
 					*   servicing TCP queries
 					*   (whether accepting or
 					*   connected) */
-	int		nudpdispatch;  /*%< Number of UDP dispatches */
+	int nudpdispatch;	       /*%< Number of UDP dispatches */
 	ISC_LINK(ns_interface_t) link;
 };
 
