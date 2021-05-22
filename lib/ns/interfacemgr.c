@@ -89,6 +89,7 @@ struct ns_interfacemgr {
 	unsigned int udpdisp;	  /*%< UDP dispatch count */
 	atomic_bool shuttingdown; /*%< Interfacemgr is shutting
 				   * down */
+	ns_clientmgr_t *clientmgr;     /*%< Client manager. */
 #ifdef USE_ROUTE_SOCKET
 	isc_task_t *task;
 	isc_socket_t *route;
@@ -188,6 +189,8 @@ ns_interfacemgr_create(isc_mem_t *mctx, ns_server_t *sctx,
 	isc_result_t result;
 	ns_interfacemgr_t *mgr;
 
+	fprintf(stderr, "XXX: %s\n", __func__);
+
 #ifndef USE_ROUTE_SOCKET
 	UNUSED(task);
 #endif /* ifndef USE_ROUTE_SOCKET */
@@ -227,12 +230,22 @@ ns_interfacemgr_create(isc_mem_t *mctx, ns_server_t *sctx,
 	ISC_LIST_INIT(mgr->interfaces);
 	ISC_LIST_INIT(mgr->listenon);
 
+	result = ns_clientmgr_create(mgr->mctx, mgr->sctx, mgr->taskmgr,
+				     mgr->timermgr, mgr, mgr->ncpus,
+				     &mgr->clientmgr);
+	if (result != ISC_R_SUCCESS) {
+		isc_log_write(IFMGR_COMMON_LOGARGS, ISC_LOG_ERROR,
+			      "ns_clientmgr_create() failed: %s",
+			      isc_result_totext(result));
+		goto cleanup_ctx;
+	}
+
 	/*
 	 * The listen-on lists are initially empty.
 	 */
 	result = ns_listenlist_create(mctx, &mgr->listenon4);
 	if (result != ISC_R_SUCCESS) {
-		goto cleanup_ctx;
+		goto cleanup_clientmgr;
 	}
 	ns_listenlist_attach(mgr->listenon4, &mgr->listenon6);
 
@@ -295,6 +308,8 @@ cleanup_listenon:
 	ns_listenlist_detach(&mgr->listenon6);
 cleanup_lock:
 	isc_mutex_destroy(&mgr->lock);
+cleanup_clientmgr:
+	ns_clientmgr_destroy(&mgr->clientmgr);
 cleanup_ctx:
 	ns_server_detach(&mgr->sctx);
 	isc_mem_putanddetach(&mgr->mctx, mgr, sizeof(*mgr));
@@ -320,6 +335,9 @@ ns_interfacemgr_destroy(ns_interfacemgr_t *mgr) {
 	ns_listenlist_detach(&mgr->listenon6);
 	clearlistenon(mgr);
 	isc_mutex_destroy(&mgr->lock);
+	if (mgr->clientmgr != NULL) {
+		ns_clientmgr_destroy(&mgr->clientmgr);
+	}
 	if (mgr->sctx != NULL) {
 		ns_server_detach(&mgr->sctx);
 	}
@@ -390,7 +408,6 @@ static isc_result_t
 ns_interface_create(ns_interfacemgr_t *mgr, isc_sockaddr_t *addr,
 		    const char *name, ns_interface_t **ifpret) {
 	ns_interface_t *ifp;
-	isc_result_t result;
 	int disp;
 
 	REQUIRE(NS_INTERFACEMGR_VALID(mgr));
@@ -427,16 +444,6 @@ ns_interface_create(ns_interfacemgr_t *mgr, isc_sockaddr_t *addr,
 	isc_refcount_init(&ifp->references, 1);
 	ifp->magic = IFACE_MAGIC;
 
-	result = ns_clientmgr_create(mgr->mctx, mgr->sctx, mgr->taskmgr,
-				     mgr->timermgr, ifp, mgr->ncpus,
-				     &ifp->clientmgr);
-	if (result != ISC_R_SUCCESS) {
-		isc_log_write(IFMGR_COMMON_LOGARGS, ISC_LOG_ERROR,
-			      "ns_clientmgr_create() failed: %s",
-			      isc_result_totext(result));
-		goto failure;
-	}
-
 	ifp->tcplistensocket = NULL;
 	ifp->http_listensocket = NULL;
 	ifp->http_secure_listensocket = NULL;
@@ -444,14 +451,6 @@ ns_interface_create(ns_interfacemgr_t *mgr, isc_sockaddr_t *addr,
 	*ifpret = ifp;
 
 	return (ISC_R_SUCCESS);
-
-failure:
-	isc_mutex_destroy(&ifp->lock);
-
-	ifp->magic = 0;
-	isc_mem_put(mgr->mctx, ifp, sizeof(*ifp));
-
-	return (ISC_R_UNEXPECTED);
 }
 
 static isc_result_t
@@ -681,9 +680,6 @@ ns_interface_shutdown(ns_interface_t *ifp) {
 	if (ifp->http_secure_listensocket != NULL) {
 		isc_nm_stoplistening(ifp->http_secure_listensocket);
 		isc_nmsocket_close(&ifp->http_secure_listensocket);
-	}
-	if (ifp->clientmgr != NULL) {
-		ns_clientmgr_destroy(&ifp->clientmgr);
 	}
 }
 
@@ -1347,18 +1343,10 @@ ns_interfacemgr_setlistenon6(ns_interfacemgr_t *mgr, ns_listenlist_t *value) {
 
 void
 ns_interfacemgr_dumprecursing(FILE *f, ns_interfacemgr_t *mgr) {
-	ns_interface_t *interface;
-
 	REQUIRE(NS_INTERFACEMGR_VALID(mgr));
 
 	LOCK(&mgr->lock);
-	interface = ISC_LIST_HEAD(mgr->interfaces);
-	while (interface != NULL) {
-		if (interface->clientmgr != NULL) {
-			ns_client_dumprecursing(f, interface->clientmgr);
-		}
-		interface = ISC_LIST_NEXT(interface, link);
-	}
+	ns_client_dumprecursing(f, mgr->clientmgr);
 	UNLOCK(&mgr->lock);
 }
 
@@ -1414,4 +1402,10 @@ ns__interfacemgr_nextif(ns_interface_t *ifp) {
 	next = ISC_LIST_NEXT(ifp, link);
 	UNLOCK(&ifp->lock);
 	return (next);
+}
+
+ns_clientmgr_t *
+ns_interfacemgr_getclientmgr(ns_interfacemgr_t *mgr) {
+	REQUIRE(NS_INTERFACEMGR_VALID(mgr));
+	return (mgr->clientmgr);
 }

@@ -155,7 +155,7 @@ struct ns_clientmgr {
 	/* Attached by clients, needed for e.g. recursion */
 	isc_task_t **taskpool;
 
-	ns_interface_t *interface;
+	ns_interfacemgr_t *interfacemgr;
 
 	/* Lock covers manager state. */
 	isc_mutex_t lock;
@@ -345,7 +345,7 @@ ns_client_settimeout(ns_client_t *client, unsigned int seconds);
 
 isc_result_t
 ns_clientmgr_create(isc_mem_t *mctx, ns_server_t *sctx, isc_taskmgr_t *taskmgr,
-		    isc_timermgr_t *timermgr, ns_interface_t *ifp, int ncpus,
+		    isc_timermgr_t *timermgr, ns_interfacemgr_t *ifmgr, int ncpus,
 		    ns_clientmgr_t **managerp);
 /*%<
  * Create a client manager.

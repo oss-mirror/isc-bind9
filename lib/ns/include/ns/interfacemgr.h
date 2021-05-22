@@ -9,8 +9,7 @@
  * information regarding copyright ownership.
  */
 
-#ifndef NS_INTERFACEMGR_H
-#define NS_INTERFACEMGR_H 1
+#pragma once
 
 /*****
 ***** Module Info
@@ -92,7 +91,6 @@ struct ns_interface {
 					*   (whether accepting or
 					*   connected) */
 	int		nudpdispatch;  /*%< Number of UDP dispatches */
-	ns_clientmgr_t *clientmgr;     /*%< Client manager. */
 	ISC_LINK(ns_interface_t) link;
 };
 
@@ -213,4 +211,6 @@ ns__interfacemgr_nextif(ns_interface_t *ifp);
  * Functions to allow external callers to walk the interfaces list.
  * (Not intended for use outside this module and associated tests.)
  */
-#endif /* NS_INTERFACEMGR_H */
+
+ns_clientmgr_t *
+ns_interfacemgr_getclientmgr(ns_interfacemgr_t *mgr);

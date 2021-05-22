@@ -4723,7 +4723,7 @@ dns64_aaaaok(ns_client_t *client, dns_rdataset_t *rdataset,
 	     dns_rdataset_t *sigrdataset) {
 	isc_netaddr_t netaddr;
 	dns_aclenv_t *env =
-		ns_interfacemgr_getaclenv(client->manager->interface->mgr);
+		ns_interfacemgr_getaclenv(client->manager->interfacemgr);
 	dns_dns64_t *dns64 = ISC_LIST_HEAD(client->view->dns64);
 	unsigned int flags = 0;
 	unsigned int i, count;
@@ -8189,7 +8189,7 @@ static isc_result_t
 query_dns64(query_ctx_t *qctx) {
 	ns_client_t *client = qctx->client;
 	dns_aclenv_t *env =
-		ns_interfacemgr_getaclenv(client->manager->interface->mgr);
+		ns_interfacemgr_getaclenv(client->manager->interfacemgr);
 	dns_name_t *name, *mname;
 	dns_rdata_t *dns64_rdata;
 	dns_rdata_t rdata = DNS_RDATA_INIT;
@@ -11537,7 +11537,7 @@ query_setup_sortlist(query_ctx_t *qctx) {
 	isc_netaddr_t netaddr;
 	ns_client_t *client = qctx->client;
 	dns_aclenv_t *env =
-		ns_interfacemgr_getaclenv(client->manager->interface->mgr);
+		ns_interfacemgr_getaclenv(client->manager->interfacemgr);
 	const void *order_arg = NULL;
 
 	isc_netaddr_fromsockaddr(&netaddr, &client->peeraddr);

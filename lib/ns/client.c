@@ -414,7 +414,7 @@ ns_client_send(ns_client_t *client) {
 	 * Delay the response according to the -T delay option
 	 */
 
-	env = ns_interfacemgr_getaclenv(client->manager->interface->mgr);
+	env = ns_interfacemgr_getaclenv(client->manager->interfacemgr);
 
 	CTRACE("send");
 
@@ -893,7 +893,7 @@ ns_client_addopt(ns_client_t *client, dns_message_t *message,
 	REQUIRE(opt != NULL && *opt == NULL);
 	REQUIRE(message != NULL);
 
-	env = ns_interfacemgr_getaclenv(client->manager->interface->mgr);
+	env = ns_interfacemgr_getaclenv(client->manager->interfacemgr);
 	view = client->view;
 	resolver = (view != NULL) ? view->resolver : NULL;
 	if (resolver != NULL) {
@@ -1639,12 +1639,13 @@ ns__client_request(isc_nmhandle_t *handle, isc_result_t eresult,
 	client = isc_nmhandle_getdata(handle);
 	if (client == NULL) {
 		ns_interface_t *ifp = (ns_interface_t *)arg;
+		ns_clientmgr_t *clientmgr = ns_interfacemgr_getclientmgr(ifp->mgr);
 
-		INSIST(VALID_MANAGER(ifp->clientmgr));
+		INSIST(VALID_MANAGER(clientmgr));
 
 		client = isc_nmhandle_getextra(handle);
 
-		result = ns__client_setup(client, ifp->clientmgr, true);
+		result = ns__client_setup(client, clientmgr, true);
 		if (result != ISC_R_SUCCESS) {
 			return;
 		}
@@ -1706,7 +1707,7 @@ ns__client_request(isc_nmhandle_t *handle, isc_result_t eresult,
 	}
 #endif /* if NS_CLIENT_DROPPORT */
 
-	env = ns_interfacemgr_getaclenv(client->manager->interface->mgr);
+	env = ns_interfacemgr_getaclenv(client->manager->interfacemgr);
 	if (client->sctx->blackholeacl != NULL &&
 	    (dns_acl_match(&netaddr, NULL, client->sctx->blackholeacl, env,
 			   &match, NULL) == ISC_R_SUCCESS) &&
@@ -1922,26 +1923,8 @@ ns__client_request(isc_nmhandle_t *handle, isc_result_t eresult,
 		return;
 	}
 
-	/*
-	 * Determine the destination address.  If the receiving interface is
-	 * bound to a specific address, we simply use it regardless of the
-	 * address family.  All IPv4 queries should fall into this case.
-	 * Otherwise, if this is a TCP query, get the address from the
-	 * receiving socket (this needs a system call and can be heavy).
-	 * For IPv6 UDP queries, we get this from the pktinfo structure (if
-	 * supported).
-	 *
-	 * If all the attempts fail (this can happen due to memory shortage,
-	 * etc), we regard this as an error for safety.
-	 */
-	if ((client->manager->interface->flags & NS_INTERFACEFLAG_ANYADDR) == 0)
-	{
-		isc_netaddr_fromsockaddr(&client->destaddr,
-					 &client->manager->interface->addr);
-	} else {
-		isc_sockaddr_t sockaddr = isc_nmhandle_localaddr(handle);
-		isc_netaddr_fromsockaddr(&client->destaddr, &sockaddr);
-	}
+	isc_sockaddr_t sockaddr = isc_nmhandle_localaddr(handle);
+	isc_netaddr_fromsockaddr(&client->destaddr, &sockaddr);
 
 	isc_sockaddr_fromnetaddr(&client->destsockaddr, &client->destaddr, 0);
 
@@ -2367,10 +2350,6 @@ clientmgr_destroy(ns_clientmgr_t *manager) {
 	isc_refcount_destroy(&manager->references);
 	manager->magic = 0;
 
-	if (manager->interface != NULL) {
-		ns_interface_detach(&manager->interface);
-	}
-
 	isc_mutex_destroy(&manager->lock);
 	isc_mutex_destroy(&manager->reclock);
 
@@ -2392,7 +2371,7 @@ clientmgr_destroy(ns_clientmgr_t *manager) {
 
 isc_result_t
 ns_clientmgr_create(isc_mem_t *mctx, ns_server_t *sctx, isc_taskmgr_t *taskmgr,
-		    isc_timermgr_t *timermgr, ns_interface_t *interface,
+		    isc_timermgr_t *timermgr, ns_interfacemgr_t *interfacemgr,
 		    int ncpus, ns_clientmgr_t **managerp) {
 	ns_clientmgr_t *manager;
 	isc_result_t result;
@@ -2415,7 +2394,7 @@ ns_clientmgr_create(isc_mem_t *mctx, ns_server_t *sctx, isc_taskmgr_t *taskmgr,
 	manager->timermgr = timermgr;
 	manager->ncpus = ncpus;
 
-	ns_interface_attach(interface, &manager->interface);
+	manager->interfacemgr = interfacemgr;
 
 	manager->exiting = false;
 	manager->taskpool = isc_mem_get(
@@ -2498,7 +2477,7 @@ ns_client_checkaclsilent(ns_client_t *client, isc_netaddr_t *netaddr,
 			 dns_acl_t *acl, bool default_allow) {
 	isc_result_t result;
 	dns_aclenv_t *env =
-		ns_interfacemgr_getaclenv(client->manager->interface->mgr);
+		ns_interfacemgr_getaclenv(client->manager->interfacemgr);
 	isc_netaddr_t tmpnetaddr;
 	int match;
 
