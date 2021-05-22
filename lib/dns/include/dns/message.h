@@ -23,7 +23,9 @@
 #include <isc/refcount.h>
 
 #include <dns/compress.h>
+#include <dns/fixedname.h>
 #include <dns/masterdump.h>
+#include <dns/rdataset.h>
 #include <dns/types.h>
 
 #include <dst/dst.h>
@@ -245,8 +247,7 @@ struct dns_message {
 	dns_compress_t *cctx;
 
 	isc_mem_t *    mctx;
-	isc_mempool_t *namepool;
-	isc_mempool_t *rdspool;
+	isc_mempool_t *pool;
 
 	isc_bufferlist_t scratchpad;
 	isc_bufferlist_t cleanup;
@@ -285,6 +286,11 @@ struct dns_ednsopt {
 	uint16_t       code;
 	uint16_t       length;
 	unsigned char *value;
+};
+
+union dns_msgresource {
+	dns_fixedname_t fname;
+	dns_rdataset_t	rdataset;
 };
 
 /***

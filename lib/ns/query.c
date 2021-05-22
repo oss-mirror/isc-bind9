@@ -6012,16 +6012,13 @@ message_clearrdataset(dns_message_t *msg, unsigned int attr) {
 				ISC_LIST_UNLINK(name->list, rds, link);
 				INSIST(dns_rdataset_isassociated(rds));
 				dns_rdataset_disassociate(rds);
-				isc_mempool_put(msg->rdspool, rds);
+				dns_message_puttemprdataset(msg, &rds);
 				rds = next_rds;
 			}
 
 			if (ISC_LIST_EMPTY(name->list)) {
 				ISC_LIST_UNLINK(msg->sections[i], name, link);
-				if (dns_name_dynamic(name)) {
-					dns_name_free(name, msg->mctx);
-				}
-				isc_mempool_put(msg->namepool, name);
+				dns_message_puttempname(msg, &name);
 			}
 
 			name = next_name;

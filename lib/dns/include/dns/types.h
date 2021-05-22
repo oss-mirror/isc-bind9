@@ -106,6 +106,7 @@ typedef struct dns_masterrawheader dns_masterrawheader_t;
 typedef uint64_t		   dns_masterstyle_flags_t;
 typedef struct dns_message	   dns_message_t;
 typedef uint16_t		   dns_messageid_t;
+typedef union dns_msgresource	   dns_msgresource_t;
 typedef isc_region_t		   dns_label_t;
 typedef struct dns_lookup	   dns_lookup_t;
 typedef struct dns_name		   dns_name_t;
