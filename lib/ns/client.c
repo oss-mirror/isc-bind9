@@ -132,8 +132,6 @@ ns_client_dumpmessage(ns_client_t *client, const char *reason);
 static void
 compute_cookie(ns_client_t *client, uint32_t when, uint32_t nonce,
 	       const unsigned char *secret, isc_buffer_t *buf);
-static void
-get_clienttask(ns_clientmgr_t *manager, isc_task_t **taskp);
 
 void
 ns_client_recursing(ns_client_t *client) {
@@ -1601,9 +1599,7 @@ ns__client_put_cb(void *client0) {
 		ns_server_detach(&client->sctx);
 	}
 
-	if (client->mctx != NULL) {
-		isc_mem_detach(&client->mctx);
-	}
+	isc_mem_detach(&client->mctx);
 }
 
 /*
@@ -2186,17 +2182,6 @@ ns__client_tcpconn(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 	return (ISC_R_SUCCESS);
 }
 
-static void
-get_clienttask(ns_clientmgr_t *manager, isc_task_t **taskp) {
-	MTRACE("clienttask");
-
-	int tid = isc_nm_tid();
-	REQUIRE(tid >= 0);
-	REQUIRE(tid < manager->ncpus);
-
-	isc_task_attach(manager->taskpool[tid], taskp);
-}
-
 isc_result_t
 ns__client_setup(ns_client_t *client, ns_clientmgr_t *mgr, bool new) {
 	isc_result_t result;
@@ -2209,16 +2194,17 @@ ns__client_setup(ns_client_t *client, ns_clientmgr_t *mgr, bool new) {
 	 * The caller is responsible for that.
 	 */
 
-	REQUIRE(NS_CLIENT_VALID(client) || (new &&client != NULL));
-	REQUIRE(VALID_MANAGER(mgr) || !new);
-
 	if (new) {
-		*client = (ns_client_t){ .magic = 0 };
+		REQUIRE(VALID_MANAGER(mgr));
+		REQUIRE(client != NULL);
+		REQUIRE(mgr->tid == isc_nm_tid());
+
+		*client = (ns_client_t){ .magic = 0, .tid = mgr->tid };
 
 		isc_mem_attach(mgr->mctx, &client->mctx);
 		clientmgr_attach(mgr, &client->manager);
 		ns_server_attach(mgr->sctx, &client->sctx);
-		get_clienttask(mgr, &client->task);
+		isc_task_attach(mgr->task, &client->task);
 
 		dns_message_create(client->mctx, DNS_MESSAGE_INTENTPARSE,
 				   &client->message);
@@ -2235,6 +2221,9 @@ ns__client_setup(ns_client_t *client, ns_clientmgr_t *mgr, bool new) {
 			goto cleanup;
 		}
 	} else {
+		REQUIRE(NS_CLIENT_VALID(client));
+		REQUIRE(client->tid == isc_nm_tid());
+
 		ns_clientmgr_t *oldmgr = client->manager;
 		ns_server_t *sctx = client->sctx;
 		isc_task_t *task = client->task;
@@ -2242,6 +2231,7 @@ ns__client_setup(ns_client_t *client, ns_clientmgr_t *mgr, bool new) {
 		dns_message_t *message = client->message;
 		isc_mem_t *oldmctx = client->mctx;
 		ns_query_t query = client->query;
+		int tid = client->tid;
 
 		/*
 		 * Retain these values from the existing client, but
@@ -2254,7 +2244,8 @@ ns__client_setup(ns_client_t *client, ns_clientmgr_t *mgr, bool new) {
 					 .task = task,
 					 .sendbuf = sendbuf,
 					 .message = message,
-					 .query = query };
+					 .query = query,
+					 .tid = tid };
 	}
 
 	client->query.attributes &= ~NS_QUERYATTR_ANSWERED;
@@ -2292,9 +2283,7 @@ cleanup:
 	if (client->manager != NULL) {
 		clientmgr_detach(&client->manager);
 	}
-	if (client->mctx != NULL) {
-		isc_mem_detach(&client->mctx);
-	}
+	isc_mem_detach(&client->mctx);
 	if (client->sctx != NULL) {
 		ns_server_detach(&client->sctx);
 	}
@@ -2343,8 +2332,6 @@ clientmgr_detach(ns_clientmgr_t **mp) {
 
 static void
 clientmgr_destroy(ns_clientmgr_t *manager) {
-	int i;
-
 	MTRACE("clientmgr_destroy");
 
 	isc_refcount_destroy(&manager->references);
@@ -2357,28 +2344,24 @@ clientmgr_destroy(ns_clientmgr_t *manager) {
 		isc_task_detach(&manager->excl);
 	}
 
-	for (i = 0; i < manager->ncpus; i++) {
-		if (manager->taskpool[i] != NULL) {
-			isc_task_detach(&manager->taskpool[i]);
-		}
-	}
-	isc_mem_put(manager->mctx, manager->taskpool,
-		    manager->ncpus * sizeof(manager->taskpool[0]));
+	isc_task_detach(&manager->task);
 	ns_server_detach(&manager->sctx);
 
-	isc_mem_put(manager->mctx, manager, sizeof(*manager));
+	isc_mem_putanddetach(&manager->mctx, manager, sizeof(*manager));
 }
 
 isc_result_t
-ns_clientmgr_create(isc_mem_t *mctx, ns_server_t *sctx, isc_taskmgr_t *taskmgr,
+ns_clientmgr_create(ns_server_t *sctx, isc_taskmgr_t *taskmgr,
 		    isc_timermgr_t *timermgr, ns_interfacemgr_t *interfacemgr,
-		    int ncpus, ns_clientmgr_t **managerp) {
+		    int tid, ns_clientmgr_t **managerp) {
 	ns_clientmgr_t *manager;
 	isc_result_t result;
-	int i;
+	isc_mem_t *mctx = NULL;
+
+	isc_mem_create(&mctx);
 
 	manager = isc_mem_get(mctx, sizeof(*manager));
-	*manager = (ns_clientmgr_t){ .magic = 0 };
+	*manager = (ns_clientmgr_t){ .magic = 0, .mctx = mctx };
 
 	isc_mutex_init(&manager->lock);
 	isc_mutex_init(&manager->reclock);
@@ -2389,22 +2372,17 @@ ns_clientmgr_create(isc_mem_t *mctx, ns_server_t *sctx, isc_taskmgr_t *taskmgr,
 		goto cleanup_reclock;
 	}
 
-	manager->mctx = mctx;
 	manager->taskmgr = taskmgr;
 	manager->timermgr = timermgr;
-	manager->ncpus = ncpus;
+	manager->tid = tid;
 
 	manager->interfacemgr = interfacemgr;
 
 	manager->exiting = false;
-	manager->taskpool = isc_mem_get(
-		mctx, manager->ncpus * sizeof(manager->taskpool[0]));
-	for (i = 0; i < manager->ncpus; i++) {
-		manager->taskpool[i] = NULL;
-		result = isc_task_create_bound(manager->taskmgr, 20,
-					       &manager->taskpool[i], i);
-		RUNTIME_CHECK(result == ISC_R_SUCCESS);
-	}
+	result = isc_task_create_bound(manager->taskmgr, 20,
+				       &manager->task, manager->tid);
+	RUNTIME_CHECK(result == ISC_R_SUCCESS);
+
 	isc_refcount_init(&manager->references, 1);
 	manager->sctx = NULL;
 	ns_server_attach(sctx, &manager->sctx);

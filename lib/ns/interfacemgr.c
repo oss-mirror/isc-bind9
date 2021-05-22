@@ -89,7 +89,7 @@ struct ns_interfacemgr {
 	unsigned int udpdisp;	  /*%< UDP dispatch count */
 	atomic_bool shuttingdown; /*%< Interfacemgr is shutting
 				   * down */
-	ns_clientmgr_t *clientmgr;     /*%< Client manager. */
+	ns_clientmgr_t **clientmgrs;     /*%< Client manager. */
 #ifdef USE_ROUTE_SOCKET
 	isc_task_t *task;
 	isc_socket_t *route;
@@ -230,14 +230,12 @@ ns_interfacemgr_create(isc_mem_t *mctx, ns_server_t *sctx,
 	ISC_LIST_INIT(mgr->interfaces);
 	ISC_LIST_INIT(mgr->listenon);
 
-	result = ns_clientmgr_create(mgr->mctx, mgr->sctx, mgr->taskmgr,
-				     mgr->timermgr, mgr, mgr->ncpus,
-				     &mgr->clientmgr);
-	if (result != ISC_R_SUCCESS) {
-		isc_log_write(IFMGR_COMMON_LOGARGS, ISC_LOG_ERROR,
-			      "ns_clientmgr_create() failed: %s",
-			      isc_result_totext(result));
-		goto cleanup_ctx;
+	mgr->clientmgrs = isc_mem_get(mgr->mctx, mgr->ncpus * sizeof(*mgr->clientmgrs[0]));
+	for (size_t i = 0; i < (size_t)mgr->ncpus; i++) {
+		result = ns_clientmgr_create(mgr->sctx, mgr->taskmgr,
+					     mgr->timermgr, mgr, (int)i,
+					     &mgr->clientmgrs[i]);
+		RUNTIME_CHECK(result == ISC_R_SUCCESS);
 	}
 
 	/*
@@ -309,8 +307,10 @@ cleanup_listenon:
 cleanup_lock:
 	isc_mutex_destroy(&mgr->lock);
 cleanup_clientmgr:
-	ns_clientmgr_destroy(&mgr->clientmgr);
-cleanup_ctx:
+	for (size_t i = 0; i < (size_t)mgr->ncpus; i++) {
+		ns_clientmgr_destroy(&mgr->clientmgrs[i]);
+	}
+	isc_mem_put(mgr->mctx, mgr->clientmgrs, mgr->ncpus * sizeof(*mgr->clientmgrs[0]));
 	ns_server_detach(&mgr->sctx);
 	isc_mem_putanddetach(&mgr->mctx, mgr, sizeof(*mgr));
 	return (result);
@@ -335,9 +335,10 @@ ns_interfacemgr_destroy(ns_interfacemgr_t *mgr) {
 	ns_listenlist_detach(&mgr->listenon6);
 	clearlistenon(mgr);
 	isc_mutex_destroy(&mgr->lock);
-	if (mgr->clientmgr != NULL) {
-		ns_clientmgr_destroy(&mgr->clientmgr);
+	for (size_t i = 0; i < (size_t)mgr->ncpus; i++) {
+		ns_clientmgr_destroy(&mgr->clientmgrs[i]);
 	}
+	isc_mem_put(mgr->mctx, mgr->clientmgrs, mgr->ncpus * sizeof(*mgr->clientmgrs[0]));
 	if (mgr->sctx != NULL) {
 		ns_server_detach(&mgr->sctx);
 	}
@@ -1346,7 +1347,9 @@ ns_interfacemgr_dumprecursing(FILE *f, ns_interfacemgr_t *mgr) {
 	REQUIRE(NS_INTERFACEMGR_VALID(mgr));
 
 	LOCK(&mgr->lock);
-	ns_client_dumprecursing(f, mgr->clientmgr);
+	for (size_t i = 0; i < (size_t)mgr->ncpus; i++) {
+		ns_client_dumprecursing(f, mgr->clientmgrs[i]);
+	}
 	UNLOCK(&mgr->lock);
 }
 
@@ -1406,6 +1409,11 @@ ns__interfacemgr_nextif(ns_interface_t *ifp) {
 
 ns_clientmgr_t *
 ns_interfacemgr_getclientmgr(ns_interfacemgr_t *mgr) {
+	int tid = isc_nm_tid();
+
 	REQUIRE(NS_INTERFACEMGR_VALID(mgr));
-	return (mgr->clientmgr);
+	REQUIRE(tid >= 0);
+	REQUIRE(tid < mgr->ncpus);
+
+	return (mgr->clientmgrs[tid]);
 }
