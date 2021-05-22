@@ -1,3 +1,8 @@
+5653.	[func]		Memory allocation has been substantially refactored,
+			and is now based on the memory allocation API
+			provided by 'libjemalloc'. This is now a build
+			dependency for BIND. [GL #2433]
+
 5652.	[bug]		Copy and paste error caused the socket option to
 			be enabled instead of disabled. [GL #2746]
 

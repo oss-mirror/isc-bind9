@@ -48,6 +48,10 @@ Feature Changes
   which should lead to less memory fragmentation and better startup
   performance.  :gl:`#2433`
 
+- Memory allocation has been substantially refactored, and is now based
+  on the memory allocation API provided by the `jemalloc` library. This
+  library is now required for building BIND. :gl:`#2433`
+
 Bug Fixes
 ~~~~~~~~~
 
