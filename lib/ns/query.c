@@ -2033,8 +2033,8 @@ addname:
 	if (need_addname) {
 		dns_message_addname(client->message, fname,
 				    DNS_SECTION_ADDITIONAL);
+		fname = NULL;
 	}
-	fname = NULL;
 
 	/*
 	 * In a few cases, we want to add additional data for additional

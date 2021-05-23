@@ -658,7 +658,7 @@ msgreset(dns_message_t *msg, bool everything) {
 		msginit(msg);
 	}
 
-	ENSURE(isc_mempool_getallocated(msg->pool) == 0);
+	ENSURE(!msg->localpool || isc_mempool_getallocated(msg->pool) == 0);
 }
 
 static unsigned int
@@ -2599,6 +2599,8 @@ dns_message_puttempname(dns_message_t *msg, dns_name_t **itemp) {
 		dns_name_free(item, msg->mctx);
 	}
 
+	dns_name_invalidate(item);
+
 	/*
 	 * 'name' is the first field in dns_fixedname_t, so putting
 	 * back the address of name is the same as putting back
@@ -2620,8 +2622,8 @@ void
 dns_message_puttemprdataset(dns_message_t *msg, dns_rdataset_t **item) {
 	REQUIRE(DNS_MESSAGE_VALID(msg));
 	REQUIRE(item != NULL && *item != NULL);
-
 	REQUIRE(!dns_rdataset_isassociated(*item));
+	dns_rdataset_invalidate(*item);
 	isc_mempool_put(msg->pool, *item);
 	*item = NULL;
 }

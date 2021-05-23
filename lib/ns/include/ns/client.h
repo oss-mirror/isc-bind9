@@ -155,7 +155,10 @@ struct ns_clientmgr {
 	/* Attached by clients, needed for e.g. recursion */
 	isc_task_t *task;
 
-	dns_aclenv_t *aclenv;
+	isc_mempool_t *resources;   /* Message resources */
+	isc_mutex_t resources_lock; /* Mempool lock */
+
+	dns_aclenv_t * aclenv;	    /* ACL environment */
 
 	/* Lock covers manager state. */
 	isc_mutex_t lock;

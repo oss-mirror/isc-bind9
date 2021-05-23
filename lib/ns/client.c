@@ -2207,8 +2207,8 @@ ns__client_setup(ns_client_t *client, ns_clientmgr_t *mgr, bool new) {
 		ns_server_attach(mgr->sctx, &client->sctx);
 		isc_task_attach(mgr->task, &client->task);
 
-		dns_message_create(client->mctx, DNS_MESSAGE_INTENTPARSE, NULL,
-				   &client->message);
+		dns_message_create(client->mctx, DNS_MESSAGE_INTENTPARSE,
+				   mgr->resources, &client->message);
 
 		client->sendbuf = isc_mem_get(client->mctx,
 					      NS_CLIENT_SEND_BUFFER_SIZE);
@@ -2340,8 +2340,11 @@ clientmgr_destroy(ns_clientmgr_t *manager) {
 
 	dns_aclenv_detach(&manager->aclenv);
 
+	isc_mempool_destroy(&manager->resources);
+
 	isc_mutex_destroy(&manager->lock);
 	isc_mutex_destroy(&manager->reclock);
+	isc_mutex_destroy(&manager->resources_lock);
 
 	if (manager->excl != NULL) {
 		isc_task_detach(&manager->excl);
@@ -2380,6 +2383,14 @@ ns_clientmgr_create(ns_server_t *sctx, isc_taskmgr_t *taskmgr,
 	manager->tid = tid;
 
 	dns_aclenv_attach(aclenv, &manager->aclenv);
+
+	isc_mutex_init(&manager->resources_lock);
+	isc_mempool_create(mctx, sizeof(dns_msgresource_t),
+			   &manager->resources);
+	isc_mempool_setfillcount(manager->resources, 4096);
+	isc_mempool_setfreemax(manager->resources, 1024);
+	isc_mempool_associatelock(manager->resources, &manager->resources_lock);
+	isc_mempool_setname(manager->resources, "clientmgr:resources");
 
 	manager->exiting = false;
 	result = isc_task_create_bound(manager->taskmgr, 20, &manager->task,
