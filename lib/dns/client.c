@@ -580,7 +580,7 @@ start_fetch(resctx_t *rctx) {
 		rctx->view->resolver, dns_fixedname_name(&rctx->name),
 		rctx->type, NULL, NULL, NULL, NULL, 0, fopts, 0, NULL,
 		rctx->task, fetch_done, rctx, rctx->rdataset, rctx->sigrdataset,
-		NULL, &rctx->fetch);
+		&rctx->fetch);
 
 	return (result);
 }

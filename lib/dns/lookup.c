@@ -85,7 +85,7 @@ start_fetch(dns_lookup_t *lookup) {
 		lookup->view->resolver, dns_fixedname_name(&lookup->name),
 		lookup->type, NULL, NULL, NULL, NULL, 0, 0, 0, NULL,
 		lookup->task, fetch_done, lookup, &lookup->rdataset,
-		&lookup->sigrdataset, NULL, &lookup->fetch);
+		&lookup->sigrdataset, &lookup->fetch);
 
 	return (result);
 }

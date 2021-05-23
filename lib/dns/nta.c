@@ -262,7 +262,7 @@ checkbogus(isc_task_t *task, isc_event_t *event) {
 	result = dns_resolver_createfetch(
 		view->resolver, nta->name, dns_rdatatype_nsec, NULL, NULL, NULL,
 		NULL, 0, DNS_FETCHOPT_NONTA, 0, NULL, task, fetch_done, nta,
-		&nta->rdataset, &nta->sigrdataset, NULL, &nta->fetch);
+		&nta->rdataset, &nta->sigrdataset, &nta->fetch);
 	if (result != ISC_R_SUCCESS) {
 		nta_detach(view->mctx, &nta);
 		dns_view_weakdetach(&view);

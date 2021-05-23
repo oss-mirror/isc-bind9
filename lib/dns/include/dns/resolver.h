@@ -294,7 +294,7 @@ dns_resolver_createfetch(dns_resolver_t *res, const dns_name_t *name,
 			 isc_counter_t *qc, isc_task_t *task,
 			 isc_taskaction_t action, void *arg,
 			 dns_rdataset_t *rdataset, dns_rdataset_t *sigrdataset,
-			 isc_mempool_t *resources, dns_fetch_t **fetchp);
+			 dns_fetch_t **fetchp);
 /*%<
  * Recurse to answer a question.
  *
@@ -320,9 +320,6 @@ dns_resolver_createfetch(dns_resolver_t *res, const dns_name_t *name,
  *\li	'client' and 'id' are used for duplicate query detection.  '*client'
  *	must remain stable until after 'action' has been called or
  *	dns_resolver_cancelfetch() is called.
-
- *\li	'resources', if not NULL, must point to a memory pool of
- *	dns_msgresource_t objects.
  *
  * Requires:
  *
