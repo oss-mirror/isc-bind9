@@ -1567,6 +1567,8 @@ ns__client_put_cb(void *client0) {
 	client->magic = 0;
 	client->shuttingdown = true;
 
+	dns_message_detach(&client->message);
+
 	if (client->manager != NULL) {
 		clientmgr_detach(&client->manager);
 	}
@@ -1577,8 +1579,6 @@ ns__client_put_cb(void *client0) {
 		dns_rdataset_disassociate(client->opt);
 		dns_message_puttemprdataset(client->message, &client->opt);
 	}
-
-	dns_message_detach(&client->message);
 
 	/*
 	 * Detaching the task must be done after unlinking from
