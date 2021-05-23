@@ -1203,9 +1203,10 @@ isc_mempool_create(isc_mem_t *mctx, size_t size, isc_mempool_t **mpctxp) {
 
 	*mpctx = (isc_mempool_t){
 		.magic = MEMPOOL_MAGIC,
-		.mctx = mctx,
 		.size = size,
 	};
+
+	isc_mem_attach(mctx, &mpctx->mctx);
 
 	isc_refcount_init(&mpctx->references, 1);
 
@@ -1238,7 +1239,6 @@ isc_mempool_setname(isc_mempool_t *mpctx, const char *name) {
 
 static void
 mempool_destroy(isc_mempool_t *mpctx) {
-	isc_mem_t *mctx;
 	isc_mutex_t *lock;
 	element *item;
 
@@ -1251,8 +1251,6 @@ mempool_destroy(isc_mempool_t *mpctx) {
 				 mpctx->name);
 	}
 	REQUIRE(atomic_load_acquire(&mpctx->allocated) == 0);
-
-	mctx = mpctx->mctx;
 
 	lock = mpctx->lock;
 
@@ -1269,21 +1267,21 @@ mempool_destroy(isc_mempool_t *mpctx) {
 		item = mpctx->items;
 		mpctx->items = item->next;
 
-		mem_putstats(mctx, item, mpctx->size);
-		mem_put(mctx, item, mpctx->size);
+		mem_putstats(mpctx->mctx, item, mpctx->size);
+		mem_put(mpctx->mctx, item, mpctx->size);
 	}
 
 	/*
 	 * Remove our linked list entry from the memory context.
 	 */
-	MCTXLOCK(mctx);
-	ISC_LIST_UNLINK(mctx->pools, mpctx, link);
-	mctx->poolcnt--;
-	MCTXUNLOCK(mctx);
+	MCTXLOCK(mpctx->mctx);
+	ISC_LIST_UNLINK(mpctx->mctx->pools, mpctx, link);
+	mpctx->mctx->poolcnt--;
+	MCTXUNLOCK(mpctx->mctx);
 
 	mpctx->magic = 0;
 
-	isc_mem_put(mpctx->mctx, mpctx, sizeof(isc_mempool_t));
+	isc_mem_putanddetach(&mpctx->mctx, mpctx, sizeof(isc_mempool_t));
 
 	if (lock != NULL) {
 		UNLOCK(lock);
