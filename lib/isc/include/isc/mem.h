@@ -403,6 +403,11 @@ isc_mempool_destroy(isc_mempool_t **mpctxp);
  */
 
 void
+isc_mempool_attach(isc_mempool_t *source, isc_mempool_t **targetp);
+void
+isc_mempool_detach(isc_mempool_t **mpctxp);
+
+void
 isc_mempool_setname(isc_mempool_t *mpctx, const char *name);
 /*%<
  * Associate a name with a memory pool.  At most 15 characters may be

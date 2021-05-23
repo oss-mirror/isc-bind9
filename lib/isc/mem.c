@@ -163,6 +163,7 @@ struct isc_mem {
 struct isc_mempool {
 	/* always unlocked */
 	unsigned int magic;
+	isc_refcount_t references;
 	isc_mutex_t *lock; /*%< optional lock */
 	isc_mem_t *mctx;   /*%< our memory context */
 	/*%< locked via the memory context's lock */
@@ -1206,6 +1207,8 @@ isc_mempool_create(isc_mem_t *mctx, size_t size, isc_mempool_t **mpctxp) {
 		.size = size,
 	};
 
+	isc_refcount_init(&mpctx->references, 1);
+
 	atomic_init(&mpctx->maxalloc, SIZE_MAX);
 	atomic_init(&mpctx->allocated, 0);
 	atomic_init(&mpctx->freecount, 0);
@@ -1232,18 +1235,15 @@ isc_mempool_setname(isc_mempool_t *mpctx, const char *name) {
 	MPCTXUNLOCK(mpctx);
 }
 
-void
-isc_mempool_destroy(isc_mempool_t **mpctxp) {
-	REQUIRE(mpctxp != NULL);
-	REQUIRE(VALID_MEMPOOL(*mpctxp));
 
-	isc_mempool_t *mpctx;
+static void
+mempool_destroy(isc_mempool_t *mpctx) {
 	isc_mem_t *mctx;
 	isc_mutex_t *lock;
 	element *item;
 
-	mpctx = *mpctxp;
-	*mpctxp = NULL;
+	isc_refcount_destroy(&mpctx->references);
+
 	if (atomic_load_acquire(&mpctx->allocated) > 0) {
 		UNEXPECTED_ERROR(__FILE__, __LINE__,
 				 "isc_mempool_destroy(): mempool %s "
@@ -1288,6 +1288,41 @@ isc_mempool_destroy(isc_mempool_t **mpctxp) {
 	if (lock != NULL) {
 		UNLOCK(lock);
 	}
+}
+
+void
+isc_mempool_attach(isc_mempool_t *source, isc_mempool_t **targetp) {
+	REQUIRE(VALID_MEMPOOL(source));
+	REQUIRE(targetp != NULL && *targetp == NULL);
+
+	isc_refcount_increment(&source->references);
+
+	*targetp = source;
+}
+
+void
+isc_mempool_detach(isc_mempool_t **mpctxp) {
+	REQUIRE(mpctxp != NULL);
+	REQUIRE(VALID_MEMPOOL(*mpctxp));
+
+	isc_mempool_t *mpctx = *mpctxp;
+	*mpctxp = NULL;
+
+	if (isc_refcount_decrement(&mpctx->references) == 1) {
+		mempool_destroy(mpctx);
+	}
+}
+
+void
+isc_mempool_destroy(isc_mempool_t **mpctxp) {
+	REQUIRE(mpctxp != NULL);
+	REQUIRE(VALID_MEMPOOL(*mpctxp));
+
+	isc_mempool_t *mpctx = *mpctxp;
+	*mpctxp = NULL;
+
+	REQUIRE(isc_refcount_decrement(&mpctx->references) == 1);
+	mempool_destroy(mpctx);
 }
 
 void
