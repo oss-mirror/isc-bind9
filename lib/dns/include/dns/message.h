@@ -206,6 +206,8 @@ struct dns_message {
 	unsigned int   magic;
 	isc_refcount_t refcount;
 
+	int tid;
+
 	dns_messageid_t	 id;
 	unsigned int	 flags;
 	dns_rcode_t	 rcode;

@@ -21,6 +21,7 @@
 
 #include <isc/buffer.h>
 #include <isc/mem.h>
+#include <isc/netmgr.h>
 #include <isc/print.h>
 #include <isc/string.h> /* Required for HP/UX (and others?) */
 #include <isc/utf8.h>
@@ -713,7 +714,7 @@ dns_message_create(isc_mem_t *mctx, unsigned int intent, isc_mempool_t *rpool,
 		intent == DNS_MESSAGE_INTENTRENDER);
 
 	m = isc_mem_get(mctx, sizeof(dns_message_t));
-	*m = (dns_message_t){ .from_to_wire = intent };
+	*m = (dns_message_t){ .from_to_wire = intent, .tid = isc_nm_tid() };
 	isc_mem_attach(mctx, &m->mctx);
 	msginit(m);
 
@@ -2524,6 +2525,7 @@ dns_message_gettempname(dns_message_t *msg, dns_name_t **item) {
 
 	REQUIRE(DNS_MESSAGE_VALID(msg));
 	REQUIRE(item != NULL && *item == NULL);
+	REQUIRE(msg->tid == isc_nm_tid());
 
 	fn = isc_mempool_get(msg->pool);
 	if (fn == NULL) {

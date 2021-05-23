@@ -2553,6 +2553,8 @@ query_prefetch(ns_client_t *client, dns_name_t *qname,
 		peeraddr = NULL;
 	}
 
+	REQUIRE(client->tid == isc_nm_tid());
+
 	isc_nmhandle_attach(client->handle, &client->prefetchhandle);
 	options = client->query.fetchoptions | DNS_FETCHOPT_PREFETCH;
 	result = dns_resolver_createfetch(
@@ -2765,6 +2767,8 @@ query_rpzfetch(ns_client_t *client, dns_name_t *qname, dns_rdatatype_t type) {
 	} else {
 		peeraddr = NULL;
 	}
+
+	REQUIRE(client->tid == isc_nm_tid());
 
 	options = client->query.fetchoptions;
 	isc_nmhandle_attach(client->handle, &client->prefetchhandle);
@@ -6429,6 +6433,8 @@ ns_query_recurse(ns_client_t *client, dns_rdatatype_t qtype, dns_name_t *qname,
 	{
 		client->query.fetchoptions |= DNS_FETCHOPT_TRYSTALE_ONTIMEOUT;
 	}
+
+	REQUIRE(client->tid == isc_nm_tid());
 
 	isc_nmhandle_attach(client->handle, &client->fetchhandle);
 	result = dns_resolver_createfetch(
