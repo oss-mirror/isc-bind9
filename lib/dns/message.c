@@ -657,8 +657,6 @@ msgreset(dns_message_t *msg, bool everything) {
 	if (!everything) {
 		msginit(msg);
 	}
-
-	ENSURE(!msg->localpool || isc_mempool_getallocated(msg->pool) == 0);
 }
 
 static unsigned int
@@ -732,14 +730,13 @@ dns_message_create(isc_mem_t *mctx, unsigned int intent, isc_mempool_t *rpool,
 	ISC_LIST_INIT(m->freerdatalist);
 
 	if (rpool != NULL) {
-		m->pool = rpool;
+		isc_mempool_attach(rpool, &m->pool);
 	} else {
 		isc_mempool_create(m->mctx, sizeof(dns_msgresource_t),
 				   &m->pool);
 		isc_mempool_setfillcount(m->pool, RESOURCE_COUNT);
 		isc_mempool_setfreemax(m->pool, RESOURCE_COUNT);
 		isc_mempool_setname(m->pool, "msg:resources");
-		m->localpool = true;
 	}
 
 	isc_buffer_allocate(mctx, &dynbuf, SCRATCHPAD_SIZE);
@@ -768,9 +765,7 @@ dns__message_destroy(dns_message_t *msg) {
 
 	msgreset(msg, true);
 	isc_refcount_destroy(&msg->refcount);
-	if (msg->localpool) {
-		isc_mempool_destroy(&msg->pool);
-	}
+	isc_mempool_detach(&msg->pool);
 
 	msg->magic = 0;
 	isc_mem_putanddetach(&msg->mctx, msg, sizeof(dns_message_t));

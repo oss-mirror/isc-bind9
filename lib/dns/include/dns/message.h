@@ -248,7 +248,6 @@ struct dns_message {
 
 	isc_mem_t *    mctx;
 	isc_mempool_t *pool;
-	bool	       localpool;
 
 	isc_bufferlist_t scratchpad;
 	isc_bufferlist_t cleanup;

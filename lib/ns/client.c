@@ -2340,7 +2340,7 @@ clientmgr_destroy(ns_clientmgr_t *manager) {
 
 	dns_aclenv_detach(&manager->aclenv);
 
-	isc_mempool_destroy(&manager->resources);
+	isc_mempool_detach(&manager->resources);
 
 	isc_mutex_destroy(&manager->lock);
 	isc_mutex_destroy(&manager->reclock);
