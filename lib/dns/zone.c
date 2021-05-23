@@ -10916,7 +10916,7 @@ zone_refreshkeys(dns_zone_t *zone) {
 					DNS_FETCHOPT_UNSHARED |
 					DNS_FETCHOPT_NOCACHED,
 				0, NULL, zone->task, keyfetch_done, kfetch,
-				&kfetch->dnskeyset, &kfetch->dnskeysigset,
+				&kfetch->dnskeyset, &kfetch->dnskeysigset, NULL,
 				&kfetch->fetch);
 			LOCK_ZONE(zone);
 #ifdef ENABLE_AFL
