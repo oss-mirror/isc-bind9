@@ -1567,17 +1567,17 @@ ns__client_put_cb(void *client0) {
 	client->magic = 0;
 	client->shuttingdown = true;
 
-	dns_message_detach(&client->message);
-
-	if (client->manager != NULL) {
-		clientmgr_detach(&client->manager);
-	}
-
 	isc_mem_put(client->mctx, client->sendbuf, NS_CLIENT_SEND_BUFFER_SIZE);
 	if (client->opt != NULL) {
 		INSIST(dns_rdataset_isassociated(client->opt));
 		dns_rdataset_disassociate(client->opt);
 		dns_message_puttemprdataset(client->message, &client->opt);
+	}
+
+	dns_message_detach(&client->message);
+
+	if (client->manager != NULL) {
+		clientmgr_detach(&client->manager);
 	}
 
 	/*
@@ -2344,7 +2344,7 @@ clientmgr_destroy(ns_clientmgr_t *manager) {
 
 	isc_mutex_destroy(&manager->lock);
 	isc_mutex_destroy(&manager->reclock);
-	isc_mutex_destroy(&manager->resources_lock);
+	/* isc_mutex_destroy(&manager->resources_lock); */
 
 	if (manager->excl != NULL) {
 		isc_task_detach(&manager->excl);
@@ -2384,12 +2384,12 @@ ns_clientmgr_create(ns_server_t *sctx, isc_taskmgr_t *taskmgr,
 
 	dns_aclenv_attach(aclenv, &manager->aclenv);
 
-	isc_mutex_init(&manager->resources_lock);
+	/* isc_mutex_init(&manager->resources_lock); */
 	isc_mempool_create(mctx, sizeof(dns_msgresource_t),
 			   &manager->resources);
 	isc_mempool_setfillcount(manager->resources, 4096);
 	isc_mempool_setfreemax(manager->resources, 1024);
-	isc_mempool_associatelock(manager->resources, &manager->resources_lock);
+	/* isc_mempool_associatelock(manager->resources, &manager->resources_lock); */
 	isc_mempool_setname(manager->resources, "clientmgr:resources");
 
 	manager->exiting = false;
