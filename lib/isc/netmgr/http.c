@@ -924,8 +924,9 @@ static bool
 http_send_outgoing(isc_nm_http_session_t *session, isc_nmhandle_t *httphandle,
 		   isc_nm_cb_t cb, void *cbarg) {
 	isc_http_send_req_t *send = NULL;
-	const uint8_t *data = NULL;
-	size_t pending;
+	size_t total = 0;
+	uint8_t tmp_data[UINT16_MAX] = { 0 };
+	uint8_t *prepared_data = &tmp_data[0];
 
 	if (!http_session_active(session) ||
 	    !nghttp2_session_want_write(session->ngsession))
@@ -933,18 +934,47 @@ http_send_outgoing(isc_nm_http_session_t *session, isc_nmhandle_t *httphandle,
 		return (false);
 	}
 
-	pending = nghttp2_session_mem_send(session->ngsession, &data);
-	if (pending == 0) {
+	while (nghttp2_session_want_write(session->ngsession)) {
+		const uint8_t *data = NULL;
+		const size_t pending =
+			nghttp2_session_mem_send(session->ngsession, &data);
+		const size_t new_total = total + pending;
+
+		/* reallocate buffer if required */
+		if (new_total > sizeof(tmp_data)) {
+			uint8_t *old_prepared_data = prepared_data;
+			const bool allocated = prepared_data != tmp_data;
+
+			prepared_data = isc_mem_get(session->mctx, new_total);
+			memmove(prepared_data, old_prepared_data, total);
+			if (allocated) {
+				isc_mem_put(session->mctx, old_prepared_data,
+					    total);
+			}
+		}
+		memmove(&prepared_data[total], data, pending);
+		total = new_total;
+	}
+
+	if (total == 0) {
+		INSIST(prepared_data == &tmp_data[0]);
 		/* No data returned */
 		return (false);
 	}
 
 	send = isc_mem_get(session->mctx, sizeof(*send));
-	*send = (isc_http_send_req_t){
-		.data.base = isc_mem_get(session->mctx, pending),
-		.data.length = pending,
-	};
-	memmove(send->data.base, data, pending);
+	if (prepared_data == tmp_data) {
+		*send = (isc_http_send_req_t){
+			.data.base = isc_mem_get(session->mctx, total),
+			.data.length = total,
+		};
+		memmove(send->data.base, tmp_data, total);
+	} else {
+		*send = (isc_http_send_req_t){
+			.data.base = prepared_data,
+			.data.length = total,
+		};
+	}
 	isc_nmhandle_attach(session->handle, &send->transphandle);
 	isc__nm_httpsession_attach(session, &send->session);
 
