@@ -1392,13 +1392,17 @@ AC_CHECK_HEADERS(locale.h)
 AC_CHECK_FUNCS(setlocale)
 
 #
+# Compile with jemalloc (either provided as package or wired in the system on FreeBSD and NetBSD)
 #
-#
-AC_MSG_CHECKING([for jemalloc])
-PKG_CHECK_MODULES([JEMALLOC], [jemalloc >= 5], []
-		  [AC_MSG_WARN([Using jemalloc 5 is recommended])
-		   PKG_CHECK_MODULES([JEMALLOC], [jemalloc], [],
-				     [AC_MSG_ERROR([jemalloc not found])])])
+jemalloc_found=no
+PKG_CHECK_MODULES([JEMALLOC], [jemalloc],
+		  [jemalloc_found=yes],
+		  [AC_CHECK_HEADERS([malloc_np.h jemalloc/jemalloc.h],
+				    [jemalloc_found=yes])])
+AS_IF([test "$jemalloc_found" = "yes"],
+      [AC_DEFINE([HAVE_JEMALLOC], [1], [Define to 1 if jemalloc is available])],
+      [AC_MSG_WARN([jemalloc not found; performance will be reduced])
+       AC_CHECK_FUNCS([malloc_size malloc_usable_size])])
 AC_SUBST([JEMALLOC_CFLAGS])
 AC_SUBST([JEMALLOC_LIBS])
 
@@ -1717,6 +1721,9 @@ report() {
     echo "Configuration summary:"
     echo "-------------------------------------------------------------------------------"
     echo "Optional features enabled:"
+    if test "yes" = "$jemalloc_found"; then
+	echo "    Memory allocator: jemalloc"
+    fi
     if test "yes" = "$enable_full_report" -o "standard" = "$with_locktype"; then
 	echo "    Mutex lock type: $with_locktype"
     fi
@@ -1773,6 +1780,14 @@ report() {
     echo "-------------------------------------------------------------------------------"
 
     echo "Features disabled or unavailable on this platform:"
+    if test "yes" = "$jemalloc_found"; then
+      echo "    Memory allocator: system"
+      echo "    WARNING: This is not a recommended configuration"
+      echo "    WARNING: Using system memory allocator caused"
+      echo "    WARNING: reduced performance and increased memory"
+      echo "    WARNING: fragmentation.  Installing jemalloc memory"
+      echo "    WARNING: allocator is strongly recommended."
+    fi
     test "small" = "$with_tuning" || echo "    Small-system tuning (--with-tuning)"
 
     test "no" = "$enable_dnstap" && \

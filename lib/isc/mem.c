@@ -42,7 +42,13 @@
 #include <json_object.h>
 #endif /* HAVE_JSON_C */
 
+#if defined(HAVE_MALLOC_NP_H)
+#include <malloc_np.h>
+#elif defined(HAVE_JEMALLOC)
 #include <jemalloc/jemalloc.h>
+#else
+#include "jemalloc_shim.h"
+#endif
 
 #include "mem_p.h"
 

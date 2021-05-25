@@ -181,6 +181,7 @@ libisc_la_SOURCES =		\
 	hmac.c			\
 	httpd.c			\
 	iterated_hash.c		\
+	jemalloc_shim.h		\
 	lex.c			\
 	lib.c			\
 	log.c			\
