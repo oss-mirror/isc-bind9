@@ -2346,7 +2346,10 @@ http_close_direct(isc_nmsocket_t *sock) {
 	atomic_store(&sock->active, false);
 	session = sock->h2.session;
 
-	if (session != NULL && session->handle) {
+	if (session != NULL && session->handle &&
+	    ISC_LIST_EMPTY(session->sstreams) &&
+	    ISC_LIST_EMPTY(session->cstreams))
+	{
 		http_do_bio(session, NULL, NULL, NULL);
 	}
 }
@@ -2369,6 +2372,15 @@ isc__nm_http_close(isc_nmsocket_t *sock) {
 		isc__nm_httpsession_detach(&sock->h2.session);
 		destroy = true;
 	} else if (sock->h2.session == NULL && sock->tid == isc_nm_tid()) {
+		destroy = true;
+	} else if (sock->h2.session != NULL && sock->tid == isc_nm_tid() &&
+		   (!ISC_LIST_EMPTY(sock->h2.session->sstreams) ||
+		    !ISC_LIST_EMPTY(sock->h2.session->cstreams)))
+	{
+		/* Avoid creating a netievent when there are more than one
+		 * pending streams. Closing the last stream socket will lead to
+		 * the necessary http_do_bio() call. */
+		isc__nm_httpsession_detach(&sock->h2.session);
 		destroy = true;
 	}
 
