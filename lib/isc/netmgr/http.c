@@ -932,13 +932,6 @@ http_send_outgoing(isc_nm_http_session_t *session, isc_nmhandle_t *httphandle,
 	    !nghttp2_session_want_write(session->ngsession))
 	{
 		return (false);
-	} else if (!session->client && cb == NULL &&
-		   !ISC_LIST_EMPTY(session->sstreams)) {
-		/* Let's not send auxiliary data on its own: let's wait when a
-		 * server response is ready and send all the prepared HTTP/2
-		 * data altogether. This way we are avoiding sending tiny TCP
-		 * packets (which is inefficient).*/
-		return (false);
 	}
 
 	while (nghttp2_session_want_write(session->ngsession)) {
