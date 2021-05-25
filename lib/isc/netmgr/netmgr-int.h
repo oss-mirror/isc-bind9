@@ -892,9 +892,6 @@ struct isc_nmsocket {
 		isc_nmiface_t server_iface;
 		isc_nmiface_t local_iface;
 		atomic_bool result_updated;
-		isc_mem_t **mem_contexts;
-		size_t mem_contexts_count;
-		isc_mem_t *local_mctx;
 		enum {
 			TLS_INIT,
 			TLS_HANDSHAKE,

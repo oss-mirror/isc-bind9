@@ -123,9 +123,9 @@ tls_senddone(isc_nmhandle_t *handle, isc_result_t eresult, void *cbarg) {
 		}
 	}
 
-	isc_mem_put(tlssock->tlsstream.local_mctx, send_req->data.base,
+	isc_mem_put(handle->sock->mgr->mctx, send_req->data.base,
 		    send_req->data.length);
-	isc_mem_put(tlssock->tlsstream.local_mctx, send_req, sizeof(*send_req));
+	isc_mem_put(handle->sock->mgr->mctx, send_req, sizeof(*send_req));
 	tlssock->tlsstream.nsending--;
 
 	if (finish && eresult == ISC_R_SUCCESS) {
@@ -236,10 +236,10 @@ tls_send_outgoing(isc_nmsocket_t *sock, bool finish, isc_nmhandle_t *tlshandle,
 		pending = TLS_BUF_SIZE;
 	}
 
-	send_req = isc_mem_get(sock->tlsstream.local_mctx, sizeof(*send_req));
+	send_req = isc_mem_get(sock->mgr->mctx, sizeof(*send_req));
 	*send_req = (isc_nmsocket_tls_send_req_t){
 		.finish = finish,
-		.data.base = isc_mem_get(sock->tlsstream.local_mctx, pending),
+		.data.base = isc_mem_get(sock->mgr->mctx, pending),
 		.data.length = pending
 	};
 
@@ -581,8 +581,6 @@ tlslisten_acceptcb(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 	isc__nmsocket_init(tlssock, handle->sock->mgr, isc_nm_tlssocket,
 			   &tlslistensock->tlsstream.server_iface);
 
-	isc_mem_attach(tlslistensock->tlsstream.mem_contexts[handle->sock->tid],
-		       &tlssock->tlsstream.local_mctx);
 	/* We need to initialize SSL now to reference SSL_CTX properly */
 	tlssock->tlsstream.ctx = tlslistensock->tlsstream.ctx;
 	tlssock->tlsstream.tls = isc_tls_create(tlssock->tlsstream.ctx);
@@ -617,7 +615,6 @@ isc_nm_listentls(isc_nm_t *mgr, isc_nmiface_t *iface,
 	isc_result_t result;
 	isc_nmsocket_t *tlssock = isc_mem_get(mgr->mctx, sizeof(*tlssock));
 	isc_nmsocket_t *tsock = NULL;
-	size_t i;
 
 	REQUIRE(VALID_NM(mgr));
 
@@ -643,15 +640,6 @@ isc_nm_listentls(isc_nm_t *mgr, isc_nmiface_t *iface,
 		atomic_store(&tlssock->closed, true);
 		isc__nmsocket_detach(&tlssock);
 		return (result);
-	}
-
-	tlssock->tlsstream.mem_contexts_count = (size_t)mgr->nworkers;
-	tlssock->tlsstream.mem_contexts = isc_mem_get(
-		mgr->mctx,
-		sizeof(isc_mem_t *) * tlssock->tlsstream.mem_contexts_count);
-	for (i = 0; i < tlssock->tlsstream.mem_contexts_count; i++) {
-		tlssock->tlsstream.mem_contexts[i] = NULL;
-		isc_mem_create(&tlssock->tlsstream.mem_contexts[i]);
 	}
 
 	/* wait for listen result */
@@ -691,7 +679,7 @@ isc__nm_async_tlssend(isc__networker_t *worker, isc__netievent_t *ev0) {
 
 	tls_do_bio(sock, NULL, req, false);
 done:
-	isc_mem_free(sock->tlsstream.local_mctx, req->uvbuf.base);
+	isc_mem_free(sock->mgr->mctx, req->uvbuf.base);
 	isc__nm_uvreq_put(&req, sock);
 	return;
 }
@@ -720,8 +708,7 @@ isc__nm_tls_send(isc_nmhandle_t *handle, const isc_region_t *region,
 	uvreq->cb.send = cb;
 	uvreq->cbarg = cbarg;
 
-	uvreq->uvbuf.base = isc_mem_allocate(sock->tlsstream.local_mctx,
-					     region->length);
+	uvreq->uvbuf.base = isc_mem_allocate(sock->mgr->mctx, region->length);
 	memmove(uvreq->uvbuf.base, region->base, region->length);
 	uvreq->uvbuf.len = region->length;
 
@@ -928,7 +915,6 @@ tcp_connected(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 		goto error;
 	}
 
-	isc_mem_attach(handle->sock->mgr->mctx, &tlssock->tlsstream.local_mctx);
 	/*
 	 * We need to initialize SSL now to reference SSL_CTX properly.
 	 */
@@ -1022,23 +1008,6 @@ isc__nm_tls_cleanup_data(isc_nmsocket_t *sock) {
 			sock->tlsstream.ctx = NULL;
 			sock->tlsstream.bio_out = NULL;
 			sock->tlsstream.bio_in = NULL;
-		}
-
-		if (sock->tlsstream.local_mctx != NULL) {
-			isc_mem_detach(&sock->tlsstream.local_mctx);
-		}
-	} else if (sock->type == isc_nm_tlslistener) {
-		if (sock->tlsstream.mem_contexts != NULL) {
-			size_t i;
-			for (i = 0; i < sock->tlsstream.mem_contexts_count; i++)
-			{
-				isc_mem_detach(
-					&sock->tlsstream.mem_contexts[i]);
-			}
-			isc_mem_put(sock->mgr->mctx,
-				    sock->tlsstream.mem_contexts,
-				    sizeof(isc_mem_t *) *
-					    sock->tlsstream.mem_contexts_count);
 		}
 	}
 }
