@@ -529,7 +529,7 @@ call_unlink_cstream_readcb(http_cstream_t *cstream,
 	cstream->read_cb(session->handle, result,
 			 &(isc_region_t){ cstream->rbuf, cstream->rbufsize },
 			 cstream->read_cbarg);
-	put_http_cstream(session->local_mctx, cstream);
+	put_http_cstream(session->mctx, cstream);
 }
 
 static int
@@ -912,8 +912,8 @@ http_writecb(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 		isc_nmhandle_detach(&req->httphandle);
 	}
 
-	isc_mem_put(session->local_mctx, req->data.base, req->data.length);
-	isc_mem_put(session->local_mctx, req, sizeof(*req));
+	isc_mem_put(session->mctx, req->data.base, req->data.length);
+	isc_mem_put(session->mctx, req, sizeof(*req));
 
 	http_do_bio(session, NULL, NULL, NULL);
 	session->sending--;
@@ -949,12 +949,11 @@ http_send_outgoing(isc_nm_http_session_t *session, isc_nmhandle_t *httphandle,
 			uint8_t *old_prepared_data = prepared_data;
 			const bool allocated = prepared_data != tmp_data;
 
-			prepared_data = isc_mem_get(session->local_mctx,
-						    new_total);
+			prepared_data = isc_mem_get(session->mctx, new_total);
 			memmove(prepared_data, old_prepared_data, total);
 			if (allocated) {
-				isc_mem_put(session->local_mctx,
-					    old_prepared_data, total);
+				isc_mem_put(session->mctx, old_prepared_data,
+					    total);
 			}
 		}
 		memmove(&prepared_data[total], data, pending);
@@ -967,10 +966,10 @@ http_send_outgoing(isc_nm_http_session_t *session, isc_nmhandle_t *httphandle,
 		return (false);
 	}
 
-	send = isc_mem_get(session->local_mctx, sizeof(*send));
+	send = isc_mem_get(session->mctx, sizeof(*send));
 	if (prepared_data == tmp_data) {
 		*send = (isc_http_send_req_t){
-			.data.base = isc_mem_get(session->local_mctx, total),
+			.data.base = isc_mem_get(session->mctx, total),
 			.data.length = total,
 		};
 		memmove(send->data.base, tmp_data, total);
@@ -2460,7 +2459,7 @@ client_call_failed_read_cb(isc_result_t result,
 		    !isc__nmsocket_timer_running(session->handle->sock))
 		{
 			ISC_LIST_DEQUEUE(session->cstreams, cstream, link);
-			put_http_cstream(session->local_mctx, cstream);
+			put_http_cstream(session->mctx, cstream);
 		}
 
 		cstream = next;
