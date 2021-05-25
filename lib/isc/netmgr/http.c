@@ -108,7 +108,6 @@ struct isc_nm_http_session {
 	unsigned int magic;
 	isc_refcount_t references;
 	isc_mem_t *mctx;
-	isc_mem_t *local_mctx;
 
 	size_t sending;
 	bool reading;
@@ -238,20 +237,18 @@ init_nghttp2_mem(isc_mem_t *mctx, nghttp2_mem *mem) {
 }
 
 static void
-new_session(isc_mem_t *mctx, isc_mem_t *worker_local_mctx, isc_tlsctx_t *tctx,
+new_session(isc_mem_t *mctx, isc_tlsctx_t *tctx,
 	    isc_nm_http_session_t **sessionp) {
 	isc_nm_http_session_t *session = NULL;
 
 	REQUIRE(sessionp != NULL && *sessionp == NULL);
 	REQUIRE(mctx != NULL);
-	REQUIRE(worker_local_mctx != NULL);
 
 	session = isc_mem_get(mctx, sizeof(isc_nm_http_session_t));
 	*session = (isc_nm_http_session_t){ .magic = HTTP2_SESSION_MAGIC,
 					    .tlsctx = tctx };
 	isc_refcount_init(&session->references, 1);
 	isc_mem_attach(mctx, &session->mctx);
-	isc_mem_attach(worker_local_mctx, &session->local_mctx);
 	ISC_LIST_INIT(session->cstreams);
 	ISC_LIST_INIT(session->sstreams);
 
@@ -297,7 +294,6 @@ isc__nm_httpsession_detach(isc_nm_http_session_t **sessionp) {
 	/* We need an acquire memory barrier here */
 	(void)isc_refcount_current(&session->references);
 
-	isc_mem_detach(&session->local_mctx);
 	session->magic = 0;
 	isc_mem_putanddetach(&session->mctx, session,
 			     sizeof(isc_nm_http_session_t));
@@ -695,7 +691,7 @@ initialize_nghttp2_client_session(isc_nm_http_session_t *session) {
 	nghttp2_option *option = NULL;
 	nghttp2_mem mem;
 
-	init_nghttp2_mem(session->local_mctx, &mem);
+	init_nghttp2_mem(session->mctx, &mem);
 	RUNTIME_CHECK(nghttp2_session_callbacks_new(&callbacks) == 0);
 	RUNTIME_CHECK(nghttp2_option_new(&option) == 0);
 
@@ -1139,7 +1135,7 @@ transport_connect_cb(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 		goto error;
 	}
 
-	new_session(mctx, mctx, http_sock->h2.connect.tlsctx, &session);
+	new_session(mctx, http_sock->h2.connect.tlsctx, &session);
 	session->client = true;
 	transp_sock->h2.session = session;
 	http_sock->h2.connect.tlsctx = NULL;
@@ -2045,7 +2041,7 @@ initialize_nghttp2_server_session(isc_nm_http_session_t *session) {
 	nghttp2_session_callbacks *callbacks = NULL;
 	nghttp2_mem mem;
 
-	init_nghttp2_mem(session->local_mctx, &mem);
+	init_nghttp2_mem(session->mctx, &mem);
 
 	RUNTIME_CHECK(nghttp2_session_callbacks_new(&callbacks) == 0);
 
@@ -2156,9 +2152,7 @@ httplisten_acceptcb(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 
 	http_transpost_tcp_nodelay(handle);
 
-	new_session(httplistensock->mgr->mctx,
-		    httplistensock->h2.mem_contexts[handle->sock->tid], NULL,
-		    &session);
+	new_session(httplistensock->mgr->mctx, NULL, &session);
 	initialize_nghttp2_server_session(session);
 	handle->sock->h2.session = session;
 
@@ -2178,7 +2172,6 @@ isc_nm_listenhttp(isc_nm_t *mgr, isc_nmiface_t *iface, int backlog,
 		  isc_nmsocket_t **sockp) {
 	isc_nmsocket_t *sock = NULL;
 	isc_result_t result;
-	size_t i;
 
 	sock = isc_mem_get(mgr->mctx, sizeof(*sock));
 	isc__nmsocket_init(sock, mgr, isc_nm_httplistener, iface);
@@ -2206,14 +2199,6 @@ isc_nm_listenhttp(isc_nm_t *mgr, isc_nmiface_t *iface, int backlog,
 	sock->result = ISC_R_UNSET;
 	sock->tid = 0;
 	sock->fd = (uv_os_sock_t)-1;
-
-	sock->h2.mem_contexts_count = (size_t)mgr->nworkers;
-	sock->h2.mem_contexts = isc_mem_get(
-		mgr->mctx, sizeof(isc_mem_t *) * sock->h2.mem_contexts_count);
-	for (i = 0; i < sock->h2.mem_contexts_count; i++) {
-		sock->h2.mem_contexts[i] = NULL;
-		isc_mem_create(&sock->h2.mem_contexts[i]);
-	}
 
 	atomic_store(&sock->listening, true);
 	*sockp = sock;
@@ -2694,16 +2679,6 @@ isc__nm_http_cleanup_data(isc_nmsocket_t *sock) {
 		if (sock->h2.buf != NULL) {
 			isc_mem_free(sock->mgr->mctx, sock->h2.buf);
 			sock->h2.buf = NULL;
-		}
-
-		if (sock->h2.mem_contexts != NULL) {
-			size_t i;
-			for (i = 0; i < sock->h2.mem_contexts_count; i++) {
-				isc_mem_detach(&sock->h2.mem_contexts[i]);
-			}
-			isc_mem_put(sock->mgr->mctx, sock->h2.mem_contexts,
-				    sizeof(isc_mem_t *) *
-					    sock->h2.mem_contexts_count);
 		}
 	}
 

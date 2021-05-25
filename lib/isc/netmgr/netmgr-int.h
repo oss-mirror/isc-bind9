@@ -807,8 +807,6 @@ typedef struct isc_nmsocket_h2 {
 	isc_nm_http_session_t *session;
 
 	isc_nmsocket_t *httpserver;
-	isc_mem_t **mem_contexts;
-	size_t mem_contexts_count;
 
 	isc_http_request_type_t request_type;
 	isc_http_scheme_type_t request_scheme;
