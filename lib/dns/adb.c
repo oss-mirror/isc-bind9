@@ -3962,8 +3962,7 @@ fetch_callback(isc_task_t *task, isc_event_t *ev) {
 		dev->rdataset->ttl = ttlclamp(dev->rdataset->ttl);
 		clean_target(adb, &name->target);
 		name->expire_target = INT_MAX;
-		result = set_target(adb, &name->name,
-				    dns_fixedname_name(&dev->foundname),
+		result = set_target(adb, &name->name, dev->foundname,
 				    dev->rdataset, &name->target);
 		if (result == ISC_R_SUCCESS) {
 			DP(NCACHE_LEVEL,
