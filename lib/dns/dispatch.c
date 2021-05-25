@@ -40,15 +40,13 @@
 typedef ISC_LIST(dns_dispentry_t) dns_displist_t;
 
 typedef struct dispsocket dispsocket_t;
-typedef ISC_LIST(dispsocket_t) dispsocketlist_t;
 
 typedef struct dns_qid {
 	unsigned int magic;
+	isc_mutex_t lock;
 	unsigned int qid_nbuckets;  /*%< hash table size */
 	unsigned int qid_increment; /*%< id increment on collision */
-	isc_mutex_t lock;
-	dns_displist_t *qid_table;    /*%< the table itself */
-	dispsocketlist_t *sock_table; /*%< socket table */
+	dns_displist_t *qid_table;  /*%< the table itself */
 } dns_qid_t;
 
 struct dns_dispatchmgr {
@@ -116,8 +114,6 @@ struct dispsocket {
 	dns_dispentry_t *resp;
 	in_port_t port;
 	ISC_LINK(dispsocket_t) link;
-	unsigned int bucket;
-	ISC_LINK(dispsocket_t) blink;
 };
 
 struct dns_dispatch {
@@ -508,42 +504,14 @@ destroy_disp(isc_task_t *task, isc_event_t *event) {
 }
 
 /*%
- * Find a dispsocket for socket address 'dest', and port number 'port'.
- * Return NULL if no such entry exists.  Requires qid->lock to be held.
- */
-static dispsocket_t *
-socket_search(dns_qid_t *qid, const isc_sockaddr_t *dest, in_port_t port,
-	      unsigned int bucket) {
-	dispsocket_t *dispsock = NULL;
-
-	REQUIRE(VALID_QID(qid));
-	REQUIRE(bucket < qid->qid_nbuckets);
-
-	dispsock = ISC_LIST_HEAD(qid->sock_table[bucket]);
-
-	while (dispsock != NULL) {
-		if (dispsock->port == port &&
-		    isc_sockaddr_equal(dest, &dispsock->peer)) {
-			return (dispsock);
-		}
-		dispsock = ISC_LIST_NEXT(dispsock, blink);
-	}
-
-	return (NULL);
-}
-
-/*%
  * Make a new socket for a single dispatch with a random port number.
  * The caller must hold the disp->lock
  */
 static isc_result_t
 get_dispsocket(dns_dispatch_t *disp, const isc_sockaddr_t *dest,
 	       dispsocket_t **dispsockp, in_port_t *portp) {
-	int i;
 	dns_dispatchmgr_t *mgr = disp->mgr;
-	dns_qid_t *qid = mgr->qid;
 	in_port_t port;
-	unsigned int bucket = 0;
 	dispsocket_t *dispsock = NULL;
 	unsigned int nports;
 	in_port_t *ports = NULL;
@@ -568,37 +536,17 @@ get_dispsocket(dns_dispatch_t *disp, const isc_sockaddr_t *dest,
 
 		*dispsock = (dispsocket_t){ .disp = disp };
 		ISC_LINK_INIT(dispsock, link);
-		ISC_LINK_INIT(dispsock, blink);
 		dispsock->magic = DISPSOCK_MAGIC;
 	}
 
-	/*
-	 * Pick up a random UDP port and open a new socket with it.  Try
-	 * to avoid ports that share the same destination because it will be
-	 * very likely to fail in bind(2) or connect(2).
-	 */
 	dispsock->local = disp->local;
-	for (i = 0; i < 64; i++) {
-		port = ports[isc_random_uniform(nports)];
-		isc_sockaddr_setport(&dispsock->local, port);
-
-		LOCK(&qid->lock);
-		bucket = dns_hash(qid, dest, 0, port);
-		if (socket_search(qid, dest, port, bucket) != NULL) {
-			UNLOCK(&qid->lock);
-			continue;
-		}
-		UNLOCK(&qid->lock);
-		break;
-	}
-
 	dispsock->peer = *dest;
-	dispsock->bucket = bucket;
+
+	/* Pick a random UDP port */
+	port = ports[isc_random_uniform(nports)];
+	isc_sockaddr_setport(&dispsock->local, port);
 	dispsock->port = port;
 
-	LOCK(&qid->lock);
-	ISC_LIST_APPEND(qid->sock_table[bucket], dispsock, blink);
-	UNLOCK(&qid->lock);
 	*dispsockp = dispsock;
 	*portp = port;
 
@@ -607,19 +555,17 @@ get_dispsocket(dns_dispatch_t *disp, const isc_sockaddr_t *dest,
 
 /*%
  * Destroy a dedicated dispatch socket.
+ * The dispatch must be locked.
  */
 static void
 destroy_dispsocket(dns_dispatch_t *disp, dispsocket_t **dispsockp) {
 	dispsocket_t *dispsock = NULL;
-	dns_qid_t *qid = disp->mgr->qid;
-
-	/*
-	 * The dispatch must be locked.
-	 */
 
 	REQUIRE(dispsockp != NULL && *dispsockp != NULL);
+
 	dispsock = *dispsockp;
 	*dispsockp = NULL;
+
 	REQUIRE(!ISC_LINK_LINKED(dispsock, link));
 
 	disp->nsockets--;
@@ -628,26 +574,17 @@ destroy_dispsocket(dns_dispatch_t *disp, dispsocket_t **dispsockp) {
 		isc_nm_cancelread(dispsock->handle);
 		isc_nmhandle_detach(&dispsock->handle);
 	}
-	if (ISC_LINK_LINKED(dispsock, blink)) {
-		LOCK(&qid->lock);
-		ISC_LIST_UNLINK(qid->sock_table[dispsock->bucket], dispsock,
-				blink);
-		UNLOCK(&qid->lock);
-	}
+
 	isc_mem_put(disp->mgr->mctx, dispsock, sizeof(*dispsock));
 }
 
 /*%
  * Deactivate a dedicated dispatch socket.  Move it to the inactive list for
  * future reuse unless the total number of sockets are exceeding the maximum.
+ * The dispatch must be locked.
  */
 static void
 deactivate_dispsocket(dns_dispatch_t *disp, dispsocket_t *dispsock) {
-	dns_qid_t *qid = disp->mgr->qid;
-
-	/*
-	 * The dispatch must be locked.
-	 */
 	ISC_LIST_UNLINK(disp->activesockets, dispsock, link);
 	if (dispsock->resp != NULL) {
 		INSIST(dispsock->resp->dispsocket == dispsock);
@@ -662,11 +599,6 @@ deactivate_dispsocket(dns_dispatch_t *disp, dispsocket_t *dispsock) {
 			isc_nm_cancelread(dispsock->handle);
 			isc_nmhandle_detach(&dispsock->handle);
 		}
-
-		LOCK(&qid->lock);
-		ISC_LIST_UNLINK(qid->sock_table[dispsock->bucket], dispsock,
-				blink);
-		UNLOCK(&qid->lock);
 
 		ISC_LIST_APPEND(disp->inactivesockets, dispsock, link);
 	}
@@ -1389,16 +1321,11 @@ qid_allocate(dns_dispatchmgr_t *mgr, dns_qid_t **qidp) {
 
 	qid->qid_table = isc_mem_get(mgr->mctx,
 				     DNS_QID_BUCKETS * sizeof(dns_displist_t));
-	qid->sock_table = isc_mem_get(
-		mgr->mctx, DNS_QID_BUCKETS * sizeof(dispsocketlist_t));
-
-	isc_mutex_init(&qid->lock);
-
 	for (i = 0; i < qid->qid_nbuckets; i++) {
 		ISC_LIST_INIT(qid->qid_table[i]);
-		ISC_LIST_INIT(qid->sock_table[i]);
 	}
 
+	isc_mutex_init(&qid->lock);
 	qid->magic = QID_MAGIC;
 	*qidp = qid;
 }
@@ -1416,8 +1343,6 @@ qid_destroy(isc_mem_t *mctx, dns_qid_t **qidp) {
 	qid->magic = 0;
 	isc_mem_put(mctx, qid->qid_table,
 		    qid->qid_nbuckets * sizeof(dns_displist_t));
-	isc_mem_put(mctx, qid->sock_table,
-		    qid->qid_nbuckets * sizeof(dispsocketlist_t));
 	isc_mutex_destroy(&qid->lock);
 	isc_mem_put(mctx, qid, sizeof(*qid));
 }
