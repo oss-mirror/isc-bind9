@@ -148,6 +148,13 @@ isc_mem_test(void **state) {
 	isc_mempool_destroy(&mp1);
 }
 
+#define ALLOC_BYTES 2048
+#if HAVE_JEMALLOC
+#define REAL_ALLOC_BYTES ALLOC_BYTES
+#else
+#define REAL_ALLOC_BYTES ALLOC_BYTES + sizeof(size_t)
+#endif
+
 /* test TotalUse calculation */
 static void
 isc_mem_total_test(void **state) {
@@ -167,14 +174,14 @@ isc_mem_total_test(void **state) {
 	for (i = 0; i < 100000; i++) {
 		void *ptr;
 
-		ptr = isc_mem_allocate(mctx2, 2048);
+		ptr = isc_mem_allocate(mctx2, ALLOC_BYTES);
 		isc_mem_free(mctx2, ptr);
 	}
 
 	after = isc_mem_total(mctx2);
 	diff = after - before;
 
-	assert_int_equal(diff, (2048) * 100000);
+	assert_int_equal(diff, (REAL_ALLOC_BYTES)*100000);
 
 	/* ISC_MEMFLAG_INTERNAL */
 
@@ -183,17 +190,18 @@ isc_mem_total_test(void **state) {
 	for (i = 0; i < 100000; i++) {
 		void *ptr;
 
-		ptr = isc_mem_allocate(test_mctx, 2048);
+		ptr = isc_mem_allocate(test_mctx, ALLOC_BYTES);
 		isc_mem_free(test_mctx, ptr);
 	}
 
 	after = isc_mem_total(test_mctx);
 	diff = after - before;
 
-	assert_int_equal(diff, (2048) * 100000);
+	assert_int_equal(diff, (REAL_ALLOC_BYTES)*100000);
 
 	isc_mem_destroy(&mctx2);
 }
+#endif
 
 /* test InUse calculation */
 static void
@@ -432,8 +440,10 @@ main(void) {
 	const struct CMUnitTest tests[] = {
 		cmocka_unit_test_setup_teardown(isc_mem_test, _setup,
 						_teardown),
+#if HAVE_JEMALLOC
 		cmocka_unit_test_setup_teardown(isc_mem_total_test, _setup,
 						_teardown),
+#endif
 		cmocka_unit_test_setup_teardown(isc_mem_inuse_test, _setup,
 						_teardown),
 
