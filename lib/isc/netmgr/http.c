@@ -2150,7 +2150,7 @@ httplisten_acceptcb(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 		return (ISC_R_CANCELED);
 	}
 
-	// http_transpost_tcp_nodelay(handle);
+	http_transpost_tcp_nodelay(handle);
 
 	new_session(httplistensock->mgr->mctx, NULL, &session);
 	initialize_nghttp2_server_session(session);
