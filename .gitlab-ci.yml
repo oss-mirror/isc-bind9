@@ -40,11 +40,13 @@ resolver-shotgun-pipeline-generator:
     - git -C bind-qa clean -ffxdq
     - git -C bind-qa reset --hard origin/shotgun
     - bind-qa/shotgun/shotgunrunner.py > child-pipeline.yaml
+    - python -c "import yaml; yaml.safe_load(open('child-pipeline.yaml'))" || (echo "SYNTAX ERROR! most likely typo in input variables"  && exit 1)
   artifacts:
     paths:
       - "child-pipeline.yaml"
       - "*.json"
     expire_in: "1 week"
+    when: always
   timeout: 5m
 
 resolver-shotgun-child-pipeline:
