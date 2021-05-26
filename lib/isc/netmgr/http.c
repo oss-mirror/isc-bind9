@@ -58,6 +58,19 @@
 #define MIN_SUCCESSFUL_HTTP_STATUS (200)
 #define MAX_SUCCESSFUL_HTTP_STATUS (299)
 
+/* This definition sets the upper limit of pending write buffer to an
+ * adequate enough value. That is done mostly to fight a limitation
+ * for a max TLS record size in flamethrower (2K).  In a perfect world
+ * this constant should not be required, if we ever move closer to
+ * that state, the constant, and corresponding code, should be
+ * removed. For now the limit seems adequate enough to fight
+ * "tinygrams" problem. */
+#define FLUSH_HTTP_WRITE_BUFFER_AFTER (1536)
+
+/* This switch is here mostly to test the code interoperability with
+ * buggy implementations */
+#define ENABLE_HTTP_WRITE_BUFFERING 1
+
 #define SUCCESSFUL_HTTP_STATUS(code)             \
 	((code) >= MIN_SUCCESSFUL_HTTP_STATUS && \
 	 (code) <= MAX_SUCCESSFUL_HTTP_STATUS)
@@ -130,6 +143,9 @@ struct isc_nm_http_session {
 	size_t bufsize;
 
 	isc_tlsctx_t *tlsctx;
+
+	ISC_LIST(isc__nm_uvreq_t) pending_write_callbacks;
+	isc_buffer_t *pending_write_data;
 };
 
 typedef enum isc_http_error_responses {
@@ -151,6 +167,7 @@ typedef struct isc_http_send_req {
 	isc_region_t data;
 	isc_nm_cb_t cb;
 	void *cbarg;
+	ISC_LIST(isc__nm_uvreq_t) pending_write_callbacks;
 } isc_http_send_req_t;
 
 static bool
@@ -251,6 +268,7 @@ new_session(isc_mem_t *mctx, isc_tlsctx_t *tctx,
 	isc_mem_attach(mctx, &session->mctx);
 	ISC_LIST_INIT(session->cstreams);
 	ISC_LIST_INIT(session->sstreams);
+	ISC_LIST_INIT(session->pending_write_callbacks);
 
 	*sessionp = session;
 }
@@ -421,6 +439,8 @@ finish_http_session(isc_nm_http_session_t *session) {
 	}
 
 	if (session->handle != NULL) {
+		isc__nm_uvreq_t *cbreq;
+
 		if (!session->closed) {
 			session->closed = true;
 			isc_nm_cancelread(session->handle);
@@ -431,6 +451,22 @@ finish_http_session(isc_nm_http_session_t *session) {
 		} else {
 			server_call_failed_read_cb(ISC_R_UNEXPECTED, session);
 		}
+
+		cbreq = ISC_LIST_HEAD(session->pending_write_callbacks);
+		while (cbreq != NULL) {
+			isc__nm_uvreq_t *next = ISC_LIST_NEXT(cbreq, link);
+			ISC_LIST_UNLINK(session->pending_write_callbacks, cbreq,
+					link);
+			isc__nm_sendcb(cbreq->handle->sock, cbreq,
+				       ISC_R_UNEXPECTED, false);
+			cbreq = next;
+		}
+		ISC_LIST_INIT(session->pending_write_callbacks);
+
+		if (session->pending_write_data != NULL) {
+			isc_buffer_free(&session->pending_write_data);
+		}
+
 		isc_nmhandle_detach(&session->handle);
 	}
 
@@ -895,12 +931,21 @@ http_writecb(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 	isc_http_send_req_t *req = (isc_http_send_req_t *)arg;
 	isc_nm_http_session_t *session = req->session;
 	isc_nmhandle_t *transphandle = req->transphandle;
+	isc__nm_uvreq_t *cbreq;
 
 	REQUIRE(VALID_HTTP2_SESSION(session));
 	REQUIRE(VALID_NMHANDLE(handle));
 
 	if (http_session_active(session)) {
 		INSIST(session->handle == handle);
+	}
+
+	cbreq = ISC_LIST_HEAD(req->pending_write_callbacks);
+	while (cbreq != NULL) {
+		isc__nm_uvreq_t *next = ISC_LIST_NEXT(cbreq, link);
+		ISC_LIST_UNLINK(req->pending_write_callbacks, cbreq, link);
+		isc__nm_sendcb(cbreq->handle->sock, cbreq, result, false);
+		cbreq = next;
 	}
 
 	if (req->cb != NULL) {
@@ -911,13 +956,24 @@ http_writecb(isc_nmhandle_t *handle, isc_result_t result, void *arg) {
 	isc_mem_put(session->mctx, req->data.base, req->data.length);
 	isc_mem_put(session->mctx, req, sizeof(*req));
 
-	http_do_bio(session, NULL, NULL, NULL);
 	session->sending--;
+	http_do_bio(session, NULL, NULL, NULL);
 	isc_nmhandle_detach(&transphandle);
 	if (result != ISC_R_SUCCESS && session->sending == 0) {
 		finish_http_session(session);
 	}
 	isc__nm_httpsession_detach(&session);
+}
+
+static void
+move_pending_send_callbacks(isc_nm_http_session_t *session,
+			    isc_http_send_req_t *send) {
+	REQUIRE(sizeof(session->pending_write_callbacks) ==
+		sizeof(send->pending_write_callbacks));
+	memmove(&send->pending_write_callbacks,
+		&session->pending_write_callbacks,
+		sizeof(session->pending_write_callbacks));
+	ISC_LIST_INIT(session->pending_write_callbacks);
 }
 
 static bool
@@ -927,10 +983,15 @@ http_send_outgoing(isc_nm_http_session_t *session, isc_nmhandle_t *httphandle,
 	size_t total = 0;
 	uint8_t tmp_data[UINT16_MAX] = { 0 };
 	uint8_t *prepared_data = &tmp_data[0];
+#ifdef ENABLE_HTTP_WRITE_BUFFERING
+	size_t max_total_write_size = 0;
+#endif /* ENABLE_HTTP_WRITE_BUFFERING */
 
 	if (!http_session_active(session) ||
-	    !nghttp2_session_want_write(session->ngsession))
+	    (!nghttp2_session_want_write(session->ngsession) &&
+	     session->pending_write_data == NULL))
 	{
+		INSIST(session->pending_write_data == NULL);
 		return (false);
 	}
 
@@ -956,6 +1017,68 @@ http_send_outgoing(isc_nm_http_session_t *session, isc_nmhandle_t *httphandle,
 		total = new_total;
 	}
 
+#ifdef ENABLE_HTTP_WRITE_BUFFERING
+	if (session->pending_write_data != NULL) {
+		max_total_write_size =
+			isc_buffer_usedlength(session->pending_write_data) +
+			total;
+	} else {
+		max_total_write_size = total;
+	}
+
+	/* Here we are trying to flush the pending writes buffer earlier
+	 * to avoid hitting stupid limitations on record size within some
+	 * tools (e.g. flamethrower). */
+	if (max_total_write_size >= FLUSH_HTTP_WRITE_BUFFER_AFTER) {
+		if (session->pending_write_data == NULL) {
+			isc_buffer_allocate(session->mctx,
+					    &session->pending_write_data,
+					    max_total_write_size);
+		}
+
+		isc_buffer_putmem(session->pending_write_data, prepared_data,
+				  total);
+
+		total = max_total_write_size;
+		prepared_data = isc_buffer_base(session->pending_write_data);
+	} else if (session->sending > 0 && total > 0) {
+		if (cb != NULL) {
+			isc__nm_uvreq_t *newcb = isc__nm_uvreq_get(
+				httphandle->sock->mgr, httphandle->sock);
+
+			INSIST(total != 0);
+			INSIST(VALID_NMHANDLE(httphandle));
+			newcb->cb.send = cb;
+			newcb->cbarg = cbarg;
+			isc_nmhandle_attach(httphandle, &newcb->handle);
+			ISC_LIST_APPEND(session->pending_write_callbacks, newcb,
+					link);
+		}
+
+		if (session->pending_write_data == NULL) {
+			isc_buffer_allocate(session->mctx,
+					    &session->pending_write_data,
+					    total);
+			isc_buffer_setautorealloc(session->pending_write_data,
+						  true);
+		}
+
+		isc_buffer_putmem(session->pending_write_data, prepared_data,
+				  total);
+		return (false);
+	} else if (session->sending == 0 && total == 0 &&
+		   session->pending_write_data &&
+		   (total = isc_buffer_usedlength(
+			    session->pending_write_data)) > 0)
+	{
+		isc_region_t region = { 0 };
+		INSIST(prepared_data == &tmp_data[0]);
+		isc_buffer_usedregion(session->pending_write_data, &region);
+		INSIST(total == region.length);
+		prepared_data = region.base;
+	}
+#endif /* ENABLE_HTTP_WRITE_BUFFERING */
+
 	if (total == 0) {
 		INSIST(prepared_data == &tmp_data[0]);
 		/* No data returned */
@@ -963,12 +1086,20 @@ http_send_outgoing(isc_nm_http_session_t *session, isc_nmhandle_t *httphandle,
 	}
 
 	send = isc_mem_get(session->mctx, sizeof(*send));
-	if (prepared_data == tmp_data) {
+	if (prepared_data == &tmp_data[0]) {
 		*send = (isc_http_send_req_t){
 			.data.base = isc_mem_get(session->mctx, total),
 			.data.length = total,
 		};
 		memmove(send->data.base, tmp_data, total);
+	} else if (session->pending_write_data != NULL) {
+		*send = (isc_http_send_req_t){
+			.data.base = isc_mem_get(session->mctx, total),
+			.data.length = total,
+		};
+		memmove(send->data.base,
+			isc_buffer_base(session->pending_write_data), total);
+		isc_buffer_free(&session->pending_write_data);
 	} else {
 		*send = (isc_http_send_req_t){
 			.data.base = prepared_data,
@@ -984,6 +1115,8 @@ http_send_outgoing(isc_nm_http_session_t *session, isc_nmhandle_t *httphandle,
 		send->cbarg = cbarg;
 		isc_nmhandle_attach(httphandle, &send->httphandle);
 	}
+
+	move_pending_send_callbacks(session, send);
 
 	session->sending++;
 	isc_nm_send(session->handle, &send->data, http_writecb, send);
@@ -1005,8 +1138,9 @@ http_do_bio(isc_nm_http_session_t *session, isc_nmhandle_t *send_httphandle,
 			finish_http_session(session);
 		}
 		return;
-	} else if ((nghttp2_session_want_read(session->ngsession) == 0 &&
-		    nghttp2_session_want_write(session->ngsession) == 0))
+	} else if (nghttp2_session_want_read(session->ngsession) == 0 &&
+		   nghttp2_session_want_write(session->ngsession) == 0 &&
+		   session->pending_write_data == NULL)
 	{
 		session->closing = true;
 		return;
