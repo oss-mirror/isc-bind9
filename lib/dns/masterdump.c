@@ -1739,6 +1739,9 @@ dumptostream(dns_dumpctx_t *dctx) {
 	dns_fixedname_t fixname;
 	isc_time_t start;
 
+	isc_log_write(dns_lctx, ISC_LOGCATEGORY_GENERAL,
+		      DNS_LOGMODULE_MASTERDUMP, ISC_LOG_ERROR, "dump begin");
+
 	bufmem = isc_mem_get(dctx->mctx, initial_buffer_length);
 
 	isc_buffer_init(&buffer, bufmem, initial_buffer_length);
@@ -1810,6 +1813,11 @@ dumptostream(dns_dumpctx_t *dctx) {
 	if (result == ISC_R_NOMORE) {
 		result = ISC_R_SUCCESS;
 	}
+
+	isc_log_write(dns_lctx, ISC_LOGCATEGORY_GENERAL,
+		      DNS_LOGMODULE_MASTERDUMP, ISC_LOG_ERROR, "dump end: %s",
+		      isc_result_totext(result));
+
 cleanup:
 	RUNTIME_CHECK(dns_dbiterator_pause(dctx->dbiter) == ISC_R_SUCCESS);
 	isc_mem_put(dctx->mctx, buffer.base, buffer.length);
