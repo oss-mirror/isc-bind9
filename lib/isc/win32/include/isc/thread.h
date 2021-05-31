@@ -9,14 +9,15 @@
  * information regarding copyright ownership.
  */
 
-#ifndef ISC_THREAD_H
-#define ISC_THREAD_H 1
+#pragma once
 
 #include <inttypes.h>
 #include <windows.h>
 
 #include <isc/lang.h>
 #include <isc/result.h>
+
+#define thread_local __declspec(thread)
 
 extern thread_local size_t isc_tid_v;
 
@@ -90,8 +91,10 @@ isc_thread_setaffinity(int cpu);
 
 #define isc_thread_yield() Sleep(0)
 
-#define thread_local __declspec(thread)
+#define isc_thread_background_begin() \
+	SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_BEGIN)
+
+#define isc_thread_background_end() \
+	SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_END)
 
 ISC_LANG_ENDDECLS
-
-#endif /* ISC_THREAD_H */

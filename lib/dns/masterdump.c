@@ -26,6 +26,7 @@
 #include <isc/stdio.h>
 #include <isc/string.h>
 #include <isc/task.h>
+#include <isc/thread.h>
 #include <isc/time.h>
 #include <isc/types.h>
 #include <isc/util.h>
@@ -1495,6 +1496,8 @@ master_dump_cb(void *data) {
 	dns_dumpctx_t *dctx = data;
 	REQUIRE(DNS_DCTX_VALID(dctx));
 
+	isc_thread_background_begin();
+
 	if (atomic_load_acquire(&dctx->canceled)) {
 		result = ISC_R_CANCELED;
 	} else {
@@ -1511,6 +1514,8 @@ master_dump_cb(void *data) {
 	} else {
 		result = flushandsync(dctx->f, result, NULL);
 	}
+
+	isc_thread_background_end();
 
 	dctx->result = result;
 }

@@ -54,4 +54,29 @@ isc_thread_setaffinity(int cpu);
 
 #define isc_thread_self (uintptr_t) pthread_self
 
+/*
+ * Scheduling priority
+ */
+
+#if defined(SCHED_BATCH)
+#define isc_thread_background_begin()                                       \
+	{                                                                   \
+		RUNTIME_CHECK(pthread_setschedparam(                        \
+				      pthread_self(), SCHED_BATCH,          \
+				      &(const struct sched_param){          \
+					      .sched_priority = 0 }) == 0); \
+	}
+
+#define isc_thread_background_end()                                         \
+	{                                                                   \
+		RUNTIME_CHECK(pthread_setschedparam(                        \
+				      pthread_self(), SCHED_OTHER,          \
+				      &(const struct sched_param){          \
+					      .sched_priority = 0 }) == 0); \
+	}
+#else
+#define isc_thread_background_begin()
+#define isc_thread_background_end()
+#endif
+
 ISC_LANG_ENDDECLS

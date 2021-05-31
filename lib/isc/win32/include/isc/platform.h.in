@@ -33,10 +33,6 @@
 typedef uint32_t socklen_t;
 #endif
 
-#ifndef thread_local
-#define thread_local __declspec(thread)
-#endif /* thread_local */
-
 /*
  * Limits
  */

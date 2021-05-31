@@ -36,6 +36,9 @@
 #define THREAD_MINSTACKSIZE (1024U * 1024)
 #endif /* ifndef THREAD_MINSTACKSIZE */
 
+thread_local int sched_policy = -1;
+thread_local struct sched_param sched_param = { 0 };
+
 #define _FATAL(r, f)                                                          \
 	{                                                                     \
 		char strbuf[ISC_STRERRORSIZE];                                \
