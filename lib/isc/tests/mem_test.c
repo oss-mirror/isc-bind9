@@ -375,7 +375,7 @@ isc_mem_traceflag_test(void **state) {
 #define NUM_ITEMS 1024 /* 768 */
 #define ITEM_SIZE 65534
 
-static atomic_size_t mem_size;
+static atomic_size_t mem_size = ATOMIC_VAR_INIT(0);
 
 static isc_threadresult_t
 mem_thread(isc_threadarg_t arg) {

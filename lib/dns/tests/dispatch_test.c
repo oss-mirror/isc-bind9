@@ -217,7 +217,7 @@ static dns_dispatch_t *dispatch = NULL;
 static dns_dispentry_t *dispentry = NULL;
 static atomic_bool first = ATOMIC_VAR_INIT(true);
 static isc_sockaddr_t local;
-static atomic_uint_fast32_t responses;
+static atomic_uint_fast32_t responses = ATOMIC_VAR_INIT(0);
 
 static void
 response(isc_task_t *task, isc_event_t *event) {

@@ -6287,7 +6287,8 @@ recparam_update(ns_query_recparam_t *param, dns_rdatatype_t qtype,
 		dns_name_copy(qdomain, param->qdomain);
 	}
 }
-static atomic_uint_fast32_t last_soft, last_hard;
+static atomic_uint_fast32_t last_soft = ATOMIC_VAR_INIT(0);
+static atomic_uint_fast32_t last_hard = ATOMIC_VAR_INIT(0);
 #ifdef ISC_MUTEX_ATOMICS
 static isc_once_t last_once = ISC_ONCE_INIT;
 static void

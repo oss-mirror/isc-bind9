@@ -48,7 +48,7 @@ static isc_condition_t cv;
 
 atomic_int_fast32_t counter;
 static int active[10];
-static atomic_bool done;
+static atomic_bool done = ATOMIC_VAR_INIT(false);
 
 static int
 _setup(void **state) {

@@ -71,7 +71,7 @@ static uv_buf_t stop_msg = { .base = (char *)&stop_magic,
 static atomic_bool do_send = ATOMIC_VAR_INIT(false);
 static unsigned int workers = 0;
 
-static atomic_int_fast64_t nsends;
+static atomic_int_fast64_t nsends = ATOMIC_VAR_INIT(0);
 static int_fast64_t esends; /* expected sends */
 
 static atomic_int_fast64_t ssends = ATOMIC_VAR_INIT(0);
@@ -90,7 +90,7 @@ static isc_refcount_t active_ssends;
 static isc_refcount_t active_sreads;
 
 static isc_quota_t listener_quota;
-static atomic_bool check_listener_quota;
+static atomic_bool check_listener_quota = ATOMIC_VAR_INIT(false);
 
 static bool skip_long_tests = false;
 

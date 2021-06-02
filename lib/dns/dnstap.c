@@ -136,7 +136,7 @@ typedef struct ioq {
 
 static thread_local dt__ioq_t dt_ioq = { 0 };
 
-static atomic_uint_fast32_t global_generation;
+static atomic_uint_fast32_t global_generation = ATOMIC_VAR_INIT(0);
 
 isc_result_t
 dns_dt_create(isc_mem_t *mctx, dns_dtmode_t mode, const char *path,

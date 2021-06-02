@@ -51,8 +51,8 @@ static isc_mutex_t lasttime_mx;
 static isc_time_t lasttime;
 static int seconds;
 static int nanoseconds;
-static atomic_int_fast32_t eventcnt;
-static atomic_uint_fast32_t errcnt;
+static atomic_int_fast32_t eventcnt = ATOMIC_VAR_INIT(0);
+static atomic_uint_fast32_t errcnt = ATOMIC_VAR_INIT(0);
 static int nevents;
 
 static int
@@ -448,8 +448,8 @@ reset(void **state) {
 	setup_test(isc_timertype_ticker, &expires, &interval, test_reset);
 }
 
-static atomic_bool startflag;
-static atomic_bool shutdownflag;
+static atomic_bool startflag = ATOMIC_VAR_INIT(false);
+static atomic_bool shutdownflag = ATOMIC_VAR_INIT(false);
 static isc_timer_t *tickertimer = NULL;
 static isc_timer_t *oncetimer = NULL;
 static isc_task_t *task1 = NULL;
