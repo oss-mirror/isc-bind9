@@ -21,8 +21,89 @@ is to compile with no warnings.
 
 #### Copyright Notices
 
-Source files with significant content should have a copyright.  The copyright
-year(s) should be kept current.
+The license described in the ``COPYING`` file applies to the BIND 9 source as a
+whole, though individual source files can have a different license which is
+required to be compatible with the MPL-2.0.
+
+Aside from that, individual files can be provided under a dual license,
+e.g. MPL-2.0 license and alternatively under a permissive license like BSD, MIT
+etc.
+
+The common way of expressing the license of a source file is to add the matching
+boilerplate text into the top comment of the file. Due to formatting, typos
+etc. these “boilerplates” are hard to validate for tools which are used in the
+context of license compliance.
+
+An alternative to boilerplate text is the use of Software Package Data Exchange
+(SPDX) license identifiers in each source file. SPDX license identifiers are
+machine parsable and precise shorthands for the license under which the content
+of the file is contributed. SPDX license identifiers are managed by the SPDX
+Workgroup at the Linux Foundation and have been agreed on by partners throughout
+the industry, tool vendors, and legal teams. For further information see
+https://spdx.org/
+
+The BIND 9 requires the precise SPDX identifier in all source files. The valid
+identifiers used in the BIND 9 are explained in the section License identifiers
+and have been retrieved from the official SPDX license list at
+https://spdx.org/licenses/ along with the license texts.
+
+##### License identifier syntax
+
+1. Placement:
+
+   The SPDX license identifier in kernel files shall be added at the first
+   possible line in a file which can contain a comment. For the majority of
+   files this is the first line, except for scripts which require the
+   ``#!PATH_TO_INTERPRETER`` in the first line. For those scripts the SPDX
+   identifier goes into the second line.
+
+2. Style:
+
+   The SPDX license identifier is added in form of a comment. The comment style
+   depends on the file type:
+
+    C source: /* SPDX-License-Identifier: <SPDX License Expression> */
+    C header: /* SPDX-License-Identifier: <SPDX License Expression> */
+    scripts:  # SPDX-License-Identifier: <SPDX License Expression>
+    .rst:     .. SPDX-License-Identifier: <SPDX License Expression>
+
+   If a specific tool cannot handle the standard comment style, then the
+   appropriate comment mechanism which the tool accepts shall be used. This is
+   the reason for having the ``/* */`` style comment in C header files.
+
+3. Syntax:
+
+   A ``<SPDX License Expression>`` is either an SPDX short form license
+   identifier found on the SPDX License List, or the combination of two SPDX
+   short form license identifiers separated by ``WITH`` when a license exception
+   applies. When multiple licenses apply, an expression consists of keywords
+   ``AND``, ``OR`` separating sub-expressions and surrounded by ``(``, ``)`` .
+
+   License identifiers for licenses like MPL-2.0 with the ‘or later’ option are
+   constructed by using a “+” for indicating the ‘or later’ option.:
+
+ .. SPDX-License-Identifier: MPL-2.0+ */
+
+   WITH should be used when there is a modifier to a license needed. For
+   example:
+
+ .. SPDX-License-Identifier: MPL-2.0+ WITH API-exception */
+
+   Exceptions can only be used with particular License identifiers. The valid
+   License identifiers are listed in the tags of the exception text file. For
+   details see the point Exceptions in the chapter License identifiers.
+
+   OR should be used if the file is dual licensed and only one license is to be
+   selected. For example, some files are available under dual licenses:
+
+ .. SPDX-License-Identifier: MPL-2.0 OR BSD-3-Clause */
+
+   AND should be used if the file has multiple licenses whose terms all apply to
+   use the file. For example, if code is inherited from another project and
+   permission has been given to put it in the BIND 9, but the original license
+   terms need to remain in effect:
+
+ .. SPDX-License-Identifier: MPL-2.0 AND MIT */
 
 #### Indentation
 
