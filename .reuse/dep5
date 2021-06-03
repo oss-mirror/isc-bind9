@@ -1,0 +1,26 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: BIND 9
+Upstream-Contact: Internet Systems Consortium, Inc. ("ISC") <info@isc.org>
+Source: https://gitlab.isc.org/isc-projects/bind9/
+
+Files: **/*.key
+       **/*.private
+       **/.gitignore
+       **/Makefile.*
+       **/testdata/*
+       **/win32/*
+       .gitlab/*
+       .github/*
+       .dir-locals.el
+       .gitattributes
+       .gitignore
+       .gitlab-ci.yml
+       .lgtm.yml
+       .pylintrc
+       .uncrustify.cfg
+       AUTHORS
+       CHANGES
+       Makefile.*
+       fuzz/*.in/*
+Copyright: Internet Systems Consortium, Inc. ("ISC")
+License: MPL-2.0
