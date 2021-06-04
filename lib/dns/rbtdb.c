@@ -3996,32 +3996,42 @@ zone_find(dns_db_t *db, const dns_name_t *name, dns_dbversion_t *version,
 	  dns_rdatatype_t type, unsigned int options, isc_stdtime_t now,
 	  dns_dbnode_t **nodep, dns_name_t *foundname, dns_rdataset_t *rdataset,
 	  dns_rdataset_t *sigrdataset) {
-	dns_rbtnode_t *node = NULL;
 	isc_result_t result;
+	dns_rbtdb_t *rbtdb = (dns_rbtdb_t *)db;
+	rbtdb_version_t *rbtversion = NULL;
+	dns_rbtnode_t *node = NULL;
 	rbtdb_search_t search;
 	bool cname_ok = true;
 	bool close_version = false;
 	bool maybe_zonecut = false;
 	bool at_zonecut = false;
-	bool wild;
-	bool empty_node;
-	rdatasetheader_t *header, *header_next, *found, *nsecheader;
-	rdatasetheader_t *foundsig, *cnamesig, *nsecsig;
+	bool wild = false;
+	bool empty_node = true;
+	bool active = false;
+	rdatasetheader_t *header = NULL,  *header_next = NULL;
+	rdatasetheader_t *found = NULL, *nsecheader = NULL;
+	rdatasetheader_t *foundsig = NULL, *cnamesig = NULL, *nsecsig = NULL;
 	rbtdb_rdatatype_t sigtype;
-	bool active;
-	nodelock_t *lock;
-	dns_rbt_t *tree;
+	nodelock_t *lock = NULL;
+	dns_rbt_t *tree = NULL;
 
-	search.rbtdb = (dns_rbtdb_t *)db;
-
-	REQUIRE(VALID_RBTDB(search.rbtdb));
-	INSIST(version == NULL ||
-	       ((rbtdb_version_t *)version)->rbtdb == (dns_rbtdb_t *)db);
+	REQUIRE(VALID_RBTDB(rbtdb));
+	INSIST(version == NULL || ((rbtdb_version_t *)version)->rbtdb == rbtdb);
 
 	/*
 	 * We don't care about 'now'.
 	 */
 	UNUSED(now);
+
+	if ((options & DNS_DBFIND_NONBLOCK) != 0) {
+		result = isc_rwlock_trylock(&rbtdb->tree_lock,
+					    isc_rwlocktype_read);
+		if (result != ISC_R_SUCCESS) {
+			return (result);
+		}
+	} else {
+		RWLOCK(&rbtdb->tree_lock, isc_rwlocktype_read);
+	}
 
 	/*
 	 * If the caller didn't supply a version, attach to the current
@@ -4032,31 +4042,21 @@ zone_find(dns_db_t *db, const dns_name_t *name, dns_dbversion_t *version,
 		close_version = true;
 	}
 
-	search.rbtversion = version;
-	search.serial = search.rbtversion->serial;
-	search.options = options;
-	search.copy_name = false;
-	search.need_cleanup = false;
-	search.wild = false;
-	search.zonecut = NULL;
-	dns_fixedname_init(&search.zonecut_name);
+	rbtversion = (rbtdb_version_t *)version;
+	search = (rbtdb_search_t){ .rbtdb = rbtdb,
+				   .options = options,
+				   .rbtversion = rbtversion,
+				   .serial = rbtversion->serial };
 	dns_rbtnodechain_init(&search.chain);
-	search.now = 0;
-
-	/*
-	 * 'wild' will be true iff. we've matched a wildcard.
-	 */
-	wild = false;
-
-	RWLOCK(&search.rbtdb->tree_lock, isc_rwlocktype_read);
+	dns_fixedname_init(&search.zonecut_name);
 
 	/*
 	 * Search down from the root of the tree.  If, while going down, we
 	 * encounter a callback node, zone_zonecut_callback() will search the
 	 * rdatasets at the zone cut for active DNAME or NS rdatasets.
 	 */
-	tree = (options & DNS_DBFIND_FORCENSEC3) != 0 ? search.rbtdb->nsec3
-						      : search.rbtdb->tree;
+	tree = (options & DNS_DBFIND_FORCENSEC3) != 0 ? rbtdb->nsec3
+						      : rbtdb->tree;
 	result = dns_rbt_findnode(tree, name, foundname, &node, &search.chain,
 				  DNS_RBTFIND_EMPTYDATA, zone_zonecut_callback,
 				  &search);
@@ -4086,7 +4086,6 @@ zone_find(dns_db_t *db, const dns_name_t *name, dns_dbversion_t *version,
 			}
 		}
 
-		active = false;
 		if ((options & DNS_DBFIND_FORCENSEC3) == 0) {
 			/*
 			 * The NSEC3 tree won't have empty nodes,
@@ -4100,14 +4099,14 @@ zone_find(dns_db_t *db, const dns_name_t *name, dns_dbversion_t *version,
 		 * If we're here, then the name does not exist, is not
 		 * beneath a zonecut, and there's no matching wildcard.
 		 */
-		if ((search.rbtversion->secure == dns_db_secure &&
-		     !search.rbtversion->havensec3) ||
+		if ((rbtversion->secure == dns_db_secure &&
+		     !rbtversion->havensec3) ||
 		    (search.options & DNS_DBFIND_FORCENSEC) != 0 ||
 		    (search.options & DNS_DBFIND_FORCENSEC3) != 0)
 		{
 			result = find_closest_nsec(&search, nodep, foundname,
 						   rdataset, sigrdataset, tree,
-						   search.rbtversion->secure);
+						   rbtversion->secure);
 			if (result == ISC_R_SUCCESS) {
 				result = active ? DNS_R_EMPTYNAME
 						: DNS_R_NXDOMAIN;
@@ -4144,9 +4143,8 @@ found:
 		 * we always return a referral.
 		 */
 		if (node->find_callback &&
-		    ((node != search.rbtdb->origin_node &&
-		      !dns_rdatatype_atparent(type)) ||
-		     IS_STUB(search.rbtdb)))
+		    ((node != rbtdb->origin_node &&
+		      !dns_rdatatype_atparent(type)) || IS_STUB(rbtdb)))
 		{
 			maybe_zonecut = true;
 		}
@@ -4167,16 +4165,10 @@ found:
 	 * We now go looking for rdata...
 	 */
 
-	lock = &search.rbtdb->node_locks[node->locknum].lock;
+	lock = &rbtdb->node_locks[node->locknum].lock;
 	NODE_LOCK(lock, isc_rwlocktype_read);
 
-	found = NULL;
-	foundsig = NULL;
 	sigtype = RBTDB_RDATATYPE_VALUE(dns_rdatatype_rrsig, type);
-	nsecheader = NULL;
-	nsecsig = NULL;
-	cnamesig = NULL;
-	empty_node = true;
 	for (header = node->data; header != NULL; header = header_next) {
 		header_next = header->next;
 		/*
@@ -4213,8 +4205,7 @@ found:
 				 * ensure that search->zonecut_rdataset will
 				 * still be valid later.
 				 */
-				new_reference(search.rbtdb, node,
-					      isc_rwlocktype_read);
+				new_reference(rbtdb, node, isc_rwlocktype_read);
 				search.zonecut = node;
 				search.zonecut_rdataset = header;
 				search.zonecut_sigrdataset = NULL;
@@ -4300,7 +4291,7 @@ found:
 					break;
 				}
 			} else if (header->type == dns_rdatatype_nsec &&
-				   !search.rbtversion->havensec3) {
+				   !rbtversion->havensec3) {
 				/*
 				 * Remember a NSEC rdataset even if we're
 				 * not specifically looking for it, because
@@ -4308,7 +4299,7 @@ found:
 				 */
 				nsecheader = header;
 			} else if (header->type == RBTDB_RDATATYPE_SIGNSEC &&
-				   !search.rbtversion->havensec3)
+				   !rbtversion->havensec3)
 			{
 				/*
 				 * If we need the NSEC rdataset, we'll also
@@ -4359,8 +4350,8 @@ found:
 		 * The desired type doesn't exist.
 		 */
 		result = DNS_R_NXRRSET;
-		if (search.rbtversion->secure == dns_db_secure &&
-		    !search.rbtversion->havensec3 &&
+		if (rbtversion->secure == dns_db_secure &&
+		    !rbtversion->havensec3 &&
 		    (nsecheader == NULL || nsecsig == NULL))
 		{
 			/*
@@ -4375,8 +4366,8 @@ found:
 			NODE_UNLOCK(lock, isc_rwlocktype_read);
 			result = find_closest_nsec(&search, nodep, foundname,
 						   rdataset, sigrdataset,
-						   search.rbtdb->tree,
-						   search.rbtversion->secure);
+						   rbtdb->tree,
+						   rbtversion->secure);
 			if (result == ISC_R_SUCCESS) {
 				result = DNS_R_EMPTYWILD;
 			}
@@ -4392,17 +4383,17 @@ found:
 			goto node_exit;
 		}
 		if (nodep != NULL) {
-			new_reference(search.rbtdb, node, isc_rwlocktype_read);
+			new_reference(rbtdb, node, isc_rwlocktype_read);
 			*nodep = node;
 		}
-		if ((search.rbtversion->secure == dns_db_secure &&
-		     !search.rbtversion->havensec3) ||
+		if ((rbtversion->secure == dns_db_secure &&
+		     !rbtversion->havensec3) ||
 		    (search.options & DNS_DBFIND_FORCENSEC) != 0)
 		{
-			bind_rdataset(search.rbtdb, node, nsecheader, 0,
+			bind_rdataset(rbtdb, node, nsecheader, 0,
 				      isc_rwlocktype_read, rdataset);
 			if (nsecsig != NULL) {
-				bind_rdataset(search.rbtdb, node, nsecsig, 0,
+				bind_rdataset(rbtdb, node, nsecsig, 0,
 					      isc_rwlocktype_read, sigrdataset);
 			}
 		}
@@ -4476,7 +4467,7 @@ found:
 
 	if (nodep != NULL) {
 		if (!at_zonecut) {
-			new_reference(search.rbtdb, node, isc_rwlocktype_read);
+			new_reference(rbtdb, node, isc_rwlocktype_read);
 		} else {
 			search.need_cleanup = false;
 		}
@@ -4484,10 +4475,10 @@ found:
 	}
 
 	if (type != dns_rdatatype_any) {
-		bind_rdataset(search.rbtdb, node, found, 0, isc_rwlocktype_read,
+		bind_rdataset(rbtdb, node, found, 0, isc_rwlocktype_read,
 			      rdataset);
 		if (foundsig != NULL) {
-			bind_rdataset(search.rbtdb, node, foundsig, 0,
+			bind_rdataset(rbtdb, node, foundsig, 0,
 				      isc_rwlocktype_read, sigrdataset);
 		}
 	}
@@ -4500,7 +4491,7 @@ node_exit:
 	NODE_UNLOCK(lock, isc_rwlocktype_read);
 
 tree_exit:
-	RWUNLOCK(&search.rbtdb->tree_lock, isc_rwlocktype_read);
+	RWUNLOCK(&rbtdb->tree_lock, isc_rwlocktype_read);
 
 	/*
 	 * If we found a zonecut but aren't going to use it, we have to
@@ -4509,10 +4500,10 @@ tree_exit:
 	if (search.need_cleanup) {
 		node = search.zonecut;
 		INSIST(node != NULL);
-		lock = &(search.rbtdb->node_locks[node->locknum].lock);
+		lock = &(rbtdb->node_locks[node->locknum].lock);
 
 		NODE_LOCK(lock, isc_rwlocktype_read);
-		decrement_reference(search.rbtdb, node, 0, isc_rwlocktype_read,
+		decrement_reference(rbtdb, node, 0, isc_rwlocktype_read,
 				    isc_rwlocktype_none, false);
 		NODE_UNLOCK(lock, isc_rwlocktype_read);
 	}

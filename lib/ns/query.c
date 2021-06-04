@@ -5177,7 +5177,7 @@ qctx_clean(query_ctx_t *qctx) {
  * Free any allocated memory associated with qctx.
  */
 static void
-qctx_freedata(query_ctx_t *qctx) {
+qctx_free_buffers(query_ctx_t *qctx) {
 	if (qctx->rdataset != NULL) {
 		ns_client_putrdataset(qctx->client, &qctx->rdataset);
 	}
@@ -5189,6 +5189,11 @@ qctx_freedata(query_ctx_t *qctx) {
 	if (qctx->fname != NULL) {
 		ns_client_releasename(qctx->client, &qctx->fname);
 	}
+}
+
+static void
+qctx_freedata(query_ctx_t *qctx) {
+	qctx_free_buffers(qctx);
 
 	if (qctx->db != NULL) {
 		INSIST(qctx->node == NULL);
@@ -5743,6 +5748,49 @@ query_refresh_rrset(query_ctx_t *orig_qctx) {
 	qctx_destroy(&qctx);
 }
 
+/*
+ * Use the asynchronous hook mechanism to set up a callback in order to
+ * delay an authoritative query until later if the database lock is busy.
+ */
+static void
+cancelhook(ns_hookasync_t *hctx) {
+	UNUSED(hctx);
+}
+
+static void
+destroyhook(ns_hookasync_t **ctxp) {
+	ns_hookasync_t *ctx = NULL;
+
+	REQUIRE(ctxp != NULL);
+
+	ctx = *ctxp;
+	isc_mem_putanddetach(&ctx->mctx, ctx, sizeof(*ctx));
+}
+
+static isc_result_t
+delayquery(query_ctx_t *qctx, isc_mem_t *mctx, void *arg, isc_task_t *task,
+	   isc_taskaction_t action, void *evarg, ns_hookasync_t **ctxp) {
+	ns_hook_resevent_t *rev = (ns_hook_resevent_t *)isc_event_allocate(
+		mctx, task, NS_EVENT_HOOKASYNCDONE, action, evarg,
+		sizeof(*rev));
+	ns_hookasync_t *ctx = isc_mem_get(mctx, sizeof(*ctx));
+
+	UNUSED(arg);
+
+	*ctx = (ns_hookasync_t){ .cancel = cancelhook,
+				 .destroy = destroyhook };
+	isc_mem_attach(mctx, &ctx->mctx);
+
+	rev->hookpoint = NS_QUERY_LOOKUP_BEGIN;
+	rev->saved_qctx = qctx;
+	rev->ctx = ctx;
+
+	isc_task_send(task, (isc_event_t **)&rev);
+
+	*ctxp = ctx;
+	return (ISC_R_SUCCESS);
+}
+
 /*%
  * Perform a local database lookup, in either an authoritative or
  * cache database. If unable to answer, call ns_query_done(); otherwise
@@ -5756,7 +5804,7 @@ query_lookup(query_ctx_t *qctx) {
 	dns_clientinfo_t ci;
 	dns_name_t *rpzqname = NULL;
 	char namebuf[DNS_NAME_FORMATSIZE];
-	unsigned int dboptions;
+	unsigned int dboptions = 0;
 	dns_ttl_t stale_refresh = 0;
 	bool dbfind_stale = false;
 	bool stale_timeout = false;
@@ -5800,6 +5848,8 @@ query_lookup(query_ctx_t *qctx) {
 	}
 
 	dboptions = qctx->client->query.dboptions;
+	dboptions |= DNS_DBFIND_NONBLOCK;
+
 	if (!qctx->is_zone && qctx->findcoveringnsec &&
 	    (qctx->type != dns_rdatatype_null || !dns_name_istat(rpzqname)))
 	{
@@ -5817,6 +5867,11 @@ query_lookup(query_ctx_t *qctx) {
 				dboptions, qctx->client->now, &qctx->node,
 				qctx->fname, &cm, &ci, qctx->rdataset,
 				qctx->sigrdataset);
+	if (result == ISC_R_LOCKBUSY) {
+		qctx_free_buffers(qctx);
+		ns_query_hookasync(qctx, delayquery, NULL);
+		return (ISC_R_COMPLETE);
+	}
 
 	/*
 	 * Fixup fname and sigrdataset.
@@ -6112,6 +6167,7 @@ fetch_callback(isc_task_t *task, isc_event_t *event) {
 		isc_event_free(ISC_EVENT_PTR(&event));
 		return;
 	}
+
 	/*
 	 * We are resuming from recursion. Reset any attributes, options
 	 * that a lookup due to stale-answer-client-timeout may have set.
@@ -6847,9 +6903,11 @@ ns_query_hookasync(query_ctx_t *qctx, ns_query_starthookasync_t runasync,
 	REQUIRE(client->query.hookactx == NULL);
 	REQUIRE(client->query.fetch == NULL);
 
-	result = check_recursionquota(client);
-	if (result != ISC_R_SUCCESS) {
-		goto cleanup;
+	if (!qctx->is_zone) {
+		result = check_recursionquota(client);
+		if (result != ISC_R_SUCCESS) {
+			goto cleanup;
+		}
 	}
 
 	saved_qctx = isc_mem_get(client->mctx, sizeof(*saved_qctx));

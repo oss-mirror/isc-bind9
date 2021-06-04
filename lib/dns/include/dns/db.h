@@ -271,6 +271,13 @@ struct dns_dbonupdatelistener {
  * window.
  */
 #define DNS_DBFIND_STALESTART 0x2000
+
+/*
+ * DNS_DBFIND_NONBLOCK: If set, then if a call to dns_db_find() would block
+ * while waiting for a read lock, the implementation may return ISC_R_LOCKBUSY
+ * so the lookup can be rescheduled for later.
+ */
+#define DNS_DBFIND_NONBLOCK 0x4000
 /*@}*/
 
 /*@{*/
