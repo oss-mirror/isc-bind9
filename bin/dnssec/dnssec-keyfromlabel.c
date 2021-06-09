@@ -606,8 +606,7 @@ main(int argc, char **argv) {
 	isc_buffer_init(&buf, filename, sizeof(filename) - 1);
 
 	/* associate the key */
-	ret = dst_key_fromlabel(name, alg, flags, protocol, rdclass,
-				engine,
+	ret = dst_key_fromlabel(name, alg, flags, protocol, rdclass, engine,
 				label, NULL, mctx, &key);
 
 	if (ret != ISC_R_SUCCESS) {
