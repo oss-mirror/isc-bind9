@@ -31,6 +31,10 @@ key rndc_key {
 	algorithm hmac-sha256;
 };
 
+server 10.53.0.10 {
+	tcp-on-no-cookie false;
+};
+
 controls {
 	inet 10.53.0.4 port @CONTROLPORT@ allow { any; } keys { rndc_key; };
 };

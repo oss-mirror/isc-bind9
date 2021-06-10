@@ -21,6 +21,10 @@ options {
 	listen-on-v6 { none; };
 };
 
+server 10.53.0.10 {
+	tcp-on-no-cookie false;
+};
+
 key rndc_key {
 	secret "1234abcd8765";
 	algorithm hmac-sha256;

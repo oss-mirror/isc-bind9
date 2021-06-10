@@ -37,6 +37,10 @@ options {
 	bindkeys-file "../../../../../bind.keys";
 };
 
+server 10.53.0.10 {
+	tcp-on-no-cookie false;
+};
+
 key rndc_key {
 	secret "1234abcd8765";
 	algorithm hmac-sha256;
