@@ -2475,6 +2475,7 @@ static cfg_clausedef_t server_clauses[] = {
 	{ "support-ixfr", NULL, CFG_CLAUSEFLAG_ANCIENT },
 	{ "tcp-keepalive", &cfg_type_boolean, 0 },
 	{ "tcp-only", &cfg_type_boolean, 0 },
+	{ "tcp-on-no-cookie", &cfg_type_boolean, 0 },
 	{ "transfer-format", &cfg_type_transferformat, 0 },
 	{ "transfer-source", &cfg_type_sockaddr4wild, 0 },
 	{ "transfer-source-v6", &cfg_type_sockaddr6wild, 0 },

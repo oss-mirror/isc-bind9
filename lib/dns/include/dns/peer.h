@@ -139,6 +139,12 @@ isc_result_t
 dns_peer_settcpkeepalive(dns_peer_t *peer, bool newval);
 
 isc_result_t
+dns_peer_gettcponnocookie(dns_peer_t *peer, bool *retval);
+
+isc_result_t
+dns_peer_settcponnocookie(dns_peer_t *peer, bool newval);
+
+isc_result_t
 dns_peer_getsupportedns(dns_peer_t *peer, bool *retval);
 
 isc_result_t

@@ -57,7 +57,7 @@ struct dns_peer {
 	bool request_expire;
 	bool force_tcp;
 	bool tcp_keepalive;
-	bool check_axfr_id;
+	bool tcp_on_no_cookie;
 	dns_name_t *key;
 	isc_sockaddr_t *transfer_source;
 	isc_dscp_t transfer_dscp;
@@ -96,6 +96,7 @@ struct dns_peer {
 #define FORCE_TCP_BIT		   15
 #define SERVER_PADDING_BIT	   16
 #define REQUEST_TCP_KEEPALIVE_BIT  17
+#define TCP_ON_NO_COOKIE_BIT	   18
 
 static void
 peerlist_delete(dns_peerlist_t **list);
@@ -960,6 +961,33 @@ dns_peer_getednsversion(dns_peer_t *peer, uint8_t *ednsversion) {
 
 	if (DNS_BIT_CHECK(EDNS_VERSION_BIT, &peer->bitflags)) {
 		*ednsversion = peer->ednsversion;
+		return (ISC_R_SUCCESS);
+	} else {
+		return (ISC_R_NOTFOUND);
+	}
+}
+
+isc_result_t
+dns_peer_settcponnocookie(dns_peer_t *peer, bool newval) {
+	bool existed;
+
+	REQUIRE(DNS_PEER_VALID(peer));
+
+	existed = DNS_BIT_CHECK(TCP_ON_NO_COOKIE_BIT, &peer->bitflags);
+
+	peer->tcp_on_no_cookie = newval;
+	DNS_BIT_SET(TCP_ON_NO_COOKIE_BIT, &peer->bitflags);
+
+	return (existed ? ISC_R_EXISTS : ISC_R_SUCCESS);
+}
+
+isc_result_t
+dns_peer_gettcponnocookie(dns_peer_t *peer, bool *retval) {
+	REQUIRE(DNS_PEER_VALID(peer));
+	REQUIRE(retval != NULL);
+
+	if (DNS_BIT_CHECK(TCP_ON_NO_COOKIE_BIT, &peer->bitflags)) {
+		*retval = peer->tcp_on_no_cookie;
 		return (ISC_R_SUCCESS);
 	} else {
 		return (ISC_R_NOTFOUND);

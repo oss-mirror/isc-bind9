@@ -7845,7 +7845,8 @@ resquery_response(isc_task_t *task, isc_event_t *event) {
 	 */
 
 	/*
-	 * If we have had a server cookie and don't get one retry over TCP.
+	 * If we have had a server cookie and don't get one retry over TCP
+	 * or didn't get a DNS COOKIE response conditionally retry over TCP.
 	 * This may be a misconfigured anycast server or an attempt to send
 	 * a spoofed response.  Skip if we have a valid tsig.
 	 */
@@ -7871,11 +7872,26 @@ resquery_response(isc_task_t *task, isc_event_t *event) {
 			rctx.resend = true;
 			rctx_done(&rctx, result);
 			return;
+		} else if (fctx->res->view->peers != NULL) {
+			dns_peer_t *peer = NULL;
+			isc_netaddr_t ipaddr;
+			bool tcp_on_nocookie = true;
+
+			isc_netaddr_fromsockaddr(&ipaddr,
+						 &query->addrinfo->sockaddr);
+			dns_peerlist_peerbyaddr(fctx->res->view->peers, &ipaddr,
+						&peer);
+			if (peer != NULL) {
+				dns_peer_gettcponnocookie(peer,
+							  &tcp_on_nocookie);
+			}
+			if (tcp_on_nocookie) {
+				rctx.retryopts |= DNS_FETCHOPT_TCP;
+				rctx.resend = true;
+				rctx_done(&rctx, result);
+				return;
+			}
 		}
-		/*
-		 * XXXMPA When support for DNS COOKIE becomes ubiquitous, fall
-		 * back to TCP for all non-COOKIE responses.
-		 */
 	}
 
 	rctx_edns(&rctx);
