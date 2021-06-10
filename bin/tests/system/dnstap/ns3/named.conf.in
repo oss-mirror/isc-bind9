@@ -31,7 +31,18 @@ options {
 	qname-minimization disabled;
 };
 
-server 10.53.0.1 { tcp-only yes; };
+/*
+ * As we have send-cookie no; also disable tcp-on-no-cookie.
+ */
+server 0/0 {
+	tcp-on-no-cookie false;
+};
+
+server ::/0 {
+	tcp-on-no-cookie false;
+};
+
+server 10.53.0.1 { tcp-only yes; tcp-on-no-cookie false; };
 
 key rndc_key {
 	secret "1234abcd8765";
