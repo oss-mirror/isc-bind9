@@ -41,6 +41,10 @@ options {
 	resolver-query-timeout 10;
 };
 
+server 10.53.0.2 {
+	tcp-on-no-cookie false;
+};
+
 zone "." {
 	type hint;
 	file "root.db";

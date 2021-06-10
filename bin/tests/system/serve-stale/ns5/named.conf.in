@@ -33,6 +33,10 @@ options {
 	max-cache-ttl 24h;
 };
 
+server 10.53.0.2 {
+	tcp-on-no-cookie false;
+};
+
 zone "." {
 	type secondary;
 	primaries { 10.53.0.1; };
