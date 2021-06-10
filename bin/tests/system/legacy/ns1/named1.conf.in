@@ -30,6 +30,14 @@ controls {
 	inet 10.53.0.1 port @CONTROLPORT@ allow { any; } keys { rndc_key; };
 };
 
+server 10.53.0.5 {
+	tcp-on-no-cookie false;
+};
+
+server 10.53.0.7 {
+	tcp-on-no-cookie false;
+};
+
 zone "." {
 	type primary;
 	file "root.db";

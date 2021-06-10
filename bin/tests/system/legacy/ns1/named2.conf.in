@@ -21,6 +21,14 @@ options {
 	dnssec-validation yes;
 };
 
+server 10.53.0.5 {
+	tcp-on-no-cookie false;
+};
+
+server 10.53.0.7 {
+	tcp-on-no-cookie false;
+};
+
 zone "." {
 	type primary;
 	file "root.db";
