@@ -35,6 +35,30 @@ controls {
 	inet 10.53.0.7 port @CONTROLPORT@ allow { any; } keys { rndc_key; };
 };
 
+server 10.53.0.2 {
+	tcp-on-no-cookie false;
+};
+
+server 10.53.0.3 {
+	tcp-on-no-cookie false;
+};
+
+server 10.53.0.4 {
+	tcp-on-no-cookie false;
+};
+
+server fd92:7065:b8e:ffff::2 {
+	tcp-on-no-cookie false;
+};
+
+server fd92:7065:b8e:ffff::3 {
+	tcp-on-no-cookie false;
+};
+
+server fd92:7065:b8e:ffff::4 {
+	tcp-on-no-cookie false;
+};
+
 zone "." {
 	type hint;
 	file "../../common/root.hint";
