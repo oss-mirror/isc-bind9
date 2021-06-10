@@ -1,3 +1,7 @@
+5658.	[func]		named now falls back to TCP if the remote server does
+			not support DNS COOKIE.  This can be overridden by the
+			server option tcp-on-no-cookie.  [GL #2766]
+
 5677.	[func]		Only accept FORMERR without a OPT record as an
 			indication that the server does net support EDNS.
 			This will break communication with servers that

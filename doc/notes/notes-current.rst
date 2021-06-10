@@ -32,6 +32,10 @@ New Features
   added to add a list of servers to a zone that can be used for checking DS
   presence. :gl:`#1126`
 
+- ``named`` now falls back to TCP if the remote server does not support DNS
+  COOKIE. This can be overridden by the ``server`` option ``tcp-on-no-cookie``.
+  :gl:`#2766`
+
 Removed Features
 ~~~~~~~~~~~~~~~~
 

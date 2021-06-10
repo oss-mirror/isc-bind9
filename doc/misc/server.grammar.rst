@@ -24,6 +24,7 @@
   	request-nsid <boolean>;
   	send-cookie <boolean>;
   	tcp-keepalive <boolean>;
+  	tcp-on-no-cookie <boolean>;
   	tcp-only <boolean>;
   	transfer-format ( many-answers | one-answer );
   	transfer-source ( <ipv4_address> | * ) [ port ( <integer> | * ) ] [

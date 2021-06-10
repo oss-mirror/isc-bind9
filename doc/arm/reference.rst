@@ -4636,6 +4636,10 @@ a COOKIE EDNS option to requests sent to the server. This overrides
 may determine that COOKIE is not supported by the remote server and not
 add a COOKIE EDNS option to requests.
 
+The ``tcp-on-no-cookie`` clause determines whether the local server
+falls back to TCP if it discovers that the remote server does not support
+the DNS COOKIE EDNS option. The default is ``yes``.
+
 .. _statschannels:
 
 ``statistics-channels`` Statement Grammar
