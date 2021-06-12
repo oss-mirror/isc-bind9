@@ -2427,7 +2427,6 @@ resquery_send(resquery_t *query) {
 		goto cleanup_message;
 	}
 
-	peer = NULL;
 	isc_netaddr_fromsockaddr(&ipaddr, &query->addrinfo->sockaddr);
 	(void)dns_peerlist_peerbyaddr(fctx->res->view->peers, &ipaddr, &peer);
 
@@ -7211,6 +7210,7 @@ resquery_response(isc_task_t *task, isc_event_t *event) {
 	if (atomic_load_acquire(&fctx->res->exiting)) {
 		result = ISC_R_SHUTTINGDOWN;
 		FCTXTRACE("resolver shutting down");
+		rctx.finish = NULL;
 		rctx_done(&rctx, result);
 		return;
 	}
@@ -9414,7 +9414,7 @@ rctx_done(respctx_t *rctx, isc_result_t result) {
 	/*
 	 * Need to attach to the message until the scope
 	 * of this function ends, since there are many places
-	 * where te message is used and/or may be destroyed
+	 * where the message is used and/or may be destroyed
 	 * before this function ends.
 	 */
 	dns_message_attach(query->rmessage, &message);
