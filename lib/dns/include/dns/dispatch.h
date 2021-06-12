@@ -277,15 +277,13 @@ dns_dispatch_connect(dns_dispentry_t *resp);
  */
 
 void
-dns_dispatch_cancel(dns_dispatch_t *disp, dns_dispentry_t *resp, bool sending,
-		    bool connecting);
+dns_dispatch_cancel(dns_dispentry_t *resp);
 /*%<
- * Cancel pending sends (if 'sending' is true) and connects (if
- * 'connecting' is true) in 'resp' or 'disp'.
+ * Cancel pending connects in 'resp', by setting a flag so that
+ * a read is not started when the connect handler runs.
  *
  * Requires:
- *\li	'resp' is NULL and 'disp' is valid, or
- *\li	'disp' is NULL and 'resp' is valid.
+ *\li	'resp' is valid.
  */
 
 void

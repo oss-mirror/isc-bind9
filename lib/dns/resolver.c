@@ -1356,10 +1356,8 @@ fctx_cancelquery(resquery_t **queryp, dns_dispatchevent_t **deventp,
 	 * it's sending or connecting; this will be moved into dispatch
 	 * later.)
 	 */
-	dns_dispatch_cancel(query->dispatch, query->dispentry,
-			    RESQUERY_SENDING(query),
-			    RESQUERY_CONNECTING(query));
 	if (query->dispentry != NULL) {
+		dns_dispatch_cancel(query->dispentry);
 		dns_dispatch_removeresponse(&query->dispentry, deventp);
 	}
 

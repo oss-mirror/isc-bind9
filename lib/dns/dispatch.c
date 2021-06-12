@@ -94,6 +94,7 @@ struct dns_dispentry {
 	isc_taskaction_t action;
 	void *arg;
 	bool item_out;
+	bool canceled;
 	ISC_LIST(dns_dispatchevent_t) items;
 	ISC_LINK(dns_dispentry_t) link;
 	ISC_LINK(dns_dispentry_t) alink;
@@ -255,8 +256,6 @@ static void
 qid_allocate(dns_dispatchmgr_t *mgr, dns_qid_t **qidp);
 static void
 qid_destroy(isc_mem_t *mctx, dns_qid_t **qidp);
-static isc_nmhandle_t *
-gethandle(dns_dispatch_t *disp);
 static isc_nmhandle_t *
 getentryhandle(dns_dispentry_t *resp);
 static void
@@ -2011,6 +2010,10 @@ disp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	dns_dispentry_t *resp = (dns_dispentry_t *)arg;
 	dns_dispatch_t *disp = resp->disp;
 
+	if (resp->canceled && eresult == ISC_R_SUCCESS) {
+		eresult = ISC_R_CANCELED;
+	}
+
 	if (!MGR_IS_SHUTTINGDOWN(disp->mgr) && eresult == ISC_R_SUCCESS) {
 		if (disp->socktype == isc_socktype_udp) {
 			isc_nmhandle_attach(handle, &resp->handle);
@@ -2025,15 +2028,20 @@ disp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	if (resp->connected != NULL) {
 		resp->connected(handle, eresult, resp->arg);
 	}
+
+	dispentry_detach(&resp);
 }
 
 isc_result_t
 dns_dispatch_connect(dns_dispentry_t *resp) {
 	dns_dispatch_t *disp = NULL;
+	dns_dispentry_t *tmp = NULL;
 
 	REQUIRE(VALID_RESPONSE(resp));
 
 	disp = resp->disp;
+
+	dispentry_attach(resp, &tmp);
 
 	switch (disp->socktype) {
 	case isc_socktype_tcp:
@@ -2083,34 +2091,10 @@ dns_dispatch_send(dns_dispentry_t *resp, isc_region_t *r, isc_dscp_t dscp) {
 }
 
 void
-dns_dispatch_cancel(dns_dispatch_t *disp, dns_dispentry_t *resp, bool sending,
-		    bool connecting) {
-	isc_nmhandle_t *handle = NULL;
+dns_dispatch_cancel(dns_dispentry_t *resp) {
+	REQUIRE(VALID_RESPONSE(resp));
 
-	REQUIRE(disp != NULL || resp != NULL);
-
-	if (resp != NULL) {
-		REQUIRE(VALID_RESPONSE(resp));
-		handle = getentryhandle(resp);
-	} else if (disp != NULL) {
-		REQUIRE(VALID_DISPATCH(disp));
-		handle = gethandle(disp);
-	} else {
-		INSIST(0);
-		ISC_UNREACHABLE();
-	}
-
-	if (handle == NULL) {
-		return;
-	}
-
-	if (connecting) {
-		// isc_socket_cancel(sock, NULL, ISC_SOCKCANCEL_CONNECT);
-	}
-
-	if (sending) {
-		// isc_socket_cancel(sock, NULL, ISC_SOCKCANCEL_SEND);
-	}
+	resp->canceled = true;
 }
 
 /*
@@ -2161,13 +2145,6 @@ do_cancel(dns_dispatch_t *disp) {
 	isc_task_send(resp->task, ISC_EVENT_PTR(&ev));
 unlock:
 	UNLOCK(&qid->lock);
-}
-
-static isc_nmhandle_t *
-gethandle(dns_dispatch_t *disp) {
-	REQUIRE(VALID_DISPATCH(disp));
-
-	return (disp->handle);
 }
 
 static isc_nmhandle_t *

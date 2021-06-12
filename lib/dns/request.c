@@ -972,9 +972,7 @@ do_cancel(isc_task_t *task, isc_event_t *event) {
 		request->flags |= DNS_REQUEST_F_CANCELED;
 
 		if (request->dispentry != NULL) {
-			dns_dispatch_cancel(NULL, request->dispentry,
-					    DNS_REQUEST_SENDING(request),
-					    DNS_REQUEST_CONNECTING(request));
+			dns_dispatch_cancel(request->dispentry);
 			dns_dispatch_removeresponse(&request->dispentry, NULL);
 		}
 
