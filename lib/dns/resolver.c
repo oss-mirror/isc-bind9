@@ -1289,10 +1289,11 @@ fctx_cancelquery(resquery_t **queryp, dns_dispatchevent_t **deventp,
 		}
 
 		dns_adb_adjustsrtt(fctx->adb, query->addrinfo, rtt, factor);
-	}
-	if ((query->options & DNS_FETCHOPT_TCP) == 0) {
-		/* Inform the ADB that we're ending a UDP fetch */
-		dns_adb_endudpfetch(fctx->adb, query->addrinfo);
+
+		if ((query->options & DNS_FETCHOPT_TCP) == 0) {
+			/* Inform the ADB that we're ending a UDP fetch */
+			dns_adb_endudpfetch(fctx->adb, query->addrinfo);
+		}
 	}
 
 	/*
@@ -2322,6 +2323,11 @@ resquery_send(resquery_t *query) {
 
 	QTRACE("send");
 
+	if (atomic_load_acquire(&res->exiting)) {
+		FCTXTRACE("resquery_send: resolver shutting down");
+		return (ISC_R_SHUTTINGDOWN);
+	}
+
 	result = dns_message_gettempname(fctx->qmessage, &qname);
 	if (result != ISC_R_SUCCESS) {
 		goto cleanup_temps;
@@ -2754,10 +2760,14 @@ resquery_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	fctx = query->fctx;
 	res = fctx->res;
 
+	if (atomic_load_acquire(&res->exiting)) {
+		eresult = ISC_R_SHUTTINGDOWN;
+	}
+
 	if (RESQUERY_CANCELED(query)) {
 		/*
-		 * This query was canceled while the connect() was in
-		 * progress.
+		 * This query was canceled while the connect() was
+		 * in progress.
 		 */
 		resquery_destroy(&query);
 	} else {
