@@ -1,6 +1,6 @@
 variables:
   SHOTGUN_TEST_VERSION:
-    value: "$CI_COMMIT_SHA"
+    value: "v9_11_32"
     description: "version(s) to be tested (commit or branch or tag name)"
   SHOTGUN_SCENARIO:
     value: "udp"
@@ -10,7 +10,7 @@ variables:
     description: "client traffic volume multiplier(s); base value 1 = roughly 8 k QPS; start with multiplier 10; max. 40"
   SHOTGUN_ROUNDS:
     value: 1
-    description: "repeat test for each combination of (version, scenario, traffic multiplier) this many times; test against reference v9_11_31 is always run once; three runs recommended to detect noise"
+    description: "repeat test for each combination of (version, scenario, traffic multiplier) this many times"
   SHOTGUN_DURATION:
     value: 60
     description: "test length in seconds, max 900 s"
