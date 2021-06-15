@@ -19,6 +19,7 @@
 
 #include <isc/assertions.h>
 #include <isc/crc64.h>
+#include <isc/hashmap.h>
 #include <isc/lang.h>
 #include <isc/magic.h>
 #include <isc/refcount.h>
@@ -122,9 +123,8 @@ struct dns_rbtnode {
 	 * node's superdomain node in the parent subtree, so that it can
 	 * be reached from a child that was found by a hash lookup.
 	 */
-	unsigned int   hashval;
+	ISC_HASHMAP_NODE(dns_rbtnode_t);
 	dns_rbtnode_t *uppernode;
-	dns_rbtnode_t *hashnext;
 
 	dns_rbtnode_t *parent;
 	dns_rbtnode_t *left;

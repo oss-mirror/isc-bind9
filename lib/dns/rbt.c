@@ -17,6 +17,7 @@
 
 #include <isc/crc64.h>
 #include <isc/file.h>
+#include <isc/hashmap.h>
 #include <isc/hex.h>
 #include <isc/mem.h>
 #include <isc/once.h>
@@ -59,9 +60,6 @@
 #define CHAIN_MAGIC	   ISC_MAGIC('0', '-', '0', '-')
 #define VALID_CHAIN(chain) ISC_MAGIC_VALID(chain, CHAIN_MAGIC)
 
-#define RBT_HASH_MIN_BITS   4
-#define RBT_HASH_MAX_BITS   32
-#define RBT_HASH_OVERCOMMIT 3
 #define RBT_HASH_BUCKETSIZE 4096 /* FIXME: What would be a good value here? */
 
 #ifdef RBT_MEM_TEST
@@ -73,13 +71,6 @@
 
 #define HASHSIZE(bits) (UINT64_C(1) << (bits))
 
-static inline uint32_t
-hash_32(uint32_t val, unsigned int bits) {
-	REQUIRE(bits <= RBT_HASH_MAX_BITS);
-	/* High bits are more random. */
-	return (val * GOLDEN_RATIO_32 >> (32 - bits));
-}
-
 struct dns_rbt {
 	unsigned int magic;
 	isc_mem_t *mctx;
@@ -87,9 +78,7 @@ struct dns_rbt {
 	void (*data_deleter)(void *, void *);
 	void *deleter_arg;
 	unsigned int nodecount;
-	uint16_t hashbits;
-	uint16_t maxhashbits;
-	dns_rbtnode_t **hashtable;
+	ISC_HASHMAP(dns_rbtnode_t) hashmap; /* Anonymous struct */
 	void *mmap_location;
 };
 
@@ -220,8 +209,6 @@ getdata(dns_rbtnode_t *node, file_header_t *header) {
 #define UPPERNODE(node)	   ((node)->uppernode)
 #define DATA(node)	   ((node)->data)
 #define IS_EMPTY(node)	   ((node)->data == NULL)
-#define HASHNEXT(node)	   ((node)->hashnext)
-#define HASHVAL(node)	   ((node)->hashval)
 #define COLOR(node)	   ((node)->color)
 #define NAMELEN(node)	   ((node)->namelen)
 #define OLDNAMELEN(node)   ((node)->oldnamelen)
@@ -393,21 +380,11 @@ dns__rbtnode_getdistance(dns_rbtnode_t *node) {
 static isc_result_t
 create_node(isc_mem_t *mctx, const dns_name_t *name, dns_rbtnode_t **nodep);
 
-static isc_result_t
-inithash(dns_rbt_t *rbt);
-
 static inline void
 hash_node(dns_rbt_t *rbt, dns_rbtnode_t *node, const dns_name_t *name);
 
 static inline void
 unhash_node(dns_rbt_t *rbt, dns_rbtnode_t *node);
-
-static uint32_t
-rehash_bits(dns_rbt_t *rbt, size_t newcount);
-static void
-rehash(dns_rbt_t *rbt, uint32_t newbits);
-static void
-maybe_rehash(dns_rbt_t *rbt, size_t size);
 
 static inline void
 rotate_left(dns_rbtnode_t *node, dns_rbtnode_t **rootp);
@@ -947,7 +924,6 @@ dns_rbt_deserialize_tree(void *base_address, size_t filesize,
 		result = ISC_R_INVALIDFILE;
 		goto cleanup;
 	}
-	maybe_rehash(rbt, header->nodecount);
 
 	CHECK(treefix(rbt, base_address, filesize, rbt->root, dns_rootname,
 		      datafixer, fixer_arg, &crc));
@@ -991,7 +967,6 @@ cleanup:
 isc_result_t
 dns_rbt_create(isc_mem_t *mctx, dns_rbtdeleter_t deleter, void *deleter_arg,
 	       dns_rbt_t **rbtp) {
-	isc_result_t result;
 	dns_rbt_t *rbt;
 
 	REQUIRE(mctx != NULL);
@@ -1000,24 +975,15 @@ dns_rbt_create(isc_mem_t *mctx, dns_rbtdeleter_t deleter, void *deleter_arg,
 
 	rbt = isc_mem_get(mctx, sizeof(*rbt));
 
-	rbt->mctx = NULL;
+	*rbt = (dns_rbt_t){
+		.data_deleter = deleter,
+		.deleter_arg = deleter_arg,
+		.magic = RBT_MAGIC,
+	};
+
 	isc_mem_attach(mctx, &rbt->mctx);
-	rbt->data_deleter = deleter;
-	rbt->deleter_arg = deleter_arg;
-	rbt->root = NULL;
-	rbt->nodecount = 0;
-	rbt->hashtable = NULL;
-	rbt->hashbits = 0;
-	rbt->maxhashbits = RBT_HASH_MAX_BITS;
-	rbt->mmap_location = NULL;
 
-	result = inithash(rbt);
-	if (result != ISC_R_SUCCESS) {
-		isc_mem_putanddetach(&rbt->mctx, rbt, sizeof(*rbt));
-		return (result);
-	}
-
-	rbt->magic = RBT_MAGIC;
+	ISC_HASHMAP_INIT(mctx, rbt->hashmap);
 
 	*rbtp = rbt;
 
@@ -1051,10 +1017,7 @@ dns_rbt_destroy2(dns_rbt_t **rbtp, unsigned int quantum) {
 
 	rbt->mmap_location = NULL;
 
-	if (rbt->hashtable != NULL) {
-		size_t size = HASHSIZE(rbt->hashbits) * sizeof(dns_rbtnode_t *);
-		isc_mem_put(rbt->mctx, rbt->hashtable, size);
-	}
+	ISC_HASHMAP_DESTROY(rbt->mctx, rbt->hashmap);
 
 	rbt->magic = 0;
 
@@ -1073,18 +1036,18 @@ size_t
 dns_rbt_hashsize(dns_rbt_t *rbt) {
 	REQUIRE(VALID_RBT(rbt));
 
-	return (1 << rbt->hashbits);
+	return (1 << rbt->hashmap.hashbits);
 }
 
 isc_result_t
 dns_rbt_adjusthashsize(dns_rbt_t *rbt, size_t size) {
 	REQUIRE(VALID_RBT(rbt));
 
-	size_t newsize = size / RBT_HASH_BUCKETSIZE;
+	UNUSED(size);
 
-	rbt->maxhashbits = rehash_bits(rbt, newsize);
+	/* size_t newsize = size / RBT_HASH_BUCKETSIZE; */
 
-	maybe_rehash(rbt, newsize);
+	/* maybe_rehash(rbt, newsize); */
 
 	return (ISC_R_SUCCESS);
 }
@@ -1628,13 +1591,12 @@ dns_rbt_findnode(dns_rbt_t *rbt, const dns_name_t *name, dns_name_t *foundname,
 			 * Walk all the nodes in the hash bucket pointed
 			 * by the computed hash value.
 			 */
-			for (hnode = rbt->hashtable[hash_32(hash,
-							    rbt->hashbits)];
+			for (hnode = ISC_HASHMAP_GET(rbt->hashmap, hash);
 			     hnode != NULL; hnode = hnode->hashnext)
 			{
 				dns_name_t hnode_name;
 
-				if (ISC_LIKELY(hash != HASHVAL(hnode))) {
+				if (ISC_LIKELY(hash != hnode->hashval)) {
 					continue;
 				}
 				/*
@@ -2258,8 +2220,8 @@ create_node(isc_mem_t *mctx, const dns_name_t *name, dns_rbtnode_t **nodep) {
 	node->data_is_relative = 0;
 	node->rpz = 0;
 
-	HASHNEXT(node) = NULL;
-	HASHVAL(node) = 0;
+	node->hashnext = NULL;
+	node->hashval = 0;
 
 	ISC_LINK_INIT(node, deadlink);
 
@@ -2302,94 +2264,6 @@ create_node(isc_mem_t *mctx, const dns_name_t *name, dns_rbtnode_t **nodep) {
 }
 
 /*
- * Add a node to the hash table
- */
-static inline void
-hash_add_node(dns_rbt_t *rbt, dns_rbtnode_t *node, const dns_name_t *name) {
-	uint32_t hash;
-
-	REQUIRE(name != NULL);
-
-	HASHVAL(node) = dns_name_fullhash(name, false);
-
-	hash = hash_32(HASHVAL(node), rbt->hashbits);
-	HASHNEXT(node) = rbt->hashtable[hash];
-
-	rbt->hashtable[hash] = node;
-}
-
-/*
- * Initialize hash table
- */
-static isc_result_t
-inithash(dns_rbt_t *rbt) {
-	size_t size;
-
-	rbt->hashbits = RBT_HASH_MIN_BITS;
-	size = HASHSIZE(rbt->hashbits) * sizeof(dns_rbtnode_t *);
-	rbt->hashtable = isc_mem_get(rbt->mctx, size);
-	memset(rbt->hashtable, 0, size);
-
-	return (ISC_R_SUCCESS);
-}
-
-static uint32_t
-rehash_bits(dns_rbt_t *rbt, size_t newcount) {
-	uint32_t newbits = rbt->hashbits;
-
-	while (newcount >= HASHSIZE(newbits) && newbits < rbt->maxhashbits) {
-		newbits += 1;
-	}
-
-	return (newbits);
-}
-
-/*
- * Rebuild the hashtable to reduce the load factor
- */
-static void
-rehash(dns_rbt_t *rbt, uint32_t newbits) {
-	uint32_t oldbits;
-	size_t oldsize;
-	dns_rbtnode_t **oldtable;
-	size_t newsize;
-
-	REQUIRE(rbt->hashbits <= rbt->maxhashbits);
-	REQUIRE(newbits <= rbt->maxhashbits);
-
-	oldbits = rbt->hashbits;
-	oldsize = HASHSIZE(oldbits);
-	oldtable = rbt->hashtable;
-
-	rbt->hashbits = newbits;
-	newsize = HASHSIZE(rbt->hashbits);
-	rbt->hashtable = isc_mem_get(rbt->mctx,
-				     newsize * sizeof(dns_rbtnode_t *));
-	memset(rbt->hashtable, 0, newsize * sizeof(dns_rbtnode_t *));
-
-	for (size_t i = 0; i < oldsize; i++) {
-		dns_rbtnode_t *node;
-		dns_rbtnode_t *nextnode;
-		for (node = oldtable[i]; node != NULL; node = nextnode) {
-			uint32_t hash = hash_32(HASHVAL(node), rbt->hashbits);
-			nextnode = HASHNEXT(node);
-			HASHNEXT(node) = rbt->hashtable[hash];
-			rbt->hashtable[hash] = node;
-		}
-	}
-
-	isc_mem_put(rbt->mctx, oldtable, oldsize * sizeof(dns_rbtnode_t *));
-}
-
-static void
-maybe_rehash(dns_rbt_t *rbt, size_t newcount) {
-	uint32_t newbits = rehash_bits(rbt, newcount);
-	if (rbt->hashbits < newbits && newbits <= rbt->maxhashbits) {
-		rehash(rbt, newbits);
-	}
-}
-
-/*
  * Add a node to the hash table. Rehash the hashtable if the node count
  * rises above a critical level.
  */
@@ -2397,11 +2271,9 @@ static inline void
 hash_node(dns_rbt_t *rbt, dns_rbtnode_t *node, const dns_name_t *name) {
 	REQUIRE(DNS_RBTNODE_VALID(node));
 
-	if (rbt->nodecount >= (HASHSIZE(rbt->hashbits) * RBT_HASH_OVERCOMMIT)) {
-		maybe_rehash(rbt, rbt->nodecount);
-	}
+	node->hashval = dns_name_fullhash(name, false);
 
-	hash_add_node(rbt, node, name);
+	ISC_HASHMAP_PUT(rbt->hashmap, node, dns_rbtnode_t);
 }
 
 /*
@@ -2409,23 +2281,7 @@ hash_node(dns_rbt_t *rbt, dns_rbtnode_t *node, const dns_name_t *name) {
  */
 static inline void
 unhash_node(dns_rbt_t *rbt, dns_rbtnode_t *node) {
-	uint32_t bucket;
-	dns_rbtnode_t *bucket_node;
-
-	REQUIRE(DNS_RBTNODE_VALID(node));
-
-	bucket = hash_32(HASHVAL(node), rbt->hashbits);
-	bucket_node = rbt->hashtable[bucket];
-
-	if (bucket_node == node) {
-		rbt->hashtable[bucket] = HASHNEXT(node);
-	} else {
-		while (HASHNEXT(bucket_node) != node) {
-			INSIST(HASHNEXT(bucket_node) != NULL);
-			bucket_node = HASHNEXT(bucket_node);
-		}
-		HASHNEXT(bucket_node) = HASHNEXT(node);
-	}
+	ISC_HASHMAP_DEL(rbt->hashmap, node, dns_rbtnode_t);
 }
 
 static inline void
