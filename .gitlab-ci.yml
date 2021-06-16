@@ -1,15 +1,15 @@
 variables:
   SHOTGUN_TEST_VERSION:
-    value: "v9_11_32"
+    value: "v9_16_17"
     description: "version(s) to be tested (commit or branch or tag name)"
   SHOTGUN_SCENARIO:
     value: "udp"
     description: "protocol combination(s) to be tested, must be one of https://gitlab.nic.cz/knot/resolver-benchmarking/-/tree/master/roles/shotgun/files"
   SHOTGUN_TRAFFIC_MULTIPLIER:
-    value: 10
+    value: 18
     description: "client traffic volume multiplier(s); base value 1 = roughly 8 k QPS; start with multiplier 10; max. 40"
   SHOTGUN_ROUNDS:
-    value: 1
+    value: 3
     description: "repeat test for each combination of (version, scenario, traffic multiplier) this many times"
   SHOTGUN_DURATION:
     value: 60
