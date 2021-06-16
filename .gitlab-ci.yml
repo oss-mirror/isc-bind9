@@ -36,7 +36,8 @@ resolver-shotgun-pipeline-generator:
   image: "766250944489.dkr.ecr.us-east-1.amazonaws.com/shotgun-controller"
   script:
     - echo "version under test $SHOTGUN_TEST_VERSION"
-    - test -d bind-qa && git fetch -C bind-qa || git clone --single-branch --branch=shotgun --depth=1 https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.isc.org/isc-private/bind-qa.git
+    - test -d bind-qa && (git fetch -C bind-qa || rm -rf bind-qa)
+    - test -d bind-qa || git clone --single-branch --branch=shotgun --depth=1 https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.isc.org/isc-private/bind-qa.git
     - git -C bind-qa clean -ffxdq
     - git -C bind-qa reset --hard origin/shotgun
     - python3 -c "import boto3; s3 = boto3.client('s3'); s3.download_file('data.isc.org', 'bind9-resolver-benchmark/az-prices.json', 'az-prices.json');"
