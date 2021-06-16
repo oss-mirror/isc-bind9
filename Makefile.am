@@ -10,7 +10,12 @@ bind.keys.h: bind.keys Makefile
 
 dist_sysconf_DATA = bind.keys
 
-.PHONY: doc
+.PHONY: doc depcomp
+
+# Without this target distcheck target fails with:
+#     No rule to make target '../../../../../depcomp', needed by 'distdir-am'.
+depcomp:
+	if [ ! -e depcomp ]; then ln -s ${top_srcdir}/depcomp depcomp; fi
 
 EXTRA_DIST = 			\
 	util/bindkeys.pl	\
