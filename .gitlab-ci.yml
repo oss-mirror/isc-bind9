@@ -4,7 +4,7 @@ variables:
   # Locale settings do not affect the build, but might affect tests.
   LC_ALL: C
 
-  CI_REGISTRY_IMAGE: registry.gitlab.isc.org/isc-projects/images/bind9
+  CI_REGISTRY_IMAGE: registry.gitlab.isc.org/isc-projects/images/bind9-staging
   CCACHE_DIR: "/ccache"
   SOFTHSM2_CONF: "/var/tmp/softhsm2/softhsm2.conf"
 
@@ -46,6 +46,8 @@ variables:
   # Default platforms to run "stress" tests on
   BIND_STRESS_TEST_OS: linux
   BIND_STRESS_TEST_ARCH: amd64
+
+  LD_PRELOAD: "/usr/local/lib/nosync.so"
 
 stages:
   - autoconf
@@ -857,6 +859,13 @@ unit:gcc:focal:amd64:
       artifacts: true
 
 # Jobs for ASAN builds on Debian 10 "buster" (amd64)
+#
+# Setting LD_PRELOAD to nosync.so makes ./configure to fail on Buster with
+# "ASan runtime does not come first in initial library list; you should either
+# link runtime to your application or manually preload it with LD_PRELOAD". If
+# static linking is used instead (LDFLAGS: "-static-libasan -static-libubsan"),
+# resulting binaries fail with "Your application is linked against incompatible
+# ASan runtimes". Therefore LD_PRELOAD needs to be disabled on gcc:asan jobs.
 
 gcc:asan:
   variables:
@@ -864,12 +873,14 @@ gcc:asan:
     CFLAGS: "${CFLAGS_COMMON} -fsanitize=address,undefined"
     LDFLAGS: "-fsanitize=address,undefined"
     EXTRA_CONFIGURE: "--with-libidn2"
+    LD_PRELOAD: ""
   <<: *base_image
   <<: *build_job
 
 system:gcc:asan:
   variables:
     ASAN_OPTIONS: ${ASAN_OPTIONS_COMMON}
+    LD_PRELOAD: ""
   <<: *base_image
   <<: *system_test_job
   needs:
@@ -879,6 +890,7 @@ system:gcc:asan:
 unit:gcc:asan:
   variables:
     ASAN_OPTIONS: ${ASAN_OPTIONS_COMMON}
+    LD_PRELOAD: ""
   <<: *base_image
   <<: *unit_test_job
   needs:
