@@ -6,3 +6,4 @@ cd /var/tmp/libp11
 ./configure --with-enginesdir=/opt/bind9/engines
 make
 make install
+cd ../../..

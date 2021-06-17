@@ -9,11 +9,12 @@
 # See the COPYRIGHT file distributed with this work for additional
 # information regarding copyright ownership.
 
-set -eu
-
-SYSTEMTESTTOP=..
 # shellcheck source=conf.sh
-. "$SYSTEMTESTTOP/conf.sh"
+. ../conf.sh
+
+set -e
+
+$SHELL clean.sh
 
 echo_i "Generating keys for engine_pkcs11 PKCS#11"
 
