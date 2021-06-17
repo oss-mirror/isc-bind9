@@ -74,7 +74,7 @@ KRB5_KTNAME=dns.keytab
 #
 # Construct the lists of tests to run
 #
-SEQUENTIAL_UNIX=""
+SEQUENTIAL_UNIX="engine_pkcs11"
 SEQUENTIALDIRS="$SEQUENTIAL_COMMON $SEQUENTIAL_UNIX"
 
 PARALLEL_UNIX="@DNSTAP@

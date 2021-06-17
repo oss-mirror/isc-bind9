@@ -111,6 +111,7 @@ TESTS +=			\
 	eddsa			\
 	ednscompliance		\
 	emptyzones		\
+	engine_pkcs11		\
 	filter-aaaa		\
 	formerr			\
 	geoip2			\
