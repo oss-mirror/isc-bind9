@@ -1,5 +1,7 @@
 #!/bin/sh -e
 
+apt-get -y install pcscd libccid libpcsclite-dev libreadline-dev
+
 # OpenSC/libp11
 git clone https://github.com/OpenSC/libp11.git /var/tmp/libp11
 cd /var/tmp/libp11
