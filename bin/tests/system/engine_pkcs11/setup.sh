@@ -27,21 +27,19 @@ PKCS11TOOL="pkcs11-tool"
 copy_setports ns1/named.conf.in ns1/named.conf
 
 keygen() {
-	alg="$1"
-	bits="$2"
-	zone="$3"
-	id="$4"
+	type="$2"
+	bits="$3"
+	zone="$4"
 
 	module="/usr/lib/softhsm/libsofthsm2.so"
-	$PKCS11TOOL --module $module -l -k --key-type $alg:$bits --label "${zone}-${id}" --pin $(cat $PWD/pin)
+	$PKCS11TOOL --module $module -l -k --key-type $type:$bits --label "${zone}-${id}" --pin $(cat $PWD/pin)
 }
 
 keyfromlabel() {
 	alg="$1"
-	bits="$2"
-	zone="$3"
-	id="$4"
-	shift 4
+	zone="$4"
+	id="$5"
+	shift 5
 	$KEYFRLAB -E pkcs11 -a "$alg" -l "token=softhsm2;object=${zone}-${id};pin-source=$PWD/pin" "$@" "$zone"
 }
 
@@ -56,21 +54,23 @@ genzsk() {
 }
 
 algs=
-for algbits in rsasha256:2048 rsasha512:2048 ecdsap256sha256:256 \
-	       ecdsap384sha384:384 ed25519:256 ed448:456
+for algtypebits in rsasha256:rsa:2048 rsasha512:rsa:2048 \
+		   ecdsap256sha256:EC:prime256v1 ecdsap384sha384:EC:prime384v1 \
+		   ed25519:edwards25519:256 ed448:edwards448:456
 do
-	alg=$(echo "$algbits" | cut -f 1 -d :)
-	bits=$(echo "$algbits" | cut -f 2 -d :)
+	alg=$(echo "$algtypebits" | cut -f 1 -d :)
+	type=$(echo "$algtypebits" | cut -f 2 -d :)
+	bits=$(echo "$algtypebits" | cut -f 3 -d :)
 	zone="$alg.example"
 	zonefile="ns1/$alg.example.db"
 	if $SHELL "../testcrypto.sh" "$alg"; then
 		echo "$alg" >> supported
 		algs="$algs$alg "
 
-		zsk1=$(genzsk "$alg" "$bits" "$zone" "zsk1")
-		zsk2=$(genzsk "$alg" "$bits" "$zone" "zsk2")
-		ksk1=$(genksk "$alg" "$bits" "pkcs11-$alg-ksk1" "$zone" "ksk1")
-		ksk2=$(genksk "$alg" "$bits" "pkcs11-$alg-ksk2" "$zone" "ksk2")
+		zsk1=$(genzsk "$alg" "$type" "$bits" "$zone" "zsk1")
+		zsk2=$(genzsk "$alg" "$type" "$bits" "$zone" "zsk2")
+		ksk1=$(genksk "$alg" "$type" "$bits" "$zone" "ksk1")
+		ksk2=$(genksk "$alg" "$type" "$bits"  "$zone" "ksk2")
 
 		cat "$infile" "$zsk1.key" "$ksk1.key" > "$zonefile"
 		$SIGNER -E pkcs11 -a -P -g -o "$zone" "$zonefile" > /dev/null
