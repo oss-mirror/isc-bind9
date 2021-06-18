@@ -39,20 +39,20 @@ keygen() {
 keyfromlabel() {
 	alg="$1"
 	bits="$2"
-	label="$3"
-	zone="$4"
+	zone="$3"
+	id="$4"
 	shift 4
-	$KEYFRLAB -a "$alg" -l "pkcs11:object=softhsm2;pin-source=$PWD/pin" "$@" "$zone"
+	$KEYFRLAB -E pkcs11 -a "$alg" -l "token=softhsm2;object=${zone}-${id};pin-source=$PWD/pin" "$@" "$zone"
 }
 
 genksk() {
-	keygen
-	keyfromlabel
+	keygen "$@"
+	keyfromlabel "$@" -f KSK
 }
 
 genzsk() {
-	keygen
-	keyfromlabel
+	keygen "$@"
+	keyfromlabel "$@"
 }
 
 algs=
@@ -61,14 +61,14 @@ for algbits in rsasha256:2048 rsasha512:2048 ecdsap256sha256:256 \
 do
 	alg=$(echo "$algbits" | cut -f 1 -d :)
 	bits=$(echo "$algbits" | cut -f 2 -d :)
-	zone="$alg.example."
+	zone="$alg.example"
 	zonefile="ns1/$alg.example.db"
-	if $SHELL "$SYSTEMTESTTOP/testcrypto.sh" "$alg"; then
+	if $SHELL "../testcrypto.sh" "$alg"; then
 		echo "$alg" >> supported
 		algs="$algs$alg "
 
-		zsk1=$(genzsk "$alg" "$bits" "pkcs11-$alg-zsk1" "$zone" "zsk1")
-		zsk2=$(genzsk "$alg" "$bits" "pkcs11-$alg-zsk2" "$zone" "zsk2")
+		zsk1=$(genzsk "$alg" "$bits" "$zone" "zsk1")
+		zsk2=$(genzsk "$alg" "$bits" "$zone" "zsk2")
 		ksk1=$(genksk "$alg" "$bits" "pkcs11-$alg-ksk1" "$zone" "ksk1")
 		ksk2=$(genksk "$alg" "$bits" "pkcs11-$alg-ksk2" "$zone" "ksk2")
 
