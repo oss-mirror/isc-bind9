@@ -11,8 +11,9 @@
 
 set -e
 
-rm -f K* ns1/K* keyset-* dsset-* ns1/*.db ns1/*.signed ns1/*.jnl
-rm -f dig.out* pin
+rm -f K* ns1/K* keyset-* dsset-*
+rm -f ns1/named.conf ns1/*.db ns1/*.signed ns1/*.jnl
+rm -f dig.out* pin supported
 rm -f ns1/*.ksk ns1/*.zsk ns1/named.memstats
 rm -f ns*/named.run ns*/named.lock ns*/named.conf
 rm -f ns*/managed-keys.bind*
