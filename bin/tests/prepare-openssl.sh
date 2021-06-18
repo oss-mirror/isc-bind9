@@ -13,6 +13,6 @@ pkcs11 = pkcs11_section
 [pkcs11_section]
 engine_id = pkcs11
 dynamic_path = /opt/bind9/engines/pkcs11.so
-MODULE_PATH = /usr/lib/softhsm/libsofthsm2.so
+MODULE_PATH = "${LD_LIBRARY_PATH}/softhsm/libsofthsm2.so"
 init = 0
 EOF
