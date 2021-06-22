@@ -47,8 +47,6 @@ variables:
   BIND_STRESS_TEST_OS: linux
   BIND_STRESS_TEST_ARCH: amd64
 
-  LD_PRELOAD: "/usr/local/lib/nosync.so"
-
 stages:
   - autoconf
   - precheck
@@ -258,9 +256,11 @@ stages:
   <<: *default_triggering_rules
   stage: build
   before_script:
+    - curl -sSL "https://github.com/Mno-hime/nosync/archive/73b482061da1361e22624d00c6cd7268a2ce047d.tar.gz" | tar -xzf - && make -C "nosync-73b482061da1361e22624d00c6cd7268a2ce047d" -j$BUILD_PARALLEL_JOBS
     - test -w "${CCACHE_DIR}" && export PATH="/usr/lib/ccache:${PATH}"
     - test -n "${OUT_OF_TREE_WORKSPACE}" && mkdir "${OUT_OF_TREE_WORKSPACE}" && cd "${OUT_OF_TREE_WORKSPACE}"
   script:
+    - export LD_PRELOAD="$CI_PROJECT_DIR/nosync-73b482061da1361e22624d00c6cd7268a2ce047d/nosync.so"
     - *configure
     - *check_readline_setup
     - make -j${BUILD_PARALLEL_JOBS:-1} -k all V=1
@@ -292,10 +292,12 @@ stages:
   <<: *default_triggering_rules
   stage: system
   before_script:
+    - curl -sSL "https://github.com/Mno-hime/nosync/archive/73b482061da1361e22624d00c6cd7268a2ce047d.tar.gz" | tar -xzf - && make -C "nosync-73b482061da1361e22624d00c6cd7268a2ce047d" -j$BUILD_PARALLEL_JOBS
     - *setup_softhsm
     - *retrieve_out_of_tree_workspace
     - *setup_interfaces
   script:
+    - export LD_PRELOAD="$CI_PROJECT_DIR/nosync-73b482061da1361e22624d00c6cd7268a2ce047d/nosync.so"
     - cd bin/tests/system
     - make -j${TEST_PARALLEL_JOBS:-1} -k check V=1
     - if git rev-parse > /dev/null 2>&1; then ( ! grep "^I:.*:file.*not removed$" *.log ); fi
@@ -333,9 +335,11 @@ stages:
   <<: *default_triggering_rules
   stage: unit
   before_script:
+    - curl -sSL "https://github.com/Mno-hime/nosync/archive/73b482061da1361e22624d00c6cd7268a2ce047d.tar.gz" | tar -xzf - && make -C "nosync-73b482061da1361e22624d00c6cd7268a2ce047d" -j$BUILD_PARALLEL_JOBS
     - *setup_softhsm
     - *retrieve_out_of_tree_workspace
   script:
+    - export LD_PRELOAD="$CI_PROJECT_DIR/nosync-73b482061da1361e22624d00c6cd7268a2ce047d/nosync.so"
     - make -j${TEST_PARALLEL_JOBS:-1} -k unit V=1
   after_script:
     - *save_out_of_tree_workspace
