@@ -201,15 +201,19 @@ fi
 
 if [ $status -eq 0 ]; then
     if [ -n "$PYTEST" ]; then
-        run=$((run+1))
         for test in $(cd "${systest}" && find . -name "tests*.py"); do
             if start_servers; then
                 rm -f "$systest/$test.status"
                 test_status=0
                 (cd "$systest" && "$PYTEST" -v "$test" "$@" || echo "$?" > "$test.status") | SYSTESTDIR="$systest" cat_d
                 if [ -f "$systest/$test.status" ]; then
-                    echo_i "FAILED"
-                    test_status=$(cat "$systest/$test.status")
+                    if [ "$(cat "$systest/$test.status")" = "5" ]; then
+                        echowarn "R:$systest:SKIPPED";
+                        stop_servers && continue || status=1
+		    else
+                        echo_i "FAILED"
+                        test_status=$(cat "$systest/$test.status")
+		    fi
                 fi
                 status=$((status+test_status))
                 stop_servers || status=1
@@ -217,6 +221,7 @@ if [ $status -eq 0 ]; then
                 status=1
                 break
             fi
+            run=$((run+1))
         done
     else
         echoinfo "I:$systest:pytest not installed, skipping python tests"
