@@ -11,6 +11,8 @@
 
 # flake8: noqa: E501
 
+import re
+
 from typing import List, Tuple
 
 from docutils import nodes
@@ -91,6 +93,23 @@ project = u'BIND 9'
 # pylint: disable=redefined-builtin
 copyright = u'2021, Internet Systems Consortium'
 author = u'Internet Systems Consortium'
+
+version_vars = {}
+with open('../../version') as version_file:
+    for line in version_file:
+        match = re.match(r'^(?P<key>[A-Z]+)=(?P<val>.*)$', line)
+        if match:
+            version_vars[match.group('key')] = match.group('val')
+
+version = '%s.%s.%s%s%s%s' % (
+    version_vars['MAJORVER'],
+    version_vars['MINORVER'],
+    version_vars['PATCHVER'],
+    version_vars['RELEASETYPE'],
+    version_vars['RELEASEVER'],
+    version_vars['EXTENSIONS'],
+)
+release = version
 
 # -- General configuration ---------------------------------------------------
 
