@@ -17,7 +17,6 @@ common_SPHINXOPTS =			\
 
 ALLSPHINXOPTS =				\
 	$(common_SPHINXOPTS)		\
-	-D today="$(RELEASE_DATE)"	\
 	$(SPHINXOPTS)			\
 	$(srcdir)
 
