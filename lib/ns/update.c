@@ -1685,6 +1685,18 @@ is_srp(dns_message_t *request, dns_rdataclass_t zoneclass, isc_mem_t *mctx) {
 				} else if (!dns_name_equal(hst, name)) {
 					goto fail;
 				}
+				/* Link local address are not permitted. */
+				if (rdata.type == dns_rdatatype_a) {
+					if (rdata.data[0] == 169 &&
+					    rdata.data[1] == 254) {
+						goto fail;
+					}
+				} else {
+					if (rdata.data[0] == 0xfe &&
+					    (rdata.data[1] & 0xc0) == 0x80) {
+						goto fail;
+					}
+				}
 				break;
 			default:
 				/* No other additions permitted */
@@ -1694,6 +1706,11 @@ is_srp(dns_message_t *request, dns_rdataclass_t zoneclass, isc_mem_t *mctx) {
 			   update_class == dns_rdataclass_any)
 		{
 			delcnt++;
+		} else if (rdata.type == dns_rdatatype_ptr &&
+			   update_class == dns_rdataclass_none &&
+			   rdata.length != 0)
+		{
+			ptrcnt++;
 		} else {
 			/* No other changes permitted */
 			goto fail;
@@ -1790,11 +1807,17 @@ is_srp(dns_message_t *request, dns_rdataclass_t zoneclass, isc_mem_t *mctx) {
 				ptrs[p++].rdata = rdata;
 				break;
 			case dns_rdatatype_srv:
-				INSIST(p < srvcnt);
+				INSIST(s < srvcnt);
 				srvs[s].name = name;
 				srvs[s++].rdata = rdata;
 				break;
 			}
+		} else if (rdata.type == dns_rdatatype_ptr &&
+			   update_class == dns_rdataclass_none &&
+			   rdata.length != 0) {
+			INSIST(p < ptrcnt);
+			ptrs[p].name = name;
+			ptrs[p++].rdata = rdata;
 		}
 	}
 
