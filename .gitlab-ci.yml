@@ -471,7 +471,9 @@ flake8:
       artifacts: true
   script:
     - *configure
-    - flake8 --max-line-length=80 $(git ls-files '*.py' | grep -vE '(ans\.py|dangerfile\.py)')
+    - flake8 --max-line-length=80 $(git ls-files '*.py' | grep -vE '(ans\.py|dangerfile\.py|^bin/tests/system/)')
+      # ignore defaults + extra W402 to enable use of pytest.importorskip
+    - flake8 --max-line-length=80 --ignore=E121,E123,E126,E226,E24,E402,E704,W503,W504 $(git ls-files 'bin/tests/system/*.py' | grep -vE 'ans\.py')
 
 pylint:
   <<: *default_triggering_rules
