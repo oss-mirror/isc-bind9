@@ -151,7 +151,8 @@ dns_keytable_create(isc_mem_t *mctx, dns_keytable_t **keytablep) {
 	keytable = isc_mem_get(mctx, sizeof(*keytable));
 
 	keytable->table = NULL;
-	result = dns_rbt_create(mctx, free_keynode, mctx, &keytable->table);
+	result = dns_rbt_create(mctx, "keytable", free_keynode, mctx,
+				&keytable->table);
 	if (result != ISC_R_SUCCESS) {
 		goto cleanup_keytable;
 	}

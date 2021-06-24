@@ -298,7 +298,8 @@ dns_transport_list_new(isc_mem_t *mctx) {
 
 	for (size_t type = 0; type < DNS_TRANSPORT_COUNT; type++) {
 		isc_result_t result;
-		result = dns_rbt_create(list->mctx, free_dns_transport, NULL,
+		result = dns_rbt_create(list->mctx, "transports",
+					free_dns_transport, NULL,
 					&list->transports[type]);
 		RUNTIME_CHECK(result == ISC_R_SUCCESS);
 	}

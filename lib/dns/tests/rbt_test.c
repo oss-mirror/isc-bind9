@@ -163,11 +163,11 @@ test_context_setup(void) {
 	assert_non_null(ctx);
 
 	ctx->rbt = NULL;
-	result = dns_rbt_create(dt_mctx, delete_data, NULL, &ctx->rbt);
+	result = dns_rbt_create(dt_mctx, "test", delete_data, NULL, &ctx->rbt);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	ctx->rbt_distances = NULL;
-	result = dns_rbt_create(dt_mctx, delete_data, NULL,
+	result = dns_rbt_create(dt_mctx, "test", delete_data, NULL,
 				&ctx->rbt_distances);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
@@ -333,7 +333,7 @@ rbt_check_distance_random(void **state) {
 
 	isc_mem_debugging = ISC_MEM_DEBUGRECORD;
 
-	result = dns_rbt_create(dt_mctx, delete_data, NULL, &mytree);
+	result = dns_rbt_create(dt_mctx, "test", delete_data, NULL, &mytree);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	/* Names are inserted in random order. */
@@ -411,7 +411,7 @@ rbt_check_distance_ordered(void **state) {
 
 	isc_mem_debugging = ISC_MEM_DEBUGRECORD;
 
-	result = dns_rbt_create(dt_mctx, delete_data, NULL, &mytree);
+	result = dns_rbt_create(dt_mctx, "test", delete_data, NULL, &mytree);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	/* Names are inserted in sorted order. */
@@ -674,7 +674,8 @@ rbt_remove(void **state) {
 		size_t start_node;
 
 		/* Create a tree. */
-		result = dns_rbt_create(dt_mctx, delete_data, NULL, &mytree);
+		result = dns_rbt_create(dt_mctx, "test", delete_data, NULL,
+					&mytree);
 		assert_int_equal(result, ISC_R_SUCCESS);
 
 		/* Insert test data into the tree. */
@@ -956,7 +957,7 @@ rbt_insert_and_remove(void **state) {
 
 	isc_mem_debugging = ISC_MEM_DEBUGRECORD;
 
-	result = dns_rbt_create(dt_mctx, delete_data, NULL, &mytree);
+	result = dns_rbt_create(dt_mctx, "test", delete_data, NULL, &mytree);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	n = isc_mem_get(dt_mctx, sizeof(size_t));
@@ -1300,7 +1301,7 @@ benchmark(void **state) {
 
 	/* Create a tree. */
 	mytree = NULL;
-	result = dns_rbt_create(dt_mctx, NULL, NULL, &mytree);
+	result = dns_rbt_create(dt_mctx, "test", NULL, NULL, &mytree);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	/* Insert test data into the tree. */

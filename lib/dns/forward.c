@@ -46,7 +46,8 @@ dns_fwdtable_create(isc_mem_t *mctx, dns_fwdtable_t **fwdtablep) {
 	fwdtable = isc_mem_get(mctx, sizeof(dns_fwdtable_t));
 
 	fwdtable->table = NULL;
-	result = dns_rbt_create(mctx, auto_detach, fwdtable, &fwdtable->table);
+	result = dns_rbt_create(mctx, "forward-table", auto_detach, fwdtable,
+			        &fwdtable->table);
 	if (result != ISC_R_SUCCESS) {
 		goto cleanup_fwdtable;
 	}

@@ -88,7 +88,7 @@ dns_zt_create(isc_mem_t *mctx, dns_rdataclass_t rdclass, dns_zt_t **ztp) {
 	zt = isc_mem_get(mctx, sizeof(*zt));
 
 	zt->table = NULL;
-	result = dns_rbt_create(mctx, auto_detach, zt, &zt->table);
+	result = dns_rbt_create(mctx, "zonetable", auto_detach, zt, &zt->table);
 	if (result != ISC_R_SUCCESS) {
 		goto cleanup_zt;
 	}

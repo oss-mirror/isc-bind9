@@ -11314,8 +11314,9 @@ dns_resolver_disable_algorithm(dns_resolver_t *resolver, const dns_name_t *name,
 	RWLOCK(&resolver->alglock, isc_rwlocktype_write);
 #endif /* if USE_ALGLOCK */
 	if (resolver->algorithms == NULL) {
-		result = dns_rbt_create(resolver->mctx, free_algorithm,
-					resolver->mctx, &resolver->algorithms);
+		result = dns_rbt_create(resolver->mctx, "resolver-algorithms",
+					free_algorithm, resolver->mctx,
+					&resolver->algorithms);
 		if (result != ISC_R_SUCCESS) {
 			goto cleanup;
 		}
@@ -11455,8 +11456,9 @@ dns_resolver_disable_ds_digest(dns_resolver_t *resolver, const dns_name_t *name,
 	RWLOCK(&resolver->alglock, isc_rwlocktype_write);
 #endif /* if USE_ALGLOCK */
 	if (resolver->digests == NULL) {
-		result = dns_rbt_create(resolver->mctx, free_digest,
-					resolver->mctx, &resolver->digests);
+		result = dns_rbt_create(resolver->mctx, "resolver-digests",
+					free_digest, resolver->mctx,
+					&resolver->digests);
 		if (result != ISC_R_SUCCESS) {
 			goto cleanup;
 		}
@@ -11567,8 +11569,8 @@ dns_resolver_setmustbesecure(dns_resolver_t *resolver, const dns_name_t *name,
 	RWLOCK(&resolver->mbslock, isc_rwlocktype_write);
 #endif /* if USE_MBSLOCK */
 	if (resolver->mustbesecure == NULL) {
-		result = dns_rbt_create(resolver->mctx, NULL, NULL,
-					&resolver->mustbesecure);
+		result = dns_rbt_create(resolver->mctx, "resolver-mustbesecure",
+					NULL, NULL, &resolver->mustbesecure);
 		if (result != ISC_R_SUCCESS) {
 			goto cleanup;
 		}

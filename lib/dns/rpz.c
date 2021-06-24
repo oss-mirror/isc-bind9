@@ -1474,7 +1474,7 @@ dns_rpz_new_zones(dns_rpz_zones_t **rpzsp, char *rps_cstr, size_t rps_cstr_size,
 	INSIST(!zones->p.dnsrps_enabled);
 #endif /* ifdef USE_DNSRPS */
 	if (result == ISC_R_SUCCESS && !zones->p.dnsrps_enabled) {
-		result = dns_rbt_create(mctx, rpz_node_deleter, mctx,
+		result = dns_rbt_create(mctx, "rpz", rpz_node_deleter, mctx,
 					&zones->rbt);
 	}
 

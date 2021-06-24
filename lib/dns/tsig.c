@@ -1827,7 +1827,8 @@ dns_tsigkeyring_create(isc_mem_t *mctx, dns_tsig_keyring_t **ringp) {
 
 	isc_rwlock_init(&ring->lock, 0, 0);
 	ring->keys = NULL;
-	result = dns_rbt_create(mctx, free_tsignode, NULL, &ring->keys);
+	result = dns_rbt_create(mctx, "tsigkeyring", free_tsignode, NULL,
+				&ring->keys);
 	if (result != ISC_R_SUCCESS) {
 		isc_rwlock_destroy(&ring->lock);
 		isc_mem_put(mctx, ring, sizeof(dns_tsig_keyring_t));

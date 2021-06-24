@@ -8102,6 +8102,8 @@ dns_rbtdb_create(isc_mem_t *mctx, const dns_name_t *origin, dns_dbtype_t type,
 	dns_name_t name;
 	bool (*sooner)(void *, void *);
 	isc_mem_t *hmctx = mctx;
+	char namestr[DNS_NAME_FORMATSIZE];
+	char refstr[DNS_NAME_FORMATSIZE + sizeof("rbtdb-nsec3 cache ")];
 
 	/* Keep the compiler happy. */
 	UNUSED(driverarg);
@@ -8227,21 +8229,36 @@ dns_rbtdb_create(isc_mem_t *mctx, const dns_name_t *origin, dns_dbtype_t type,
 	}
 
 	/*
+	 * Make a Red-Black Tree reference.
+	 */
+
+	/*
 	 * Make the Red-Black Trees.
 	 */
-	result = dns_rbt_create(mctx, delete_callback, rbtdb, &rbtdb->tree);
+	dns_name_format(origin, namestr, sizeof(namestr));
+
+	snprintf(refstr, sizeof(refstr), "rbtdb-tree %s %s",
+		 IS_CACHE(rbtdb) ? "cache" : "zone", namestr);
+	result = dns_rbt_create(mctx, refstr, delete_callback, rbtdb,
+				&rbtdb->tree);
 	if (result != ISC_R_SUCCESS) {
 		free_rbtdb(rbtdb, false, NULL);
 		return (result);
 	}
 
-	result = dns_rbt_create(mctx, delete_callback, rbtdb, &rbtdb->nsec);
+	snprintf(refstr, sizeof(refstr), "rbtdb-nsec %s %s",
+		 IS_CACHE(rbtdb) ? "cache" : "zone", namestr);
+	result = dns_rbt_create(mctx, refstr, delete_callback, rbtdb,
+				&rbtdb->nsec);
 	if (result != ISC_R_SUCCESS) {
 		free_rbtdb(rbtdb, false, NULL);
 		return (result);
 	}
 
-	result = dns_rbt_create(mctx, delete_callback, rbtdb, &rbtdb->nsec3);
+	snprintf(refstr, sizeof(refstr), "rbtdb-nsec3 %s %s",
+		 IS_CACHE(rbtdb) ? "cache" : "zone", namestr);
+	result = dns_rbt_create(mctx, refstr, delete_callback, rbtdb,
+				&rbtdb->nsec3);
 	if (result != ISC_R_SUCCESS) {
 		free_rbtdb(rbtdb, false, NULL);
 		return (result);

@@ -117,7 +117,7 @@ dns_ntatable_create(dns_view_t *view, isc_taskmgr_t *taskmgr,
 	isc_task_setname(ntatable->task, "ntatable", ntatable);
 
 	ntatable->table = NULL;
-	result = dns_rbt_create(view->mctx, free_nta, view->mctx,
+	result = dns_rbt_create(view->mctx, "ntatable", free_nta, view->mctx,
 				&ntatable->table);
 	if (result != ISC_R_SUCCESS) {
 		goto cleanup_task;
