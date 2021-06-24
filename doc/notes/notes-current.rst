@@ -26,6 +26,9 @@ New Features
 
 - None.
 
+- Log an informational message when the internal RBT hashtable grows, as this
+  process can be time-consuming especially at large cache sizes. :gl:`#2277`
+
 Removed Features
 ~~~~~~~~~~~~~~~~
 
