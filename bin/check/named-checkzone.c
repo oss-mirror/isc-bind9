@@ -526,6 +526,7 @@ main(int argc, char **argv) {
 	}
 
 	dns_result_register();
+	RUNTIME_CHECK(dst_lib_init(mctx, NULL) == ISC_R_SUCCESS);
 
 	origin = argv[isc_commandline_index++];
 
@@ -567,6 +568,7 @@ main(int argc, char **argv) {
 	if (lctx != NULL) {
 		isc_log_destroy(&lctx);
 	}
+	dst_lib_destroy();
 	isc_mem_destroy(&mctx);
 
 	return ((result == ISC_R_SUCCESS) ? 0 : 1);
