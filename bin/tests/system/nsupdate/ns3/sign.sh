@@ -43,3 +43,14 @@ keyname2=`$KEYGEN -q -a RSASHA256 -3 $zone`
 cat $infile $keyname1.key $keyname2.key >$zonefile
 
 $SIGNER -A -3 - -P -o $zone -k $keyname1 $zonefile $keyname2 > /dev/null
+
+zone=zonemd.test.
+infile=zonemd.test.db.in
+zonefile=zonemd.test.db
+
+keyname1=`$KEYGEN -q -a RSASHA1 -b 1024 -n zone -f KSK $zone`
+keyname2=`$KEYGEN -q -a RSASHA1 -b 1024 -n zone $zone`
+
+cat $infile $keyname1.key $keyname2.key >$zonefile
+
+$SIGNER -P -o $zone -k $keyname1 $zonefile $keyname2 > /dev/null
