@@ -2281,6 +2281,12 @@ static cfg_clausedef_t zone_clauses[] = {
 	{ "zone-statistics", &cfg_type_zonestat,
 	  CFG_ZONE_MASTER | CFG_ZONE_SLAVE | CFG_ZONE_MIRROR | CFG_ZONE_STUB |
 		  CFG_ZONE_STATICSTUB | CFG_ZONE_REDIRECT },
+	{ "zonemd-check", &cfg_type_boolean,
+	  CFG_ZONE_MASTER | CFG_ZONE_SLAVE | CFG_ZONE_MIRROR },
+	{ "zonemd-dnssec-only", &cfg_type_boolean,
+	  CFG_ZONE_MASTER | CFG_ZONE_SLAVE | CFG_ZONE_MIRROR },
+	{ "zonemd-required", &cfg_type_boolean,
+	  CFG_ZONE_MASTER | CFG_ZONE_SLAVE | CFG_ZONE_MIRROR },
 	{ NULL, NULL, 0 }
 };
 
