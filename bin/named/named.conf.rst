@@ -454,6 +454,17 @@ OPTIONS
   	zone-statistics ( full | terse | none | boolean );
   };
 
+PARENTAL-AGENTS
+^^^^^^^^^^^^^^^
+
+::
+
+  parental-agents string [ port integer ] [
+      dscp integer ] { ( remote-servers |
+      ipv4_address [ port integer ] |
+      ipv6_address [ port integer ] ) [ key
+      string ]; ... };
+
 PLUGIN
 ^^^^^^
 
@@ -899,6 +910,10 @@ VIEW
   		notify-source-v6 ( ipv6_address | * ) [ port ( integer
   		    | * ) ] [ dscp integer ];
   		notify-to-soa boolean;
+  		parental-agents [ port integer ] [ dscp integer ] { (
+  		    remote-servers | ipv4_address [ port integer ] |
+  		    ipv6_address [ port integer ] ) [ key string ];
+  		    ... };
   		primaries [ port integer ] [ dscp integer ] { (
   		    remote-servers | ipv4_address [ port integer ] |
   		    ipv6_address [ port integer ] ) [ key string ];
@@ -1006,6 +1021,9 @@ ZONE
   	notify-source-v6 ( ipv6_address | * ) [ port ( integer | * ) ]
   	    [ dscp integer ];
   	notify-to-soa boolean;
+  	parental-agents [ port integer ] [ dscp integer ] { (
+  	    remote-servers | ipv4_address [ port integer ] |
+  	    ipv6_address [ port integer ] ) [ key string ]; ... };
   	primaries [ port integer ] [ dscp integer ] { (
   	    remote-servers | ipv4_address [ port integer ] |
   	    ipv6_address [ port integer ] ) [ key string ]; ... };
