@@ -12,9 +12,9 @@
   	allow-transfer { <address_match_element>; ... };
   	allow-update { <address_match_element>; ... };
   	allow-update-forwarding { <address_match_element>; ... };
-  	also-notify [ port <integer> ] [ dscp <integer> ] { ( <primaries> |
-  	    <ipv4_address> [ port <integer> ] | <ipv6_address> [ port
-  	    <integer> ] ) [ key <string> ]; ... };
+  	also-notify [ port <integer> ] [ dscp <integer> ] { (
+  	    <remote-servers> | <ipv4_address> [ port <integer> ] |
+  	    <ipv6_address> [ port <integer> ] ) [ key <string> ]; ... };
   	alt-transfer-source ( <ipv4_address> | * ) [ port ( <integer> | * )
   	    ] [ dscp <integer> ];
   	alt-transfer-source-v6 ( <ipv6_address> | * ) [ port ( <integer> |
@@ -30,7 +30,7 @@
   	blackhole { <address_match_element>; ... };
   	cache-file <quoted_string>;
   	catalog-zones { zone <string> [ default-masters [ port <integer> ]
-  	    [ dscp <integer> ] { ( <primaries> | <ipv4_address> [ port
+  	    [ dscp <integer> ] { ( <remote-servers> | <ipv4_address> [ port
   	    <integer> ] | <ipv6_address> [ port <integer> ] ) [ key
   	    <string> ]; ... } ] [ zone-directory <quoted_string> ] [
   	    in-memory <boolean> ] [ min-update-interval <duration> ]; ... };
@@ -82,12 +82,15 @@
   	dnssec-secure-to-insecure <boolean>;
   	dnssec-update-mode ( maintain | no-resign );
   	dnssec-validation ( yes | no | auto );
-  	dnstap { ( all | auth | client | forwarder | resolver | update ) [
-  	    ( query | response ) ]; ... };
-  	dnstap-identity ( <quoted_string> | none | hostname );
-  	dnstap-output ( file | unix ) <quoted_string> [ size ( unlimited |
-  	    <size> ) ] [ versions ( unlimited | <integer> ) ] [ suffix (
-  	    increment | timestamp ) ];
+  	dnstap { ( all | auth | client | forwarder |
+  	    resolver | update ) [ ( query | response ) ];
+  	    ... };
+  	dnstap-identity ( <quoted_string> | none |
+  	    hostname );
+  	dnstap-output ( file | unix ) <quoted_string> [
+  	    size ( unlimited | <size> ) ] [ versions (
+  	    unlimited | <integer> ) ] [ suffix ( increment
+  	    | timestamp ) ];
   	dnstap-version ( <quoted_string> | none );
   	dscp <integer>;
   	dual-stack-servers [ port <integer> ] { ( <quoted_string> [ port
