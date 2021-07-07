@@ -2766,6 +2766,8 @@ resquery_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	isc_result_t result;
 	fetchctx_t *fctx = NULL;
 	dns_resolver_t *res = NULL;
+	unsigned int bucketnum;
+	bool bucket_empty;
 	int pf;
 
 	REQUIRE(VALID_QUERY(query));
@@ -2776,6 +2778,8 @@ resquery_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 
 	fctx = query->fctx;
 	res = fctx->res;
+
+	bucketnum = fctx->bucketnum;
 
 	if (atomic_load_acquire(&res->exiting)) {
 		eresult = ISC_R_SHUTTINGDOWN;
@@ -2859,7 +2863,12 @@ resquery_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 		fctx_done(fctx, eresult, __LINE__);
 	}
 
-	fctx_decreference(fctx);
+	LOCK(&res->buckets[bucketnum].lock);
+	bucket_empty = fctx_decreference(fctx);
+	UNLOCK(&res->buckets[bucketnum].lock);
+	if (bucket_empty) {
+		empty_bucket(res);
+	}
 }
 
 static void
