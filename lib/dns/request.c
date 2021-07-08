@@ -86,10 +86,9 @@ struct dns_request {
 
 #define DNS_REQUEST_F_CONNECTING 0x0001
 #define DNS_REQUEST_F_SENDING	 0x0002
-#define DNS_REQUEST_F_CANCELED                                                \
-	0x0004				 /*%< ctlevent received, or otherwise \
-					  * synchronously canceled */
-#define DNS_REQUEST_F_TCP	  0x0010 /*%< This request used TCP */
+#define DNS_REQUEST_F_CANCELED	 0x0004
+#define DNS_REQUEST_F_TCP	 0x0010
+
 #define DNS_REQUEST_CANCELED(r)	  (((r)->flags & DNS_REQUEST_F_CANCELED) != 0)
 #define DNS_REQUEST_CONNECTING(r) (((r)->flags & DNS_REQUEST_F_CONNECTING) != 0)
 #define DNS_REQUEST_SENDING(r)	  (((r)->flags & DNS_REQUEST_F_SENDING) != 0)
@@ -984,7 +983,7 @@ do_cancel(isc_task_t *task, isc_event_t *event) {
 
 static void
 request_cancel(dns_request_t *request) {
-	if (!DNS_REQUEST_CANCELED(request)) {
+	if (!request->canceling && !DNS_REQUEST_CANCELED(request)) {
 		isc_event_t *ev = &request->ctlevent;
 		isc_task_send(request->event->ev_sender, &ev);
 	}
