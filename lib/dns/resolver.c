@@ -2035,12 +2035,12 @@ fctx_query(fetchctx_t *fctx, dns_adbaddrinfo_t *addrinfo,
 	srtt = addrinfo->srtt;
 
 	/*
-	 * Allow an additional second for the kernel to resend the SYN (or
-	 * SYN without ECN in the case of stupid firewalls blocking ECN
+	 * Allow an additional 3 seconds for the kernel to resend the SYN
+	 * (or SYN without ECN in the case of stupid firewalls blocking ECN
 	 * negotiation) over the current RTT estimate.
 	 */
 	if ((options & DNS_FETCHOPT_TCP) != 0) {
-		srtt += 1000000;
+		srtt += 3000000;
 	}
 
 	/*
