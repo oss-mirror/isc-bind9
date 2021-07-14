@@ -201,14 +201,14 @@ server.
    consistency.
 
    For more information and a list of available commands and options,
-   see :ref:`man_named-checkzone_named-compilezone`.
+   see :ref:`man_named-checkzone`.
 
 ``named-compilezone``
    This tool is similar to ``named-checkzone,`` but it always dumps the zone content
    to a specified file (typically in a different format).
 
    For more information and a list of available commands and options,
-   see :ref:`man_named-checkzone_named-compilezone`.
+   see :ref:`man_named-compilezone`.
 
 ``rndc``
    The remote name daemon control (``rndc``) program allows the system
