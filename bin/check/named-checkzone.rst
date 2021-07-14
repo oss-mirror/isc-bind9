@@ -21,17 +21,15 @@
 
 .. highlight: console
 
-.. _man_named-checkzone_named-compilezone:
+.. _man_named-checkzone:
 
-named-checkzone, named-compilezone - zone file validity checking or converting tool
+named-checkzone - zone file validity checking or converting tool
 -----------------------------------------------------------------------------------
 
 Synopsis
 ~~~~~~~~
 
 :program:`named-checkzone` [**-d**] [**-h**] [**-j**] [**-q**] [**-v**] [**-c** class] [**-f** format] [**-F** format] [**-J** filename] [**-i** mode] [**-k** mode] [**-m** mode] [**-M** mode] [**-n** mode] [**-l** ttl] [**-L** serial] [**-o** filename] [**-r** mode] [**-s** style] [**-S** mode] [**-t** directory] [**-T** mode] [**-w** directory] [**-D**] [**-W** mode] {zonename} {filename}
-
-:program:`named-compilezone` [**-d**] [**-j**] [**-q**] [**-v**] [**-c** class] [**-C** mode] [**-f** format] [**-F** format] [**-J** filename] [**-i** mode] [**-k** mode] [**-m** mode] [**-n** mode] [**-l** ttl] [**-L** serial] [**-r** mode] [**-s** style] [**-t** directory] [**-T** mode] [**-w** directory] [**-D**] [**-W** mode] {**-o** filename} {zonename} {filename}
 
 Description
 ~~~~~~~~~~~
@@ -40,13 +38,6 @@ Description
 performs the same checks as ``named`` does when loading a zone. This
 makes ``named-checkzone`` useful for checking zone files before
 configuring them into a name server.
-
-``named-compilezone`` is similar to ``named-checkzone``, but it always
-dumps the zone contents to a specified file in a specified format.
-It also applies stricter check levels by default, since the
-dump output is used as an actual zone file loaded by ``named``.
-When manually specified otherwise, the check levels must at least be as
-strict as those specified in the ``named`` configuration file.
 
 Options
 ~~~~~~~
@@ -57,6 +48,11 @@ Options
 ``-h``
    This option prints the usage summary and exits.
 
+``-j``
+   When loading a zone file, this option tells ``named`` to read the journal if it exists. The journal
+   file name is assumed to be the zone file name with the
+   string ``.jnl`` appended.
+
 ``-q``
    This option sets quiet mode, which only sets an exit code to indicate
    successful or failed completion.
@@ -64,17 +60,29 @@ Options
 ``-v``
    This option prints the version of the ``named-checkzone`` program and exits.
 
-``-j``
-   When loading a zone file, this option tells ``named`` to read the journal if it exists. The journal
-   file name is assumed to be the zone file name with the
-   string ``.jnl`` appended.
+``-c class``
+   This option specifies the class of the zone. If not specified, ``IN`` is assumed.
+
+``-f format``
+   This option specifies the format of the zone file. Possible formats are ``text``
+   (the default), ``raw``, and ``map``.
+
+``-F format``
+   This option specifies the format of the output file specified. For
+   ``named-checkzone``, this does not have any effect unless it dumps
+   the zone contents.
+
+   Possible formats are ``text`` (the default), which is the standard
+   textual representation of the zone, and ``map``, ``raw``, and
+   ``raw=N``, which store the zone in a binary format for rapid
+   loading by ``named``. ``raw=N`` specifies the format version of the
+   raw zone file: if ``N`` is 0, the raw file can be read by any version of
+   ``named``; if N is 1, the file can only be read by release 9.9.0 or
+   higher. The default is 1.
 
 ``-J filename``
    When loading the zone file, this option tells ``named`` to read the journal from the given file, if
    it exists. This implies ``-j``.
-
-``-c class``
-   This option specifies the class of the zone. If not specified, ``IN`` is assumed.
 
 ``-i mode``
    This option performs post-load zone integrity checks. Possible modes are
@@ -102,37 +110,10 @@ Options
 
    Mode ``none`` disables the checks.
 
-``-f format``
-   This option specifies the format of the zone file. Possible formats are ``text``
-   (the default), ``raw``, and ``map``.
-
-``-F format``
-   This option specifies the format of the output file specified. For
-   ``named-checkzone``, this does not have any effect unless it dumps
-   the zone contents.
-
-   Possible formats are ``text`` (the default), which is the standard
-   textual representation of the zone, and ``map``, ``raw``, and
-   ``raw=N``, which store the zone in a binary format for rapid
-   loading by ``named``. ``raw=N`` specifies the format version of the
-   raw zone file: if ``N`` is 0, the raw file can be read by any version of
-   ``named``; if N is 1, the file can only be read by release 9.9.0 or
-   higher. The default is 1.
-
 ``-k mode``
    This option performs ``check-names`` checks with the specified failure mode.
    Possible modes are ``fail`` (the default for ``named-compilezone``),
    ``warn`` (the default for ``named-checkzone``), and ``ignore``.
-
-``-l ttl``
-   This option sets a maximum permissible TTL for the input file. Any record with a
-   TTL higher than this value causes the zone to be rejected. This
-   is similar to using the ``max-zone-ttl`` option in ``named.conf``.
-
-``-L serial``
-   When compiling a zone to ``raw`` or ``map`` format, this option sets the "source
-   serial" value in the header to the specified serial number. This is
-   expected to be used primarily for testing purposes.
 
 ``-m mode``
    This option specifies whether MX records should be checked to see if they are
@@ -148,6 +129,16 @@ Options
    addresses. Possible modes are ``fail`` (the default for
    ``named-compilezone``), ``warn`` (the default for ``named-checkzone``),
    and ``ignore``.
+
+``-l ttl``
+   This option sets a maximum permissible TTL for the input file. Any record with a
+   TTL higher than this value causes the zone to be rejected. This
+   is similar to using the ``max-zone-ttl`` option in ``named.conf``.
+
+``-L serial``
+   When compiling a zone to ``raw`` or ``map`` format, this option sets the "source
+   serial" value in the header to the specified serial number. This is
+   expected to be used primarily for testing purposes.
 
 ``-o filename``
    This option writes the zone output to ``filename``. If ``filename`` is ``-``, then
