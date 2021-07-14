@@ -21,6 +21,8 @@
 
 .. highlight: console
 
+.. _man_named-checkzone_named-compilezone:
+
 named-checkzone, named-compilezone - zone file validity checking or converting tool
 -----------------------------------------------------------------------------------
 
