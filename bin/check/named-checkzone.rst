@@ -112,8 +112,7 @@ Options
 
 ``-k mode``
    This option performs ``check-names`` checks with the specified failure mode.
-   Possible modes are ``fail`` (the default for ``named-compilezone``),
-   ``warn`` (the default for ``named-checkzone``), and ``ignore``.
+   Possible modes are ``fail``, ``warn`` (the default), and ``ignore``.
 
 ``-m mode``
    This option specifies whether MX records should be checked to see if they are
@@ -126,8 +125,7 @@ Options
 
 ``-n mode``
    This option specifies whether NS records should be checked to see if they are
-   addresses. Possible modes are ``fail`` (the default for
-   ``named-compilezone``), ``warn`` (the default for ``named-checkzone``),
+   addresses. Possible modes are ``fail``, ``warn`` (the default),
    and ``ignore``.
 
 ``-l ttl``
@@ -142,7 +140,7 @@ Options
 
 ``-o filename``
    This option writes the zone output to ``filename``. If ``filename`` is ``-``, then
-   the zone output is written to standard output. This is mandatory for ``named-compilezone``.
+   the zone output is written to standard output.
 
 ``-r mode``
    This option checks for records that are treated as different by DNSSEC but are
@@ -178,8 +176,7 @@ Options
    ``named.conf``.
 
 ``-D``
-   This option dumps the zone file in canonical format. This is always enabled for
-   ``named-compilezone``.
+   This option dumps the zone file in canonical format.
 
 ``-W mode``
    This option specifies whether to check for non-terminal wildcards. Non-terminal
@@ -202,5 +199,5 @@ and 0 otherwise.
 See Also
 ~~~~~~~~
 
-:manpage:`named(8)`, :manpage:`named-checkconf(8)`, :rfc:`1035`, BIND 9 Administrator Reference
-Manual.
+:manpage:`named(8)`, :manpage:`named-checkconf(8)`, :manpage:`named-compilezone(8)`, :rfc:`1035`,
+BIND 9 Administrator Reference Manual.
