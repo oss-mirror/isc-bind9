@@ -11070,7 +11070,7 @@ named_server_refreshcommand(named_server_t *server, isc_lex_t *lex,
 isc_result_t
 named_server_togglequerylog(named_server_t *server, isc_lex_t *lex) {
 	bool prev, value;
-	char *ptr;
+	char *ptr = NULL;
 
 	/* Skip the command name. */
 	ptr = next_token(lex, NULL);
@@ -11110,12 +11110,13 @@ named_server_togglequerylog(named_server_t *server, isc_lex_t *lex) {
 isc_result_t
 named_server_toggleresponselog(named_server_t *server, isc_lex_t *lex) {
 	bool prev, value;
-	char *ptr;
+	char *ptr = NULL;
 
 	/* Skip the command name. */
 	ptr = next_token(lex, NULL);
-	if (ptr == NULL)
+	if (ptr == NULL) {
 		return (ISC_R_UNEXPECTEDEND);
+	}
 
 	prev = ns_server_getoption(server->sctx, NS_SERVER_LOGRESPONSES);
 
@@ -11134,8 +11135,9 @@ named_server_toggleresponselog(named_server_t *server, isc_lex_t *lex) {
 		return (DNS_R_SYNTAX);
 	}
 
-	if (value == prev)
+	if (value == prev) {
 		return (ISC_R_SUCCESS);
+	}
 
 	ns_server_setoption(server->sctx, NS_SERVER_LOGRESPONSES, value);
 
