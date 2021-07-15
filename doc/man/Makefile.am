@@ -42,6 +42,7 @@ MANPAGES_RST =				\
 	tsig-keygen.rst			\
 	../../bin/check/named-checkconf.rst \
 	../../bin/check/named-checkzone.rst \
+	../../bin/check/named-compilezone.rst \
 	../../bin/confgen/rndc-confgen.rst \
 	../../bin/confgen/tsig-keygen.rst \
 	../../bin/delv/delv.rst \
