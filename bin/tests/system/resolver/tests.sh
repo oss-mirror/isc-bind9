@@ -846,7 +846,7 @@ if [ $ret != 0 ]; then echo_i "failed"; fi
 status=`expr $status + $ret`
 
 n=`expr $n + 1`
-echo_i "check that response code have been log with 'responselog yes;' ($n)"
+echo_i "check that response codes have been logged with 'responselog yes;' ($n)"
 ret=0
 grep "responselog yes;" ns5/named.conf > /dev/null || ret=1
 grep "response: version.bind CH TXT NOERROR" ns5/named.run > /dev/null || ret=1
@@ -873,7 +873,7 @@ if [ $ret != 0 ]; then echo_i "failed"; fi
 status=`expr $status + $ret`
 
 n=`expr $n + 1`
-echo_i "check that response code have not been log with default 'responselog' ($n)"
+echo_i "check that response codes have not been logged with default 'responselog' ($n)"
 ret=0
 grep "responselog" ns1/named.conf > /dev/null && ret=1
 grep "response: version.bind CH TXT NOERROR" ns1/named.run > /dev/null && ret=1
@@ -882,7 +882,7 @@ status=`expr $status + $ret`
 n=`expr $n + 1`
 
 n=`expr $n + 1`
-echo_i "check that 'rndc responselog on' enables logging default 'responselog' ($n)"
+echo_i "check that 'rndc responselog on' enables logging with default 'responselog' ($n)"
 ret=0
 grep "response: should.be.logged" ns1/named.run > /dev/null && ret=1
 $RNDCCMD 10.53.0.1 responselog on || ret=1
@@ -892,7 +892,7 @@ if [ $ret != 0 ]; then echo_i "failed"; fi
 status=`expr $status + $ret`
 
 n=`expr $n + 1`
-echo_i "check that 'rndc responselog off' disables logging default 'responselog' ($n)"
+echo_i "check that 'rndc responselog off' disables logging with default 'responselog' ($n)"
 ret=0
 $RNDCCMD 10.53.0.1 responselog off || ret=1
 $DIG $DIGOPTS @10.53.0.1 should.not.be.logged > dig.ns1.out.${n} || ret=1
@@ -901,7 +901,7 @@ if [ $ret != 0 ]; then echo_i "failed"; fi
 status=`expr $status + $ret`
 
 n=`expr $n + 1`
-echo_i "check that response code have not been log with 'responselog no;' ($n)"
+echo_i "check that response codes have not been logged with 'responselog no;' ($n)"
 ret=0
 grep "responselog no;" ns6/named.conf > /dev/null || ret=1
 grep "response: version.bind CH TXT NOERROR" ns6/named.run > /dev/null && ret=1
@@ -909,7 +909,7 @@ if [ $ret != 0 ]; then echo_i "failed"; fi
 status=`expr $status + $ret`
 
 n=`expr $n + 1`
-echo_i "check that 'rndc responselog on' enables logging default 'responselog no;' ($n)"
+echo_i "check that 'rndc responselog on' enables logging with default 'responselog no;' ($n)"
 ret=0
 grep "response: should.be.logged" ns6/named.run > /dev/null && ret=1
 $RNDCCMD 10.53.0.6 responselog on || ret=1
@@ -919,7 +919,7 @@ if [ $ret != 0 ]; then echo_i "failed"; fi
 status=`expr $status + $ret`
 
 n=`expr $n + 1`
-echo_i "check that 'rndc responselog off' disables logging default 'responselog no;' ($n)"
+echo_i "check that 'rndc responselog off' disables logging with default 'responselog no;' ($n)"
 ret=0
 $RNDCCMD 10.53.0.6 responselog off || ret=1
 $DIG $DIGOPTS @10.53.0.6 should.not.be.logged > dig.ns6.out.${n} || ret=1
