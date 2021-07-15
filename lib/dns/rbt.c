@@ -236,9 +236,8 @@ getdata(dns_rbtnode_t *node, file_header_t *header) {
  * Structure elements from the rbtdb.c, not
  * used as part of the rbt.c algorithms.
  */
-#define DIRTY(node)   ((node)->dirty)
-#define WILD(node)    ((node)->wild)
-#define LOCKNUM(node) ((node)->locknum)
+#define DIRTY(node) ((node)->dirty)
+#define WILD(node)  ((node)->wild)
 
 /*%
  * The variable length stuff stored after the node has the following
@@ -2279,7 +2278,6 @@ create_node(isc_mem_t *mctx, const dns_name_t *name, dns_rbtnode_t **nodep) {
 
 	ISC_LINK_INIT(node, deadlink);
 
-	LOCKNUM(node) = 0;
 	WILD(node) = 0;
 	DIRTY(node) = 0;
 	isc_refcount_init(&node->references, 0);
@@ -3080,8 +3078,6 @@ dns_rbt_printnodeinfo(dns_rbtnode_t *n, FILE *f) {
 		(n->left_is_relative == 1 ? " L" : ""),
 		(n->down_is_relative == 1 ? " D" : ""),
 		(n->data_is_relative == 1 ? " T" : ""));
-
-	fprintf(f, "node lock address = %u\n", n->locknum);
 
 	fprintf(f, "Parent: %p\n", n->parent);
 	fprintf(f, "Right: %p\n", n->right);
