@@ -387,6 +387,9 @@ This command reloads the configuration file and zones.
 .B \fBreload\fP \fIzone\fP [\fIclass\fP [\fIview\fP]]
 This command reloads the given zone.
 .TP
+.B \fBresponselog\fP [on | off]
+Enable or disable response logging.
+.TP
 .B \fBretransfer\fP \fIzone\fP [\fIclass\fP [\fIview\fP]]
 This command retransfers the given secondary zone from the primary server.
 .sp
