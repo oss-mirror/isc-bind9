@@ -10,24 +10,27 @@ variables:
     description: "client traffic volume multiplier(s); base value 1 = roughly 8 k QPS; start with multiplier 10; max. 40"
   SHOTGUN_ROUNDS:
     value: 1
-    description: "repeat test for each combination of (version, scenario, traffic multiplier) this many times; test against reference v9_11_31 is always run once; three runs recommended to detect noise"
+    description: "repeat test for each combination of (version, scenario, traffic multiplier) this many times; three runs recommended to detect noise"
   SHOTGUN_DURATION:
     value: 60
     description: "test length in seconds, max 900 s"
+  SHOTGUN_SERVER_THREADS:
+    value: 16
+    description: "number of online CPUs & also named -n value; range 1-16"
   EXAMPLE_SHOTGUN_TEST_VERSION_WITH_MULTIPLE_VALUES:
     value: "['main', 'v9_16_15']"
     description: "an example how to specify multiple values for version; works the same way for (scenario, traffic multiplier)"
 
 stages:
-  - performance
-  - performance2
+  - job_generator
+  - run_child_pipeline
 
 ### Job Definitions
 
 # Jobs in the precheck stage
 
 resolver-shotgun-pipeline-generator:
-  stage: performance
+  stage: job_generator
   tags:
     - linux-benchmarking
   dependencies: []
@@ -52,7 +55,7 @@ resolver-shotgun-pipeline-generator:
   timeout: 5m
 
 resolver-shotgun-child-pipeline:
-  stage: performance2
+  stage: run_child_pipeline
   variables:
     PARENT_PIPELINE_ID: $CI_PIPELINE_ID
   trigger:
