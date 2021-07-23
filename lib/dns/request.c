@@ -32,6 +32,8 @@
 #include <dns/result.h>
 #include <dns/tsig.h>
 
+#define REQ_TRACE
+
 #define REQUESTMGR_MAGIC      ISC_MAGIC('R', 'q', 'u', 'M')
 #define VALID_REQUESTMGR(mgr) ISC_MAGIC_VALID(mgr, REQUESTMGR_MAGIC)
 
@@ -268,8 +270,15 @@ dns__requestmgr_attach(dns_requestmgr_t *source, dns_requestmgr_t **targetp,
 
 	ref = isc_refcount_increment(&source->references);
 
+#ifdef REQ_TRACE
 	fprintf(stderr, "%s:%s:%u:%s(%p, %p) = %" PRIuFAST32 "\n", func, file,
 		line, __func__, source, targetp, ref + 1);
+#else
+	UNUSED(func);
+	UNUSED(file);
+	UNUSED(line);
+	UNUSED(ref);
+#endif /* REQ_TRACE */
 
 	req_log(ISC_LOG_DEBUG(3),
 		"dns_requestmgr_attach: %p: references = %" PRIuFAST32, source,
@@ -281,7 +290,7 @@ dns__requestmgr_attach(dns_requestmgr_t *source, dns_requestmgr_t **targetp,
 void
 dns__requestmgr_detach(dns_requestmgr_t **requestmgrp, const char *file,
 		       unsigned int line, const char *func) {
-	dns_requestmgr_t *requestmgr;
+	dns_requestmgr_t *requestmgr = NULL;
 	uint_fast32_t ref;
 
 	REQUIRE(requestmgrp != NULL && VALID_REQUESTMGR(*requestmgrp));
@@ -291,8 +300,15 @@ dns__requestmgr_detach(dns_requestmgr_t **requestmgrp, const char *file,
 
 	ref = isc_refcount_decrement(&requestmgr->references);
 
+#ifdef REQ_TRACE
 	fprintf(stderr, "%s:%s:%u:%s(%p, %p) = %" PRIuFAST32 "\n", func, file,
 		line, __func__, requestmgr, requestmgrp, ref - 1);
+#else
+	UNUSED(func);
+	UNUSED(file);
+	UNUSED(line);
+	UNUSED(ref);
+#endif /* REQ_TRACE */
 
 	req_log(ISC_LOG_DEBUG(3),
 		"dns_requestmgr_detach: %p: references = %" PRIuFAST32,
@@ -1199,13 +1215,22 @@ req_sendevent(dns_request_t *request, isc_result_t result) {
 static void
 __req_attach(dns_request_t *source, dns_request_t **targetp, const char *file,
 	     unsigned int line, const char *func) {
+	uint_fast32_t ref;
+
 	REQUIRE(VALID_REQUEST(source));
 	REQUIRE(targetp != NULL && *targetp == NULL);
 
-	uint_fast32_t ref = isc_refcount_increment(&source->references);
+	ref = isc_refcount_increment(&source->references);
 
+#ifdef REQ_TRACE
 	fprintf(stderr, "%s:%s:%u:%s(%p, %p) = %" PRIuFAST32 "\n", func, file,
 		line, __func__, source, targetp, ref + 1);
+#else
+	UNUSED(func);
+	UNUSED(file);
+	UNUSED(line);
+	UNUSED(ref);
+#endif /* REQ_TRACE */
 
 	*targetp = source;
 }
@@ -1213,15 +1238,25 @@ __req_attach(dns_request_t *source, dns_request_t **targetp, const char *file,
 static void
 __req_detach(dns_request_t **requestp, const char *file, unsigned int line,
 	     const char *func) {
-	dns_request_t *request;
+	dns_request_t *request = NULL;
+	uint_fast32_t ref;
+
 	REQUIRE(requestp != NULL && VALID_REQUEST(*requestp));
 
 	request = *requestp;
 	*requestp = NULL;
 
-	uint_fast32_t ref = isc_refcount_decrement(&request->references);
+	ref = isc_refcount_decrement(&request->references);
+
+#ifdef REQ_TRACE
 	fprintf(stderr, "%s:%s:%u:%s(%p, %p) = %" PRIuFAST32 "\n", func, file,
 		line, __func__, request, requestp, ref - 1);
+#else
+	UNUSED(func);
+	UNUSED(file);
+	UNUSED(line);
+	UNUSED(ref);
+#endif /* REQ_TRACE */
 
 	if (atomic_load_acquire(&request->requestmgr->exiting)) {
 		/* We are shutting down and this was last request */

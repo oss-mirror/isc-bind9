@@ -1174,10 +1174,12 @@ resquery_destroy(resquery_t *query) {
 static void __attribute__((unused))
 __resquery_attach(resquery_t *source, resquery_t **targetp, const char *file,
 		  unsigned int line, const char *func) {
+	uint_fast32_t ref;
+
 	REQUIRE(VALID_QUERY(source));
 	REQUIRE(targetp != NULL && *targetp == NULL);
 
-	uint_fast32_t ref = isc_refcount_increment(&source->references);
+	ref = isc_refcount_increment(&source->references);
 
 #ifdef RESOLVER_TRACE
 	fprintf(stderr, "%s:%s:%u:%s(%p, %p) = %" PRIuFAST32 "\n", func, file,
@@ -1197,13 +1199,15 @@ __resquery_attach(resquery_t *source, resquery_t **targetp, const char *file,
 static void
 __resquery_detach(resquery_t **queryp, const char *file, unsigned int line,
 		  const char *func) {
-	resquery_t *query;
+	uint_fast32_t ref;
+	resquery_t *query = NULL;
+
 	REQUIRE(queryp != NULL && VALID_QUERY(*queryp));
 
 	query = *queryp;
 	*queryp = NULL;
 
-	uint_fast32_t ref = isc_refcount_decrement(&query->references);
+	ref = isc_refcount_decrement(&query->references);
 
 #ifdef RESOLVER_TRACE
 	fprintf(stderr, "%s:%s:%u:%s(%p, %p) = %" PRIuFAST32 "\n", func, file,
