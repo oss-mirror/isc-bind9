@@ -404,6 +404,7 @@ deactivate_dispentry(dns_dispatch_t *disp, dns_dispentry_t *resp) {
 	}
 	if (resp->handle != NULL) {
 		isc_nm_cancelread(resp->handle);
+		isc_nmhandle_detach(&resp->handle);
 	}
 	disp->nsockets--;
 }
@@ -528,10 +529,14 @@ __dispentry_attach(dns_dispentry_t *resp, dns_dispentry_t **respp,
 	__dispentry_detach(rp, __func__, __FILE__, __LINE__)
 
 static void
-dns__dispentry_destroy(dns_dispentry_t *resp) {
+__dispentry_destroy(dns_dispentry_t *resp) {
 	dns_dispatch_t *disp = resp->disp;
 
 	resp->magic = 0;
+
+	if (resp->handle != NULL) {
+		isc_nmhandle_detach(&resp->handle);
+	}
 
 	isc_refcount_destroy(&resp->references);
 
@@ -558,7 +563,7 @@ __dispentry_detach(dns_dispentry_t **respp, const char *func, const char *file,
 	fprintf(stderr, "%s:%s:%u:%s(%p, %p) = %" PRIuFAST32 "\n", func, file,
 		line, __func__, resp, respp, ref - 1);
 	if (ref == 1) {
-		dns__dispentry_destroy(resp);
+		__dispentry_destroy(resp);
 	}
 }
 
@@ -718,8 +723,6 @@ sendevent:
 
 unlock:
 	UNLOCK(&disp->lock);
-	isc_nmhandle_detach(&resp->handle);
-	INSIST(resp->handle == NULL);
 
 	if (action != NULL) {
 		action(resp->task, (isc_event_t *)rev);
@@ -1811,7 +1814,7 @@ startrecv(dns_dispatch_t *disp, dns_dispentry_t *resp) {
 
 		dispentry_attach(resp, &tmp_resp);
 
-		/* resp->handle is detached in udp_recv() */
+		/* resp->handle is detached in _removeresponse() */
 		isc_nm_read(resp->handle, udp_recv, resp);
 
 		break;
