@@ -525,9 +525,6 @@ __dispentry_attach(dns_dispentry_t *resp, dns_dispentry_t **respp,
 	*respp = resp;
 }
 
-#define dispentry_detach(rp) \
-	__dispentry_detach(rp, __func__, __FILE__, __LINE__)
-
 static void
 __dispentry_destroy(dns_dispentry_t *resp) {
 	dns_dispatch_t *disp = resp->disp;
@@ -547,6 +544,9 @@ __dispentry_destroy(dns_dispentry_t *resp) {
 
 	dns_dispatch_detach(&disp);
 }
+
+#define dispentry_detach(rp) \
+	__dispentry_detach(rp, __func__, __FILE__, __LINE__)
 
 static void
 __dispentry_detach(dns_dispentry_t **respp, const char *func, const char *file,
@@ -595,6 +595,7 @@ udp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	isc_netaddr_t netaddr;
 	int match;
 	isc_taskaction_t action = NULL;
+	bool nomore = true;
 
 	REQUIRE(VALID_RESPONSE(resp));
 
@@ -628,6 +629,7 @@ udp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	if (eresult == ISC_R_TIMEDOUT && resp->timedout != NULL) {
 		resp->timedout(handle, ISC_R_TIMEDOUT, resp->arg);
 		if (isc_nmhandle_timer_running(handle)) {
+			nomore = false;
 			goto unlock;
 		}
 	}
@@ -728,7 +730,9 @@ unlock:
 		action(resp->task, (isc_event_t *)rev);
 	}
 
-	dispentry_detach(&resp);
+	if (nomore) {
+		dispentry_detach(&resp);
+	}
 	return;
 }
 
