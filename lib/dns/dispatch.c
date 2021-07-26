@@ -37,6 +37,8 @@
 #include <dns/stats.h>
 #include <dns/types.h>
 
+#define DISPATCH_TRACE
+
 typedef ISC_LIST(dns_dispentry_t) dns_displist_t;
 
 typedef struct dns_qid {

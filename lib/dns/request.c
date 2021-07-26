@@ -969,6 +969,7 @@ do_cancel(isc_task_t *task, isc_event_t *event) {
 		req_log(ISC_LOG_DEBUG(3), "do_cancel: request %p", request);
 
 		request->flags |= DNS_REQUEST_F_CANCELED;
+		request->flags &= ~DNS_REQUEST_F_CONNECTING;
 
 		if (request->dispentry != NULL) {
 			dns_dispatch_cancel(request->dispentry);
@@ -988,6 +989,7 @@ request_cancel(dns_request_t *request) {
 		isc_task_send(request->event->ev_sender, &ev);
 	}
 }
+
 void
 dns_request_cancel(dns_request_t *request) {
 	REQUIRE(VALID_REQUEST(request));
@@ -1083,6 +1085,10 @@ req_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 
 	UNUSED(handle);
 
+	if (eresult == ISC_R_CANCELED) {
+		return;
+	}
+
 	REQUIRE(VALID_REQUEST(request));
 	REQUIRE(DNS_REQUEST_CONNECTING(request));
 
@@ -1092,6 +1098,8 @@ req_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	request->flags &= ~DNS_REQUEST_F_CONNECTING;
 
 	if (eresult == ISC_R_TIMEDOUT) {
+		dns_dispatch_removeresponse(&request->dispentry, NULL);
+		dns_dispatch_detach(&request->dispatch);
 		send_if_done(request, eresult);
 	} else if (DNS_REQUEST_CANCELED(request)) {
 		send_if_done(request, ISC_R_CANCELED);
