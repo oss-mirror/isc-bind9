@@ -800,6 +800,7 @@ isc__nm_udp_read_cb(uv_udp_t *handle, ssize_t nrecv, const uv_buf_t *buf,
 	 * does not.
 	 */
 	if (!sock->parent) {
+		isc__nmsocket_timer_stop(sock);
 		isc__nm_stop_reading(sock);
 	}
 }
