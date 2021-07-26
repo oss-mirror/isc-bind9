@@ -16,20 +16,20 @@ set -e
 
 $SHELL clean.sh
 
+copy_setports ns1/named.conf.in ns1/named.conf
+
 echo_i "Generating keys for engine_pkcs11 PKCS#11"
 
 PKCS11_TOOL="pkcs11-tool"
-if [ -n "$PKCS11_TOOL" ] ; then
-	echo_i "pkcs11-tool not found, skipping test"
-	exit 0
+if [ -z "$PKCS11_TOOL" ] ; then
+	echo_i "pkcs11-tool not found, required for test"
+	exit 1
 fi
 
 infile=ns1/example.db.in
 
 printf '%s' "${HSMPIN:-1234}" > pin
 PWD=$(pwd)
-
-copy_setports ns1/named.conf.in ns1/named.conf
 
 keygen() {
 	type="$2"
