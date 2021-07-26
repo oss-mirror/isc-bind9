@@ -1936,13 +1936,13 @@ disp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 			startrecv(disp, resp);
 			break;
 		case isc_socktype_tcp:
-			/* Why don't we attach to resp->handle here? */
-			REQUIRE(disp->handle == NULL);
-			LOCK(&disp->lock);
-			disp->attributes |= DNS_DISPATCHATTR_CONNECTED;
-			UNLOCK(&disp->lock);
-			isc_nmhandle_attach(handle, &disp->handle);
-			startrecv(disp, resp);
+			if (disp->handle == NULL) {
+				LOCK(&disp->lock);
+				isc_nmhandle_attach(handle, &disp->handle);
+				disp->attributes |= DNS_DISPATCHATTR_CONNECTED;
+				UNLOCK(&disp->lock);
+				startrecv(disp, resp);
+			}
 			break;
 		default:
 			INSIST(0);
