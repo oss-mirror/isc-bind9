@@ -1800,7 +1800,7 @@ resquery_senddone(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	fctx = query->fctx;
 
 	if (RESQUERY_CANCELED(query)) {
-		eresult = ISC_R_CANCELED;
+		goto detach;
 	}
 
 	switch (eresult) {
@@ -1808,9 +1808,6 @@ resquery_senddone(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 		/* Don't detach from resquery */
 		return;
 
-	case ISC_R_CANCELED:
-		/* Don't call fctx_cancelquery() twice */
-		break;
 	case ISC_R_HOSTUNREACH:
 	case ISC_R_NETUNREACH:
 	case ISC_R_NOPERM:
@@ -1839,6 +1836,7 @@ resquery_senddone(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 		break;
 	}
 
+detach:
 	resquery_detach(&query);
 }
 
@@ -2830,7 +2828,7 @@ resquery_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	}
 
 	if (RESQUERY_CANCELED(query)) {
-		eresult = ISC_R_CANCELED;
+		goto detach;
 	}
 
 	switch (eresult) {
@@ -2866,10 +2864,6 @@ resquery_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 			dns_rdatatypestats_increment(res->view->resquerystats,
 						     fctx->type);
 		}
-		break;
-
-	case ISC_R_CANCELED:
-		/* Don't call fctx_cancelquery() twice */
 		break;
 
 	case ISC_R_NETUNREACH:
@@ -2914,6 +2908,7 @@ resquery_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 		empty_bucket(res);
 	}
 
+detach:
 	resquery_detach(&connquery);
 }
 
