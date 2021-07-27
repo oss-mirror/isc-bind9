@@ -1805,7 +1805,8 @@ resquery_senddone(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	fctx = query->fctx;
 
 	if (RESQUERY_CANCELED(query)) {
-		goto detach;
+		resquery_detach(&query);
+		return;
 	}
 
 	switch (eresult) {
@@ -1841,7 +1842,6 @@ resquery_senddone(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 		break;
 	}
 
-detach:
 	resquery_detach(&query);
 }
 
@@ -1993,7 +1993,7 @@ fctx_query(fetchctx_t *fctx, dns_adbaddrinfo_t *addrinfo,
 	   unsigned int options) {
 	isc_result_t result;
 	dns_resolver_t *res = NULL;
-	resquery_t *query = NULL;
+	resquery_t *query = NULL, *rclone = NULL;
 	isc_sockaddr_t addr;
 	bool have_addr = false;
 	unsigned int srtt;
@@ -2182,10 +2182,8 @@ fctx_query(fetchctx_t *fctx, dns_adbaddrinfo_t *addrinfo,
 	fctx->nqueries++;
 	UNLOCK(&res->buckets[fctx->bucketnum].lock);
 
-	resquery_t *tmp = NULL;
-	resquery_attach(query, &tmp);
-
 	/* Set up the dispatch and set the query ID */
+	resquery_attach(query, &rclone);
 	result = dns_dispatch_addresponse(
 		query->dispatch, 0, isc_interval_ms(&fctx->interval),
 		&query->addrinfo->sockaddr, resquery_connected,
@@ -2806,7 +2804,6 @@ cleanup_temps:
 static void
 resquery_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	resquery_t *query = (resquery_t *)arg;
-	resquery_t *connquery = query;
 	isc_result_t result;
 	fetchctx_t *fctx = NULL;
 	dns_resolver_t *res = NULL;
@@ -2830,7 +2827,8 @@ resquery_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	}
 
 	if (RESQUERY_CANCELED(query)) {
-		goto detach;
+		resquery_detach(&query);
+		return;
 	}
 
 	switch (eresult) {
@@ -2910,8 +2908,7 @@ resquery_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 		empty_bucket(res);
 	}
 
-detach:
-	resquery_detach(&connquery);
+	resquery_detach(&query);
 }
 
 static void
@@ -7245,6 +7242,10 @@ resquery_response(isc_nmhandle_t *handle, isc_result_t eresult,
 	respctx_t rctx;
 
 	UNUSED(handle);
+
+	if (eresult == ISC_R_CANCELED) {
+		return;
+	}
 
 	REQUIRE(VALID_QUERY(query));
 	fctx = query->fctx;

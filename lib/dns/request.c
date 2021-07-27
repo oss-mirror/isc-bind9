@@ -515,8 +515,9 @@ dns_request_createraw(dns_requestmgr_t *requestmgr, isc_buffer_t *msgbuf,
 		      dns_request_t **requestp) {
 	dns_request_t *request = NULL;
 	isc_task_t *tclone = NULL;
+	dns_request_t *rclone = NULL;
 	isc_result_t result;
-	isc_mem_t *mctx;
+	isc_mem_t *mctx = NULL;
 	dns_messageid_t id;
 	bool tcp = false;
 	bool newtcp = false;
@@ -591,9 +592,7 @@ again:
 		dispopt |= DNS_DISPATCHOPT_FIXEDID;
 	}
 
-	dns_request_t *tmp = NULL;
-	req_attach(request, &tmp);
-
+	req_attach(request, &rclone);
 	result = dns_dispatch_addresponse(
 		request->dispatch, dispopt, request->timeout, destaddr,
 		req_connected, req_senddone, req_response, req_timeout, request,
@@ -682,8 +681,9 @@ dns_request_createvia(dns_requestmgr_t *requestmgr, dns_message_t *message,
 		      dns_request_t **requestp) {
 	dns_request_t *request = NULL;
 	isc_task_t *tclone = NULL;
+	dns_request_t *rclone = NULL;
 	isc_result_t result;
-	isc_mem_t *mctx;
+	isc_mem_t *mctx = NULL;
 	dns_messageid_t id;
 	bool tcp = false;
 	bool settsigkey = true;
@@ -749,9 +749,7 @@ use_tcp:
 		goto cleanup;
 	}
 
-	dns_request_t *tmp = NULL;
-	req_attach(request, &tmp);
-
+	req_attach(request, &rclone);
 	result = dns_dispatch_addresponse(
 		request->dispatch, 0, request->timeout, destaddr, req_connected,
 		req_senddone, req_response, req_timeout, request, &id,
@@ -1155,9 +1153,13 @@ req_response(isc_nmhandle_t *handle, isc_result_t result, isc_region_t *region,
 	     void *arg) {
 	dns_request_t *request = (dns_request_t *)arg;
 
-	REQUIRE(VALID_REQUEST(request));
-
 	UNUSED(handle);
+
+	if (result == ISC_R_CANCELED) {
+		return;
+	}
+
+	REQUIRE(VALID_REQUEST(request));
 
 	req_log(ISC_LOG_DEBUG(3), "req_response: request %p: %s", request,
 		dns_result_totext(result));
