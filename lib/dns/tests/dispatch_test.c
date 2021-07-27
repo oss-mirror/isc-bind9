@@ -151,12 +151,12 @@ make_dispatchset(unsigned int ndisps) {
 	}
 
 	isc_sockaddr_any(&any);
-	result = dns_dispatch_createudp(dispatchmgr, taskmgr, &any, 0, &disp);
+	result = dns_dispatch_createudp(dispatchmgr, &any, 0, &disp);
 	if (result != ISC_R_SUCCESS) {
 		return (result);
 	}
 
-	result = dns_dispatchset_create(dt_mctx, taskmgr, disp, &dset, ndisps);
+	result = dns_dispatchset_create(dt_mctx, disp, &dset, ndisps);
 	dns_dispatch_detach(&disp);
 
 	return (result);
@@ -282,18 +282,20 @@ nameserver(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 }
 
 static void
-response(isc_task_t *task, isc_event_t *event) {
-	dns_dispatchevent_t *devent = (dns_dispatchevent_t *)event;
+response(isc_nmhandle_t *handle, isc_result_t result, isc_region_t *region,
+	 void *arg) {
 	bool exp_true = true;
 
-	UNUSED(task);
+	UNUSED(handle);
+	UNUSED(region);
+	UNUSED(arg);
 
 	atomic_fetch_add_relaxed(&testdata.responses, 1);
 	if (atomic_compare_exchange_strong(&first, &exp_true, false)) {
-		isc_result_t result = dns_dispatch_getnext(dispentry, &devent);
+		result = dns_dispatch_getnext(dispentry);
 		assert_int_equal(result, ISC_R_SUCCESS);
 	} else {
-		dns_dispatch_removeresponse(&dispentry, &devent);
+		dns_dispatch_removeresponse(&dispentry);
 		isc_nmhandle_detach(&testdata.handle);
 		isc_app_shutdown();
 	}
@@ -347,7 +349,7 @@ dispatch_getnext(void **state) {
 	result = dns_dispatchmgr_create(dt_mctx, connect_nm, &dispatchmgr);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
-	result = dns_dispatch_createudp(dispatchmgr, taskmgr, &connect_addr, 0,
+	result = dns_dispatch_createudp(dispatchmgr, &connect_addr, 0,
 					&dispatch);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
@@ -360,9 +362,9 @@ dispatch_getnext(void **state) {
 
 	region.base = rbuf;
 	region.length = sizeof(rbuf);
-	result = dns_dispatch_addresponse(
-		dispatch, 0, 10000, &server_addr, task, connected,
-		client_senddone, response, NULL, &region, &id, &dispentry);
+	result = dns_dispatch_addresponse(dispatch, 0, 10000, &server_addr,
+					  connected, client_senddone, response,
+					  NULL, &region, &id, &dispentry);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	memset(message, 0, sizeof(message));

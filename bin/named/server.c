@@ -1315,8 +1315,7 @@ get_view_querysource_dispatch(const cfg_obj_t **maps, int af,
 		}
 	}
 
-	result = dns_dispatch_createudp(named_g_dispatchmgr, named_g_taskmgr,
-					&sa, attrs, &disp);
+	result = dns_dispatch_createudp(named_g_dispatchmgr, &sa, attrs, &disp);
 	if (result != ISC_R_SUCCESS) {
 		isc_sockaddr_t any;
 		char buf[ISC_SOCKADDR_FORMATSIZE];
@@ -10354,9 +10353,8 @@ named_add_reserved_dispatch(named_server_t *server,
 	dispatch->dispatchgen = server->dispatchgen;
 	dispatch->dispatch = NULL;
 
-	result = dns_dispatch_createudp(named_g_dispatchmgr, named_g_taskmgr,
-					&dispatch->addr, attrs,
-					&dispatch->dispatch);
+	result = dns_dispatch_createudp(named_g_dispatchmgr, &dispatch->addr,
+					attrs, &dispatch->dispatch);
 	if (result != ISC_R_SUCCESS) {
 		goto cleanup;
 	}

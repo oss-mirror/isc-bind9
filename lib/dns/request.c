@@ -112,7 +112,8 @@ static isc_result_t
 req_render(dns_message_t *message, isc_buffer_t **buffer, unsigned int options,
 	   isc_mem_t *mctx);
 static void
-req_response(isc_task_t *task, isc_event_t *event);
+req_response(isc_nmhandle_t *handle, isc_result_t result, isc_region_t *region,
+	     void *arg);
 static void
 req_senddone(isc_nmhandle_t *handle, isc_result_t eresult, void *arg);
 static void
@@ -455,9 +456,8 @@ tcp_dispatch(bool newtcp, dns_requestmgr_t *requestmgr,
 		}
 	}
 
-	result = dns_dispatch_createtcp(requestmgr->dispatchmgr,
-					requestmgr->taskmgr, srcaddr, destaddr,
-					0, dscp, dispatchp);
+	result = dns_dispatch_createtcp(requestmgr->dispatchmgr, srcaddr,
+					destaddr, 0, dscp, dispatchp);
 	return (result);
 }
 
@@ -486,8 +486,7 @@ udp_dispatch(dns_requestmgr_t *requestmgr, const isc_sockaddr_t *srcaddr,
 		return (ISC_R_SUCCESS);
 	}
 
-	return (dns_dispatch_createudp(requestmgr->dispatchmgr,
-				       requestmgr->taskmgr, srcaddr, 0,
+	return (dns_dispatch_createudp(requestmgr->dispatchmgr, srcaddr, 0,
 				       dispatchp));
 }
 
@@ -596,7 +595,7 @@ again:
 	req_attach(request, &tmp);
 
 	result = dns_dispatch_addresponse(
-		request->dispatch, dispopt, request->timeout, destaddr, task,
+		request->dispatch, dispopt, request->timeout, destaddr,
 		req_connected, req_senddone, req_response, req_timeout, request,
 		&id, &request->dispentry);
 	if (result != ISC_R_SUCCESS) {
@@ -754,9 +753,9 @@ use_tcp:
 	req_attach(request, &tmp);
 
 	result = dns_dispatch_addresponse(
-		request->dispatch, 0, request->timeout, destaddr, task,
-		req_connected, req_senddone, req_response, req_timeout, request,
-		&id, &request->dispentry);
+		request->dispatch, 0, request->timeout, destaddr, req_connected,
+		req_senddone, req_response, req_timeout, request, &id,
+		&request->dispentry);
 	if (result != ISC_R_SUCCESS) {
 		goto cleanup;
 	}
@@ -774,7 +773,7 @@ use_tcp:
 		 * Try again using TCP.
 		 */
 		dns_message_renderreset(message);
-		dns_dispatch_removeresponse(&request->dispentry, NULL);
+		dns_dispatch_removeresponse(&request->dispentry);
 		dns_dispatch_detach(&request->dispatch);
 		options |= DNS_REQUESTOPT_TCP;
 		settsigkey = false;
@@ -961,7 +960,7 @@ do_cancel(isc_task_t *task, isc_event_t *event) {
 
 		if (request->dispentry != NULL) {
 			dns_dispatch_cancel(request->dispentry);
-			dns_dispatch_removeresponse(&request->dispentry, NULL);
+			dns_dispatch_removeresponse(&request->dispentry);
 		}
 
 		dns_dispatch_detach(&request->dispatch);
@@ -1087,7 +1086,7 @@ req_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	request->flags &= ~DNS_REQUEST_F_CONNECTING;
 
 	if (eresult == ISC_R_TIMEDOUT) {
-		dns_dispatch_removeresponse(&request->dispentry, NULL);
+		dns_dispatch_removeresponse(&request->dispentry);
 		dns_dispatch_detach(&request->dispatch);
 		send_if_done(request, eresult);
 	} else if (DNS_REQUEST_CANCELED(request)) {
@@ -1152,32 +1151,27 @@ req_timeout(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 }
 
 static void
-req_response(isc_task_t *task, isc_event_t *event) {
-	isc_result_t result;
-	dns_request_t *request = event->ev_arg;
-	dns_dispatchevent_t *devent = (dns_dispatchevent_t *)event;
-	isc_region_t r;
+req_response(isc_nmhandle_t *handle, isc_result_t result, isc_region_t *region,
+	     void *arg) {
+	dns_request_t *request = (dns_request_t *)arg;
 
 	REQUIRE(VALID_REQUEST(request));
-	REQUIRE(event->ev_type == DNS_EVENT_DISPATCH);
 
-	UNUSED(task);
+	UNUSED(handle);
 
 	req_log(ISC_LOG_DEBUG(3), "req_response: request %p: %s", request,
-		dns_result_totext(devent->result));
+		dns_result_totext(result));
 
 	LOCK(&request->requestmgr->locks[request->hash]);
-	result = devent->result;
 	if (result != ISC_R_SUCCESS) {
 		goto done;
 	}
 
 	/*
-	 * Copy buffer to request.
+	 * Copy region to request.
 	 */
-	isc_buffer_usedregion(&devent->buffer, &r);
-	isc_buffer_allocate(request->mctx, &request->answer, r.length);
-	result = isc_buffer_copyregion(request->answer, &r);
+	isc_buffer_allocate(request->mctx, &request->answer, region->length);
+	result = isc_buffer_copyregion(request->answer, region);
 	if (result != ISC_R_SUCCESS) {
 		isc_buffer_free(&request->answer);
 	}
@@ -1185,7 +1179,7 @@ done:
 	/*
 	 * Cleanup.
 	 */
-	dns_dispatch_removeresponse(&request->dispentry, &devent);
+	dns_dispatch_removeresponse(&request->dispentry);
 	request_cancel(request);
 
 	/*
@@ -1291,7 +1285,7 @@ req_destroy(dns_request_t *request) {
 		isc_event_free((isc_event_t **)&request->event);
 	}
 	if (request->dispentry != NULL) {
-		dns_dispatch_removeresponse(&request->dispentry, NULL);
+		dns_dispatch_removeresponse(&request->dispentry);
 	}
 	if (request->dispatch != NULL) {
 		dns_dispatch_detach(&request->dispatch);

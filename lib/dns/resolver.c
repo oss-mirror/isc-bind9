@@ -611,7 +611,8 @@ empty_bucket(dns_resolver_t *res);
 static isc_result_t
 resquery_send(resquery_t *query);
 static void
-resquery_response(isc_task_t *task, isc_event_t *event);
+resquery_response(isc_nmhandle_t *handle, isc_result_t eresult,
+		  isc_region_t *region, void *arg);
 static void
 resquery_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg);
 static void
@@ -713,10 +714,10 @@ resume_qmin(isc_task_t *task, isc_event_t *event);
 
 typedef struct respctx {
 	isc_task_t *task;
-	dns_dispatchevent_t *devent;
 	resquery_t *query;
 	fetchctx_t *fctx;
 	isc_result_t result;
+	isc_buffer_t buffer;
 	unsigned int retryopts; /* updated options to pass to
 				 * fctx_query() when resending */
 
@@ -778,8 +779,8 @@ typedef struct respctx {
 } respctx_t;
 
 static void
-rctx_respinit(isc_task_t *task, dns_dispatchevent_t *devent, resquery_t *query,
-	      fetchctx_t *fctx, respctx_t *rctx);
+rctx_respinit(resquery_t *query, fetchctx_t *fctx, isc_result_t result,
+	      isc_region_t *region, respctx_t *rctx);
 
 static void
 rctx_answer_init(respctx_t *rctx);
@@ -1242,13 +1243,13 @@ update_edns_stats(resquery_t *query) {
 	}
 }
 
-#define fctx_cancelquery(q, d, f, n, a) \
-	__fctx_cancelquery(q, d, f, n, a, __FILE__, __LINE__, __func__)
+#define fctx_cancelquery(q, f, n, a) \
+	__fctx_cancelquery(q, f, n, a, __FILE__, __LINE__, __func__)
 
 static void
-__fctx_cancelquery(resquery_t *query, dns_dispatchevent_t **deventp,
-		   isc_time_t *finish, bool no_response, bool age_untried,
-		   const char *file, unsigned int line, const char *func) {
+__fctx_cancelquery(resquery_t *query, isc_time_t *finish, bool no_response,
+		   bool age_untried, const char *file, unsigned int line,
+		   const char *func) {
 	fetchctx_t *fctx = NULL;
 	unsigned int rtt, rttms;
 	unsigned int factor;
@@ -1439,7 +1440,7 @@ __fctx_cancelquery(resquery_t *query, dns_dispatchevent_t **deventp,
 	 */
 	if (query->dispentry != NULL) {
 		dns_dispatch_cancel(query->dispentry);
-		dns_dispatch_removeresponse(&query->dispentry, deventp);
+		dns_dispatch_removeresponse(&query->dispentry);
 	}
 
 	if (ISC_LINK_LINKED(query, link)) {
@@ -1452,14 +1453,14 @@ __fctx_cancelquery(resquery_t *query, dns_dispatchevent_t **deventp,
 
 static void
 fctx_cancelqueries(fetchctx_t *fctx, bool no_response, bool age_untried) {
-	resquery_t *query, *next_query;
+	resquery_t *query = NULL, *next_query = NULL;
 
 	FCTXTRACE("cancelqueries");
 
 	for (query = ISC_LIST_HEAD(fctx->queries); query != NULL;
 	     query = next_query) {
 		next_query = ISC_LIST_NEXT(query, link);
-		fctx_cancelquery(query, NULL, NULL, no_response, age_untried);
+		fctx_cancelquery(query, NULL, no_response, age_untried);
 	}
 }
 
@@ -1826,7 +1827,7 @@ resquery_senddone(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 		 */
 		add_bad(fctx, query->rmessage, query->addrinfo, eresult,
 			badns_unreachable);
-		fctx_cancelquery(query, NULL, NULL, true, false);
+		fctx_cancelquery(query, NULL, true, false);
 
 		FCTX_ATTR_CLR(fctx, FCTX_ATTR_ADDRWAIT);
 		fctx_try(fctx, true, false);
@@ -1835,7 +1836,7 @@ resquery_senddone(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 		FCTXTRACE3("query canceled in resquery_senddone() "
 			   "due to unexpected result; responding",
 			   eresult);
-		fctx_cancelquery(query, NULL, NULL, false, false);
+		fctx_cancelquery(query, NULL, false, false);
 		fctx_done(fctx, eresult, __LINE__);
 		break;
 	}
@@ -1992,7 +1993,6 @@ fctx_query(fetchctx_t *fctx, dns_adbaddrinfo_t *addrinfo,
 	   unsigned int options) {
 	isc_result_t result;
 	dns_resolver_t *res = NULL;
-	isc_task_t *task = NULL;
 	resquery_t *query = NULL;
 	isc_sockaddr_t addr;
 	bool have_addr = false;
@@ -2002,7 +2002,6 @@ fctx_query(fetchctx_t *fctx, dns_adbaddrinfo_t *addrinfo,
 	FCTXTRACE("query");
 
 	res = fctx->res;
-	task = res->buckets[fctx->bucketnum].task;
 
 	srtt = addrinfo->srtt;
 
@@ -2106,8 +2105,8 @@ fctx_query(fetchctx_t *fctx, dns_adbaddrinfo_t *addrinfo,
 			query->dscp = dscp;
 		}
 
-		result = dns_dispatch_createtcp(res->dispatchmgr, res->taskmgr,
-						&addr, &addrinfo->sockaddr, 0,
+		result = dns_dispatch_createtcp(res->dispatchmgr, &addr,
+						&addrinfo->sockaddr, 0,
 						query->dscp, &query->dispatch);
 		if (result != ISC_R_SUCCESS) {
 			goto cleanup_query;
@@ -2127,9 +2126,8 @@ fctx_query(fetchctx_t *fctx, dns_adbaddrinfo_t *addrinfo,
 				result = ISC_R_NOTIMPLEMENTED;
 				goto cleanup_query;
 			}
-			result = dns_dispatch_createudp(res->dispatchmgr,
-							res->taskmgr, &addr, 0,
-							&query->dispatch);
+			result = dns_dispatch_createudp(res->dispatchmgr, &addr,
+							0, &query->dispatch);
 			if (result != ISC_R_SUCCESS) {
 				goto cleanup_query;
 			}
@@ -2190,7 +2188,7 @@ fctx_query(fetchctx_t *fctx, dns_adbaddrinfo_t *addrinfo,
 	/* Set up the dispatch and set the query ID */
 	result = dns_dispatch_addresponse(
 		query->dispatch, 0, isc_interval_ms(&fctx->interval),
-		&query->addrinfo->sockaddr, task, resquery_connected,
+		&query->addrinfo->sockaddr, resquery_connected,
 		resquery_senddone, resquery_response, resquery_timeout, query,
 		&query->id, &query->dispentry);
 	if (result != ISC_R_SUCCESS) {
@@ -2792,7 +2790,7 @@ cleanup_message:
 	/*
 	 * Stop the dispatcher from listening.
 	 */
-	dns_dispatch_removeresponse(&query->dispentry, NULL);
+	dns_dispatch_removeresponse(&query->dispentry);
 
 cleanup_temps:
 	if (qname != NULL) {
@@ -2851,7 +2849,7 @@ resquery_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 				  "resquery_send() failed; "
 				  "responding");
 
-			fctx_cancelquery(query, NULL, NULL, false, false);
+			fctx_cancelquery(query, NULL, false, false);
 			fctx_done(fctx, result, __LINE__);
 		}
 
@@ -2889,7 +2887,7 @@ resquery_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 		 */
 		add_bad(fctx, query->rmessage, query->addrinfo, eresult,
 			badns_unreachable);
-		fctx_cancelquery(query, NULL, NULL, true, false);
+		fctx_cancelquery(query, NULL, true, false);
 
 		FCTX_ATTR_CLR(fctx, FCTX_ATTR_ADDRWAIT);
 		fctx_try(fctx, true, false);
@@ -2901,7 +2899,7 @@ resquery_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 			   "due to unexpected result; responding",
 			   eresult);
 
-		fctx_cancelquery(query, NULL, NULL, false, false);
+		fctx_cancelquery(query, NULL, false, false);
 		fctx_done(fctx, eresult, __LINE__);
 	}
 
@@ -7239,17 +7237,18 @@ betterreferral(respctx_t *rctx) {
  * resquery_send(). Sets up a response context (respctx_t).
  */
 static void
-resquery_response(isc_task_t *task, isc_event_t *event) {
-	isc_result_t result = ISC_R_SUCCESS;
-	resquery_t *query = event->ev_arg;
-	dns_dispatchevent_t *devent = (dns_dispatchevent_t *)event;
-	fetchctx_t *fctx;
+resquery_response(isc_nmhandle_t *handle, isc_result_t eresult,
+		  isc_region_t *region, void *arg) {
+	isc_result_t result;
+	resquery_t *query = (resquery_t *)arg;
+	fetchctx_t *fctx = NULL;
 	respctx_t rctx;
+
+	UNUSED(handle);
 
 	REQUIRE(VALID_QUERY(query));
 	fctx = query->fctx;
 	REQUIRE(VALID_FCTX(fctx));
-	REQUIRE(event->ev_type == DNS_EVENT_DISPATCH);
 
 	QTRACE("response");
 
@@ -7259,7 +7258,7 @@ resquery_response(isc_task_t *task, isc_event_t *event) {
 		inc_stats(fctx->res, dns_resstatscounter_responsev6);
 	}
 
-	rctx_respinit(task, devent, query, fctx, &rctx);
+	rctx_respinit(query, fctx, eresult, region, &rctx);
 
 	if (atomic_load_acquire(&fctx->res->exiting)) {
 		result = ISC_R_SHUTTINGDOWN;
@@ -7309,9 +7308,8 @@ resquery_response(isc_task_t *task, isc_event_t *event) {
 
 	if ((rctx.retryopts & DNS_FETCHOPT_TCP) == 0) {
 		if ((rctx.retryopts & DNS_FETCHOPT_NOEDNS0) == 0) {
-			dns_adb_setudpsize(
-				fctx->adb, query->addrinfo,
-				isc_buffer_usedlength(&devent->buffer));
+			dns_adb_setudpsize(fctx->adb, query->addrinfo,
+					   isc_buffer_usedlength(&rctx.buffer));
 		} else {
 			dns_adb_plainresponse(fctx->adb, query->addrinfo);
 		}
@@ -7648,16 +7646,15 @@ resquery_response(isc_task_t *task, isc_event_t *event) {
  * resquery_response().
  */
 static void
-rctx_respinit(isc_task_t *task, dns_dispatchevent_t *devent, resquery_t *query,
-	      fetchctx_t *fctx, respctx_t *rctx) {
-	*rctx = (respctx_t){ .task = task,
-			     .devent = devent,
-			     .result = devent->result,
+rctx_respinit(resquery_t *query, fetchctx_t *fctx, isc_result_t result,
+	      isc_region_t *region, respctx_t *rctx) {
+	*rctx = (respctx_t){ .result = result,
 			     .query = query,
 			     .fctx = fctx,
 			     .broken_type = badns_response,
 			     .retryopts = query->options };
-
+	isc_buffer_init(&rctx->buffer, region->base, region->length);
+	isc_buffer_add(&rctx->buffer, region->length);
 	TIME_NOW(&rctx->tnow);
 	rctx->finish = &rctx->tnow;
 	rctx->now = (isc_stdtime_t)isc_time_seconds(&rctx->tnow);
@@ -7722,17 +7719,15 @@ rctx_answer_init(respctx_t *rctx) {
  */
 static isc_result_t
 rctx_dispfail(respctx_t *rctx) {
-	dns_dispatchevent_t *devent = rctx->devent;
 	fetchctx_t *fctx = rctx->fctx;
 	resquery_t *query = rctx->query;
 
-	if (devent->result == ISC_R_SUCCESS) {
+	if (rctx->result == ISC_R_SUCCESS) {
 		return (ISC_R_SUCCESS);
 	}
 
-	if (devent->result == ISC_R_EOF &&
-	    (rctx->retryopts & DNS_FETCHOPT_NOEDNS0) == 0)
-	{
+	if (rctx->result == ISC_R_EOF &&
+	    (rctx->retryopts & DNS_FETCHOPT_NOEDNS0) == 0) {
 		/*
 		 * The problem might be that they don't understand
 		 * EDNS0. Turn it off and try again.
@@ -7752,18 +7747,18 @@ rctx_dispfail(respctx_t *rctx) {
 		 * adjust finish and no_response so that we penalize
 		 * this address in SRTT adjustment later.
 		 */
-		if (devent->result == ISC_R_HOSTUNREACH ||
-		    devent->result == ISC_R_NETUNREACH ||
-		    devent->result == ISC_R_CONNREFUSED ||
-		    devent->result == ISC_R_CANCELED)
+		if (rctx->result == ISC_R_HOSTUNREACH ||
+		    rctx->result == ISC_R_NETUNREACH ||
+		    rctx->result == ISC_R_CONNREFUSED ||
+		    rctx->result == ISC_R_CANCELED)
 		{
-			rctx->broken_server = devent->result;
+			rctx->broken_server = rctx->result;
 			rctx->broken_type = badns_unreachable;
 			rctx->finish = NULL;
 			rctx->no_response = true;
 		}
 	}
-	FCTXTRACE3("dispatcher failure", devent->result);
+	FCTXTRACE3("dispatcher failure", rctx->result);
 	rctx_done(rctx, ISC_R_SUCCESS);
 	return (ISC_R_COMPLETE);
 }
@@ -7811,7 +7806,7 @@ rctx_parse(respctx_t *rctx) {
 	fetchctx_t *fctx = rctx->fctx;
 	resquery_t *query = rctx->query;
 
-	result = dns_message_parse(query->rmessage, &rctx->devent->buffer, 0);
+	result = dns_message_parse(query->rmessage, &rctx->buffer, 0);
 	if (result == ISC_R_SUCCESS) {
 		return (ISC_R_SUCCESS);
 	}
@@ -9409,7 +9404,7 @@ rctx_next(respctx_t *rctx) {
 	inc_stats(rctx->fctx->res, dns_resstatscounter_nextitem);
 	INSIST(rctx->query->dispentry != NULL);
 	dns_message_reset(rctx->query->rmessage, DNS_MESSAGE_INTENTPARSE);
-	result = dns_dispatch_getnext(rctx->query->dispentry, &rctx->devent);
+	result = dns_dispatch_getnext(rctx->query->dispentry);
 	if (result != ISC_R_SUCCESS) {
 		fctx_done(rctx->fctx, result, __LINE__);
 	}
@@ -9482,8 +9477,7 @@ rctx_done(respctx_t *rctx, isc_result_t result) {
 	 * Cancel the query.
 	 */
 	if (!rctx->nextitem) {
-		fctx_cancelquery(query, &rctx->devent, rctx->finish,
-				 rctx->no_response, false);
+		fctx_cancelquery(query, rctx->finish, rctx->no_response, false);
 	}
 
 #ifdef ENABLE_AFL
@@ -9491,8 +9485,8 @@ rctx_done(respctx_t *rctx, isc_result_t result) {
 	    (rctx->next_server || rctx->resend || rctx->nextitem))
 	{
 		if (rctx->nextitem) {
-			fctx_cancelquery(query, &rctx->devent, rctx->finish,
-					 rctx->no_response, false);
+			fctx_cancelquery(query, rctx->finish, rctx->no_response,
+					 false);
 		}
 		fctx_done(fctx, DNS_R_SERVFAIL, __LINE__);
 		return;
@@ -9580,7 +9574,7 @@ rctx_logpacket(respctx_t *rctx) {
 	dns_dt_send(fctx->res->view, dtmsgtype, la,
 		    &rctx->query->addrinfo->sockaddr,
 		    ((rctx->query->options & DNS_FETCHOPT_TCP) != 0), &zr,
-		    &rctx->query->start, NULL, &rctx->devent->buffer);
+		    &rctx->query->start, NULL, &rctx->buffer);
 #endif /* HAVE_DNSTAP */
 }
 
@@ -10001,12 +9995,12 @@ dns_resolver_create(dns_view_t *view, isc_taskmgr_t *taskmgr,
 	}
 
 	if (dispatchv4 != NULL) {
-		dns_dispatchset_create(view->mctx, taskmgr, dispatchv4,
+		dns_dispatchset_create(view->mctx, dispatchv4,
 				       &res->dispatches4, ndisp);
 	}
 
 	if (dispatchv6 != NULL) {
-		dns_dispatchset_create(view->mctx, taskmgr, dispatchv6,
+		dns_dispatchset_create(view->mctx, dispatchv6,
 				       &res->dispatches6, ndisp);
 	}
 
