@@ -481,6 +481,7 @@ pylint:
       artifacts: true
   script:
     - *configure
+    - pip3 install pylint==2.9.5
     - PYTHONPATH="$PYTHONPATH:$CI_PROJECT_DIR/bin/python"
     - pylint --rcfile $CI_PROJECT_DIR/.pylintrc $(git ls-files '*.py' | grep -vE '(ans\.py|dangerfile\.py)')
 
