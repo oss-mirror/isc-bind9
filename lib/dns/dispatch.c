@@ -360,10 +360,12 @@ deactivate_dispentry(dns_dispatch_t *disp, dns_dispentry_t *resp) {
 	if (ISC_LINK_LINKED(resp, alink)) {
 		ISC_LIST_UNLINK(disp->active, resp, alink);
 	}
+
 	if (resp->handle != NULL) {
 		isc_nm_cancelread(resp->handle);
 		isc_nmhandle_detach(&resp->handle);
 	}
+
 	disp->nsockets--;
 }
 
@@ -636,7 +638,6 @@ tcp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	 void *arg) {
 	dns_dispentry_t *resp0 = (dns_dispentry_t *)arg;
 	dns_dispentry_t *resp = NULL;
-
 	dns_dispatch_t *disp = NULL;
 	dns_messageid_t id;
 	isc_result_t dres;
@@ -1590,8 +1591,6 @@ dns_dispatch_removeresponse(dns_dispentry_t **respp) {
  */
 static void
 startrecv(dns_dispatch_t *disp, dns_dispentry_t *resp) {
-	isc_nmhandle_t *handle = NULL;
-
 	switch (disp->socktype) {
 	case isc_socktype_udp:
 		REQUIRE(resp != NULL && resp->handle != NULL);
@@ -1602,20 +1601,21 @@ startrecv(dns_dispatch_t *disp, dns_dispentry_t *resp) {
 		isc_nm_read(resp->handle, udp_recv, resp);
 
 		break;
+
 	case isc_socktype_tcp:
 		REQUIRE(resp != NULL && resp->handle == NULL);
 		REQUIRE(disp->handle != NULL);
 
-		isc_nmhandle_attach(disp->handle, &handle);
-		dispentry_attach(resp, &(dns_dispentry_t *){ NULL });
-
-		if (isc_nmhandle_timer_running(handle)) {
-			isc_nmhandle_settimeout(handle, resp->timeout);
+		if (isc_nmhandle_timer_running(disp->handle)) {
+			isc_nmhandle_settimeout(disp->handle, resp->timeout);
 			break;
 		}
 
-		isc_nm_read(handle, tcp_recv, resp);
+		isc_nmhandle_attach(disp->handle, &(isc_nmhandle_t *){ NULL });
+		dispentry_attach(resp, &(dns_dispentry_t *){ NULL });
+		isc_nm_read(disp->handle, tcp_recv, resp);
 		break;
+
 	default:
 		INSIST(0);
 		ISC_UNREACHABLE();
