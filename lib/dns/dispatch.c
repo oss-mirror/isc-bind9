@@ -1304,7 +1304,7 @@ cleanup:
 }
 
 static void
-dns_dispatch_destroy(dns_dispatch_t *disp) {
+dispatch_destroy(dns_dispatch_t *disp) {
 	dns_dispatchmgr_t *mgr = disp->mgr;
 
 	LOCK(&mgr->lock);
@@ -1324,8 +1324,9 @@ dns_dispatch_destroy(dns_dispatch_t *disp) {
 
 	dispatch_free(&disp);
 
-	/* Because dispatch uses mgr->mctx, we must detach after freeing
-	 * dispatch, not before
+	/*
+	 * Because dispatch uses mgr->mctx, we must detach after freeing
+	 * dispatch, not before.
 	 */
 	dns_dispatchmgr_detach(&mgr);
 }
@@ -1353,15 +1354,6 @@ dns__dispatch_attach(dns_dispatch_t *disp, dns_dispatch_t **dispp,
 	*dispp = disp;
 }
 
-static void
-dns__dispatch_free(dns_dispatch_t *disp) {
-	LOCK(&disp->lock);
-	REQUIRE(ISC_LIST_EMPTY(disp->active));
-	UNLOCK(&disp->lock);
-
-	dns_dispatch_destroy(disp);
-}
-
 void
 dns__dispatch_detach(dns_dispatch_t **dispp, const char *func, const char *file,
 		     unsigned int line) {
@@ -1387,7 +1379,11 @@ dns__dispatch_detach(dns_dispatch_t **dispp, const char *func, const char *file,
 	dispatch_log(disp, LVL(90), "detach: refcount %" PRIuFAST32, ref - 1);
 
 	if (ref == 1) {
-		dns__dispatch_free(disp);
+		LOCK(&disp->lock);
+		INSIST(ISC_LIST_EMPTY(disp->active));
+		UNLOCK(&disp->lock);
+
+		dispatch_destroy(disp);
 	}
 }
 
@@ -1639,6 +1635,7 @@ disp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 			REQUIRE(disp->handle == NULL);
 			LOCK(&disp->lock);
 			isc_nmhandle_attach(handle, &disp->handle);
+			disp->attributes &= ~DNS_DISPATCHATTR_CONNECTING;
 			disp->attributes |= DNS_DISPATCHATTR_CONNECTED;
 			UNLOCK(&disp->lock);
 			startrecv(disp, resp);
@@ -1665,10 +1662,25 @@ isc_result_t
 dns_dispatch_connect(dns_dispentry_t *resp) {
 	dns_dispatch_t *disp = NULL;
 	dns_dispentry_t *tmp = NULL;
+	bool connecting;
 
 	REQUIRE(VALID_RESPONSE(resp));
 
 	disp = resp->disp;
+
+	if (disp->socktype == isc_socktype_tcp) {
+		/*
+		 * Check whether we were already connecting.
+		 */
+		LOCK(&disp->lock);
+		connecting = (disp->attributes & DNS_DISPATCHATTR_CONNECTING);
+		disp->attributes &= DNS_DISPATCHATTR_CONNECTING;
+		UNLOCK(&disp->lock);
+
+		if (connecting) {
+			return (ISC_R_SUCCESS);
+		}
+	}
 
 	dispentry_attach(resp, &tmp); /* detached in disp_connected */
 
@@ -1803,7 +1815,6 @@ dns_dispatch_changeattributes(dns_dispatch_t *disp, unsigned int attributes,
 	REQUIRE(VALID_DISPATCH(disp));
 
 	LOCK(&disp->lock);
-
 	disp->attributes &= ~mask;
 	disp->attributes |= (attributes & mask);
 	UNLOCK(&disp->lock);
