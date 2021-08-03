@@ -2759,7 +2759,7 @@ resquery_send(resquery_t *query) {
 
 	isc_buffer_usedregion(&buffer, &r);
 
-	resquery_attach(query, &(resquery_t *){ NULL }); /* send query */
+	resquery_attach(query, &(resquery_t *){ NULL });
 	dns_dispatch_send(query->dispentry, &r, query->dscp);
 
 	QTRACE("sent");
@@ -2836,8 +2836,7 @@ resquery_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 			 * this point, so we need to properly cancel the reading
 			 * and then detach the final resquery_t
 			 */
-			resquery_attach(query, &(resquery_t *){ NULL }); /* read
-									  */
+			resquery_attach(query, &(resquery_t *){ NULL });
 			dns_dispatch_cancel(query->dispentry);
 		}
 		eresult = ISC_R_SHUTTINGDOWN;
@@ -2852,9 +2851,6 @@ resquery_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 		dns_dispatch_changeattributes(query->dispatch,
 					      DNS_DISPATCHATTR_CONNECTED,
 					      DNS_DISPATCHATTR_CONNECTED);
-
-		/* The dispatch is also reading at this point */
-		resquery_attach(query, &(resquery_t *){ NULL }); /* read */
 
 		result = resquery_send(query);
 		if (result != ISC_R_SUCCESS) {

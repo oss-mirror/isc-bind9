@@ -1596,10 +1596,7 @@ startrecv(dns_dispatch_t *disp, dns_dispentry_t *resp) {
 		REQUIRE(resp != NULL && resp->handle != NULL);
 
 		dispentry_attach(resp, &(dns_dispentry_t *){ NULL });
-
-		/* resp->handle is detached in _removeresponse() */
 		isc_nm_read(resp->handle, udp_recv, resp);
-
 		break;
 
 	case isc_socktype_tcp:
@@ -1731,10 +1728,7 @@ dns_dispatch_send(dns_dispentry_t *resp, isc_region_t *r, isc_dscp_t dscp) {
 	}
 #endif
 
-	dispentry_attach(resp, &(dns_dispentry_t *){ NULL }); /* detached
-								 in
-								 send_done()
-							       */
+	dispentry_attach(resp, &(dns_dispentry_t *){ NULL });
 	isc_nm_send(handle, r, send_done, resp);
 }
 
