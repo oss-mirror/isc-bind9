@@ -258,7 +258,6 @@ dispatchset_get(void **state) {
 }
 
 struct {
-	isc_nmhandle_t *handle;
 	uint_fast32_t responses;
 	isc_result_t result;
 } testdata;
@@ -269,7 +268,6 @@ static atomic_bool first = ATOMIC_VAR_INIT(true);
 
 static void
 reset_testdata(void) {
-	testdata.handle = NULL;
 	testdata.responses = 0;
 	testdata.result = ISC_R_UNSET;
 }
@@ -334,9 +332,7 @@ noop_nameserver(isc_nmhandle_t *handle, isc_result_t eresult,
 }
 
 static void
-response_getnext(isc_nmhandle_t *handle, isc_result_t result,
-		 isc_region_t *region, void *arg) {
-	UNUSED(handle);
+response_getnext(isc_result_t result, isc_region_t *region, void *arg) {
 	UNUSED(region);
 	UNUSED(arg);
 
@@ -346,15 +342,12 @@ response_getnext(isc_nmhandle_t *handle, isc_result_t result,
 		result = dns_dispatch_getnext(dispentry);
 		assert_int_equal(result, ISC_R_SUCCESS);
 	} else {
-		isc_nmhandle_detach(&testdata.handle);
 		uv_sem_post(&sem);
 	}
 }
 
 static void
-response(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
-	 void *arg) {
-	UNUSED(handle);
+response(isc_result_t eresult, isc_region_t *region, void *arg) {
 	UNUSED(region);
 	UNUSED(arg);
 
@@ -364,40 +357,36 @@ response(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	testdata.responses++;
 	testdata.result = eresult;
 
-	isc_nmhandle_detach(&testdata.handle);
 	uv_sem_post(&sem);
 }
 
 static void
-response_timeout(isc_nmhandle_t *handle, isc_result_t eresult,
-		 isc_region_t *region, void *arg) {
-	UNUSED(handle);
+response_timeout(isc_result_t eresult, isc_region_t *region, void *arg) {
 	UNUSED(region);
 	UNUSED(arg);
 
 	testdata.result = eresult;
-	isc_nmhandle_detach(&testdata.handle);
 
 	uv_sem_post(&sem);
 }
 
 static void
-connected(isc_nmhandle_t *handle, isc_result_t eresult, void *cbarg) {
+connected(isc_result_t eresult, isc_region_t *region, void *cbarg) {
 	isc_region_t *r = (isc_region_t *)cbarg;
 
 	UNUSED(eresult);
+	UNUSED(region);
 
 	fprintf(stderr, "%s(..., %s, ...)\n", __func__,
 		isc_result_totext(eresult));
 
-	isc_nmhandle_attach(handle, &testdata.handle);
 	dns_dispatch_send(dispentry, r, -1);
 }
 
 static void
-client_senddone(isc_nmhandle_t *handle, isc_result_t eresult, void *cbarg) {
-	UNUSED(handle);
+client_senddone(isc_result_t eresult, isc_region_t *region, void *cbarg) {
 	UNUSED(eresult);
+	UNUSED(region);
 	UNUSED(cbarg);
 
 	fprintf(stderr, "%s(..., %s, ...)\n", __func__,
@@ -407,8 +396,8 @@ client_senddone(isc_nmhandle_t *handle, isc_result_t eresult, void *cbarg) {
 }
 
 static void
-timeout_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *cbarg) {
-	UNUSED(handle);
+timeout_connected(isc_result_t eresult, isc_region_t *region, void *cbarg) {
+	UNUSED(region);
 	UNUSED(cbarg);
 
 	testdata.result = eresult;
@@ -441,7 +430,7 @@ dispatch_timeout_tcp_connect(void **state) {
 
 	result = dns_dispatch_addresponse(
 		dispatch, 0, T_CONNECT, &tcp_server_addr, timeout_connected,
-		client_senddone, response, NULL, &region, &id, &dispentry);
+		client_senddone, response, &region, &id, &dispentry);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	memset(message, 0, sizeof(message));
@@ -499,10 +488,9 @@ dispatch_timeout_tcp_response(void **state __attribute__((unused))) {
 	region.base = rbuf;
 	region.length = sizeof(rbuf);
 
-	result = dns_dispatch_addresponse(dispatch, 0, T_CONNECT,
-					  &tcp_server_addr, connected,
-					  client_senddone, response_timeout,
-					  NULL, &region, &id, &dispentry);
+	result = dns_dispatch_addresponse(
+		dispatch, 0, T_CONNECT, &tcp_server_addr, connected,
+		client_senddone, response_timeout, &region, &id, &dispentry);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	memset(message, 0, sizeof(message));
@@ -558,7 +546,7 @@ dispatch_tcp_response(void **state __attribute__((unused))) {
 
 	result = dns_dispatch_addresponse(
 		dispatch, 0, T_CONNECT, &tcp_server_addr, connected,
-		client_senddone, response, NULL, &region, &id, &dispentry);
+		client_senddone, response, &region, &id, &dispentry);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	memset(message, 0, sizeof(message));
@@ -615,10 +603,9 @@ dispatch_timeout_udp_response(void **state __attribute__((unused))) {
 	region.base = rbuf;
 	region.length = sizeof(rbuf);
 
-	result = dns_dispatch_addresponse(dispatch, 0, T_CONNECT,
-					  &udp_server_addr, connected,
-					  client_senddone, response_timeout,
-					  NULL, &region, &id, &dispentry);
+	result = dns_dispatch_addresponse(
+		dispatch, 0, T_CONNECT, &udp_server_addr, connected,
+		client_senddone, response_timeout, &region, &id, &dispentry);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	memset(message, 0, sizeof(message));
@@ -672,10 +659,9 @@ dispatch_getnext(void **state) {
 
 	region.base = rbuf;
 	region.length = sizeof(rbuf);
-	result = dns_dispatch_addresponse(dispatch, 0, T_CONNECT,
-					  &udp_server_addr, connected,
-					  client_senddone, response_getnext,
-					  NULL, &region, &id, &dispentry);
+	result = dns_dispatch_addresponse(
+		dispatch, 0, T_CONNECT, &udp_server_addr, connected,
+		client_senddone, response_getnext, &region, &id, &dispentry);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	memset(message, 0, sizeof(message));
