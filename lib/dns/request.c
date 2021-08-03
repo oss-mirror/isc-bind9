@@ -544,7 +544,6 @@ dns_request_createraw(dns_requestmgr_t *requestmgr, isc_buffer_t *msgbuf,
 		return (DNS_R_BLACKHOLED);
 	}
 
-	request = NULL;
 	result = new_request(mctx, &request);
 	if (result != ISC_R_SUCCESS) {
 		return (result);
@@ -601,6 +600,7 @@ again:
 		if ((options & DNS_REQUESTOPT_FIXEDID) != 0 && !newtcp) {
 			newtcp = true;
 			connected = false;
+			req_detach(&rclone);
 			dns_dispatch_detach(&request->dispatch);
 			goto again;
 		}
@@ -638,6 +638,7 @@ again:
 		request->flags |= DNS_REQUEST_F_CONNECTING | DNS_REQUEST_F_TCP;
 	} else {
 		req_send(request);
+		req_detach(&rclone);
 	}
 
 	req_log(ISC_LOG_DEBUG(3), "dns_request_createraw: request %p", request);
@@ -806,6 +807,7 @@ use_tcp:
 		request->flags |= DNS_REQUEST_F_CONNECTING | DNS_REQUEST_F_TCP;
 	} else {
 		req_send(request);
+		req_detach(&rclone);
 	}
 
 	req_log(ISC_LOG_DEBUG(3), "dns_request_createvia: request %p", request);
