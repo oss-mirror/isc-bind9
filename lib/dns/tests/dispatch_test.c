@@ -25,7 +25,6 @@
 #define UNIT_TESTING
 #include <cmocka.h>
 
-#include <isc/app.h>
 #include <isc/buffer.h>
 #include <isc/managers.h>
 #include <isc/refcount.h>
@@ -39,18 +38,25 @@
 
 #include "dnstest.h"
 
+uv_sem_t sem;
+
 /* Timeouts in miliseconds */
-#define T_INIT	     120 * 1000
-#define T_IDLE	     120 * 1000
-#define T_KEEPALIVE  120 * 1000
-#define T_ADVERTISED 120 * 1000
-#define T_CONNECT    30 * 1000
+#define T_INIT	     5 * 1000
+#define T_IDLE	     5 * 1000
+#define T_KEEPALIVE  5 * 1000
+#define T_ADVERTISED 5 * 1000
+#define T_CONNECT    1 * 1000
 
 dns_dispatchmgr_t *dispatchmgr = NULL;
 dns_dispatchset_t *dset = NULL;
 isc_nm_t *connect_nm = NULL;
-static isc_sockaddr_t server_addr;
-static isc_sockaddr_t connect_addr;
+static isc_sockaddr_t udp_server_addr;
+static isc_sockaddr_t udp_connect_addr;
+static isc_sockaddr_t tcp_server_addr;
+static isc_sockaddr_t tcp_connect_addr;
+
+const struct in6_addr in6addr_blackhole = { { { 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+						0, 0, 0, 0, 1 } } };
 
 static int
 setup_ephemeral_port(isc_sockaddr_t *addr, sa_family_t family) {
@@ -96,21 +102,35 @@ setup_ephemeral_port(isc_sockaddr_t *addr, sa_family_t family) {
 	return (fd);
 }
 
+static void
+reset_testdata(void);
+
 static int
 _setup(void **state) {
 	isc_result_t result;
 	uv_os_sock_t sock = -1;
+	int r;
 
 	UNUSED(state);
 
 	result = dns_test_begin(NULL, true);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
-	connect_addr = (isc_sockaddr_t){ .length = 0 };
-	isc_sockaddr_fromin6(&connect_addr, &in6addr_loopback, 0);
+	udp_connect_addr = (isc_sockaddr_t){ .length = 0 };
+	isc_sockaddr_fromin6(&udp_connect_addr, &in6addr_loopback, 0);
 
-	server_addr = (isc_sockaddr_t){ .length = 0 };
-	sock = setup_ephemeral_port(&server_addr, SOCK_DGRAM);
+	tcp_connect_addr = (isc_sockaddr_t){ .length = 0 };
+	isc_sockaddr_fromin6(&tcp_connect_addr, &in6addr_loopback, 0);
+
+	udp_server_addr = (isc_sockaddr_t){ .length = 0 };
+	sock = setup_ephemeral_port(&udp_server_addr, SOCK_DGRAM);
+	if (sock < 0) {
+		return (-1);
+	}
+	close(sock);
+
+	tcp_server_addr = (isc_sockaddr_t){ .length = 0 };
+	sock = setup_ephemeral_port(&tcp_server_addr, SOCK_STREAM);
 	if (sock < 0) {
 		return (-1);
 	}
@@ -124,12 +144,19 @@ _setup(void **state) {
 	isc_nm_settimeouts(connect_nm, T_INIT, T_IDLE, T_KEEPALIVE,
 			   T_ADVERTISED);
 
+	r = uv_sem_init(&sem, 0);
+	assert_int_equal(r, 0);
+
+	reset_testdata();
+
 	return (0);
 }
 
 static int
 _teardown(void **state) {
 	UNUSED(state);
+
+	uv_sem_destroy(&sem);
 
 	isc_managers_destroy(&connect_nm, NULL, NULL, NULL);
 	assert_null(connect_nm);
@@ -232,12 +259,20 @@ dispatchset_get(void **state) {
 
 struct {
 	isc_nmhandle_t *handle;
-	atomic_uint_fast32_t responses;
+	uint_fast32_t responses;
+	isc_result_t result;
 } testdata;
 
 static dns_dispatch_t *dispatch = NULL;
 static dns_dispentry_t *dispentry = NULL;
 static atomic_bool first = ATOMIC_VAR_INIT(true);
+
+static void
+reset_testdata(void) {
+	testdata.handle = NULL;
+	testdata.responses = 0;
+	testdata.result = ISC_R_UNSET;
+}
 
 static void
 server_senddone(isc_nmhandle_t *handle, isc_result_t eresult, void *cbarg) {
@@ -281,24 +316,69 @@ nameserver(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	isc_nm_send(handle, &response, server_senddone, NULL);
 }
 
-static void
-response(isc_nmhandle_t *handle, isc_result_t result, isc_region_t *region,
-	 void *arg) {
-	bool exp_true = true;
+static isc_result_t
+accept_cb(isc_nmhandle_t *handle, isc_result_t eresult, void *cbarg) {
+	UNUSED(handle);
+	UNUSED(cbarg);
 
+	return (eresult);
+}
+
+static void
+noop_nameserver(isc_nmhandle_t *handle, isc_result_t eresult,
+		isc_region_t *region, void *cbarg) {
+	UNUSED(handle);
+	UNUSED(eresult);
+	UNUSED(region);
+	UNUSED(cbarg);
+}
+
+static void
+response_getnext(isc_nmhandle_t *handle, isc_result_t result,
+		 isc_region_t *region, void *arg) {
 	UNUSED(handle);
 	UNUSED(region);
 	UNUSED(arg);
 
-	atomic_fetch_add_relaxed(&testdata.responses, 1);
-	if (atomic_compare_exchange_strong(&first, &exp_true, false)) {
+	testdata.responses++;
+
+	if (atomic_compare_exchange_strong(&first, &(bool){ true }, false)) {
 		result = dns_dispatch_getnext(dispentry);
 		assert_int_equal(result, ISC_R_SUCCESS);
 	} else {
-		dns_dispatch_removeresponse(&dispentry);
 		isc_nmhandle_detach(&testdata.handle);
-		isc_app_shutdown();
+		uv_sem_post(&sem);
 	}
+}
+
+static void
+response(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
+	 void *arg) {
+	UNUSED(handle);
+	UNUSED(region);
+	UNUSED(arg);
+
+	fprintf(stderr, "%s(..., %s, ...)\n", __func__,
+		isc_result_totext(eresult));
+
+	testdata.responses++;
+	testdata.result = eresult;
+
+	isc_nmhandle_detach(&testdata.handle);
+	uv_sem_post(&sem);
+}
+
+static void
+response_timeout(isc_nmhandle_t *handle, isc_result_t eresult,
+		 isc_region_t *region, void *arg) {
+	UNUSED(handle);
+	UNUSED(region);
+	UNUSED(arg);
+
+	testdata.result = eresult;
+	isc_nmhandle_detach(&testdata.handle);
+
+	uv_sem_post(&sem);
 }
 
 static void
@@ -306,6 +386,9 @@ connected(isc_nmhandle_t *handle, isc_result_t eresult, void *cbarg) {
 	isc_region_t *r = (isc_region_t *)cbarg;
 
 	UNUSED(eresult);
+
+	fprintf(stderr, "%s(..., %s, ...)\n", __func__,
+		isc_result_totext(eresult));
 
 	isc_nmhandle_attach(handle, &testdata.handle);
 	dns_dispatch_send(dispentry, r, -1);
@@ -317,53 +400,108 @@ client_senddone(isc_nmhandle_t *handle, isc_result_t eresult, void *cbarg) {
 	UNUSED(eresult);
 	UNUSED(cbarg);
 
+	fprintf(stderr, "%s(..., %s, ...)\n", __func__,
+		isc_result_totext(eresult));
+
 	return;
 }
 
 static void
-startit(isc_task_t *task, isc_event_t *event) {
-	UNUSED(task);
-	dns_dispatch_connect(dispentry);
-	isc_event_free(&event);
+timeout_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *cbarg) {
+	UNUSED(handle);
+	UNUSED(cbarg);
+
+	testdata.result = eresult;
+
+	uv_sem_post(&sem);
 }
 
-/* test dispatch getnext */
 static void
-dispatch_getnext(void **state) {
+dispatch_timeout_tcp_connect(void **state) {
 	isc_result_t result;
 	isc_region_t region;
-	isc_nmsocket_t *sock = NULL;
-	isc_task_t *task = NULL;
-	unsigned char message[12];
-	unsigned char rbuf[12];
+	unsigned char rbuf[12] = { 0 };
+	unsigned char message[12] = { 0 };
 	uint16_t id;
 
 	UNUSED(state);
 
-	testdata.handle = NULL;
-	atomic_init(&testdata.responses, 0);
-
-	result = isc_task_create(taskmgr, 0, &task);
-	assert_int_equal(result, ISC_R_SUCCESS);
+	tcp_connect_addr = (isc_sockaddr_t){ .length = 0 };
+	isc_sockaddr_fromin6(&tcp_connect_addr, &in6addr_blackhole, 0);
 
 	result = dns_dispatchmgr_create(dt_mctx, connect_nm, &dispatchmgr);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
-	result = dns_dispatch_createudp(dispatchmgr, &connect_addr, 0,
-					&dispatch);
-	assert_int_equal(result, ISC_R_SUCCESS);
-
-	/*
-	 * Create a local udp nameserver on the loopback.
-	 */
-	result = isc_nm_listenudp(netmgr, &server_addr, nameserver, NULL, 0,
-				  &sock);
+	result = dns_dispatch_createtcp(dispatchmgr, &tcp_connect_addr,
+					&tcp_server_addr, 0, -1, &dispatch);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	region.base = rbuf;
 	region.length = sizeof(rbuf);
-	result = dns_dispatch_addresponse(dispatch, 0, 10000, &server_addr,
-					  connected, client_senddone, response,
+
+	result = dns_dispatch_addresponse(
+		dispatch, 0, T_CONNECT, &tcp_server_addr, timeout_connected,
+		client_senddone, response, NULL, &region, &id, &dispentry);
+	assert_int_equal(result, ISC_R_SUCCESS);
+
+	memset(message, 0, sizeof(message));
+	message[0] = (id >> 8) & 0xff;
+	message[1] = id & 0xff;
+
+	region.base = message;
+	region.length = sizeof(message);
+
+	dns_dispatch_connect(dispentry);
+
+	uv_sem_wait(&sem);
+
+	dns_dispatch_removeresponse(&dispentry);
+
+	dns_dispatch_detach(&dispatch);
+	dns_dispatchmgr_detach(&dispatchmgr);
+
+	/* Skip if the IPv6 is not available or not blackholed */
+	if (testdata.result == ISC_R_ADDRNOTAVAIL ||
+	    testdata.result == ISC_R_CONNREFUSED)
+	{
+		skip();
+		return;
+	}
+
+	assert_int_equal(testdata.result, ISC_R_TIMEDOUT);
+}
+
+static void
+dispatch_timeout_tcp_response(void **state __attribute__((unused))) {
+	isc_result_t result;
+	isc_region_t region;
+	unsigned char rbuf[12] = { 0 };
+	unsigned char message[12] = { 0 };
+	uint16_t id;
+	isc_nmsocket_t *sock = NULL;
+
+	UNUSED(state);
+
+	tcp_connect_addr = (isc_sockaddr_t){ .length = 0 };
+	isc_sockaddr_fromin6(&tcp_connect_addr, &in6addr_loopback, 0);
+
+	result = dns_dispatchmgr_create(dt_mctx, connect_nm, &dispatchmgr);
+	assert_int_equal(result, ISC_R_SUCCESS);
+
+	result = dns_dispatch_createtcp(dispatchmgr, &tcp_connect_addr,
+					&tcp_server_addr, 0, -1, &dispatch);
+	assert_int_equal(result, ISC_R_SUCCESS);
+
+	result = isc_nm_listentcpdns(netmgr, &tcp_server_addr, noop_nameserver,
+				     NULL, accept_cb, NULL, 0, 0, NULL, &sock);
+	assert_int_equal(result, ISC_R_SUCCESS);
+
+	region.base = rbuf;
+	region.length = sizeof(rbuf);
+
+	result = dns_dispatch_addresponse(dispatch, 0, T_CONNECT,
+					  &tcp_server_addr, connected,
+					  client_senddone, response_timeout,
 					  NULL, &region, &id, &dispentry);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
@@ -374,26 +512,191 @@ dispatch_getnext(void **state) {
 	region.base = message;
 	region.length = sizeof(message);
 
-	result = isc_app_onrun(dt_mctx, task, startit, NULL);
-	assert_int_equal(result, ISC_R_SUCCESS);
+	dns_dispatch_connect(dispentry);
 
-	result = isc_app_run();
-	assert_int_equal(result, ISC_R_SUCCESS);
+	uv_sem_wait(&sem);
 
-	assert_int_equal(atomic_load_acquire(&testdata.responses), 2);
+	assert_int_equal(testdata.result, ISC_R_TIMEDOUT);
 
 	isc_nm_stoplistening(sock);
 	isc_nmsocket_close(&sock);
 	assert_null(sock);
 
-	/*
-	 * Shutdown nameserver.
-	 */
-	isc_task_detach(&task);
+	dns_dispatch_removeresponse(&dispentry);
+
+	dns_dispatch_detach(&dispatch);
+	dns_dispatchmgr_detach(&dispatchmgr);
+}
+
+static void
+dispatch_tcp_response(void **state __attribute__((unused))) {
+	isc_result_t result;
+	isc_region_t region;
+	unsigned char rbuf[12] = { 0 };
+	unsigned char message[12] = { 0 };
+	uint16_t id;
+	isc_nmsocket_t *sock = NULL;
+
+	UNUSED(state);
+
+	tcp_connect_addr = (isc_sockaddr_t){ .length = 0 };
+	isc_sockaddr_fromin6(&tcp_connect_addr, &in6addr_loopback, 0);
+
+	result = dns_dispatchmgr_create(dt_mctx, connect_nm, &dispatchmgr);
+	assert_int_equal(result, ISC_R_SUCCESS);
+
+	result = dns_dispatch_createtcp(dispatchmgr, &tcp_connect_addr,
+					&tcp_server_addr, 0, -1, &dispatch);
+	assert_int_equal(result, ISC_R_SUCCESS);
+
+	result = isc_nm_listentcpdns(netmgr, &tcp_server_addr, nameserver, NULL,
+				     accept_cb, NULL, 0, 0, NULL, &sock);
+	assert_int_equal(result, ISC_R_SUCCESS);
+
+	region.base = rbuf;
+	region.length = sizeof(rbuf);
+
+	result = dns_dispatch_addresponse(
+		dispatch, 0, T_CONNECT, &tcp_server_addr, connected,
+		client_senddone, response, NULL, &region, &id, &dispentry);
+	assert_int_equal(result, ISC_R_SUCCESS);
+
+	memset(message, 0, sizeof(message));
+	message[0] = (id >> 8) & 0xff;
+	message[1] = id & 0xff;
+
+	region.base = message;
+	region.length = sizeof(message);
+
+	dns_dispatch_connect(dispentry);
+
+	uv_sem_wait(&sem);
+
+	assert_int_equal(testdata.responses, 1);
+	assert_int_equal(testdata.result, ISC_R_SUCCESS);
+
+	/* Cleanup */
+
+	isc_nm_stoplistening(sock);
+	isc_nmsocket_close(&sock);
+	assert_null(sock);
+
+	dns_dispatch_removeresponse(&dispentry);
+
+	dns_dispatch_detach(&dispatch);
+	dns_dispatchmgr_detach(&dispatchmgr);
+}
+
+static void
+dispatch_timeout_udp_response(void **state __attribute__((unused))) {
+	isc_result_t result;
+	isc_region_t region;
+	unsigned char rbuf[12] = { 0 };
+	unsigned char message[12] = { 0 };
+	uint16_t id;
+	isc_nmsocket_t *sock = NULL;
+
+	UNUSED(state);
+
+	udp_connect_addr = (isc_sockaddr_t){ .length = 0 };
+	isc_sockaddr_fromin6(&udp_connect_addr, &in6addr_loopback, 0);
+
+	result = dns_dispatchmgr_create(dt_mctx, connect_nm, &dispatchmgr);
+	assert_int_equal(result, ISC_R_SUCCESS);
+
+	result = dns_dispatch_createudp(dispatchmgr, &tcp_connect_addr, 0,
+					&dispatch);
+	assert_int_equal(result, ISC_R_SUCCESS);
+
+	result = isc_nm_listenudp(netmgr, &udp_server_addr, noop_nameserver,
+				  NULL, 0, &sock);
+	assert_int_equal(result, ISC_R_SUCCESS);
+
+	region.base = rbuf;
+	region.length = sizeof(rbuf);
+
+	result = dns_dispatch_addresponse(dispatch, 0, T_CONNECT,
+					  &udp_server_addr, connected,
+					  client_senddone, response_timeout,
+					  NULL, &region, &id, &dispentry);
+	assert_int_equal(result, ISC_R_SUCCESS);
+
+	memset(message, 0, sizeof(message));
+	message[0] = (id >> 8) & 0xff;
+	message[1] = id & 0xff;
+
+	region.base = message;
+	region.length = sizeof(message);
+
+	dns_dispatch_connect(dispentry);
+
+	uv_sem_wait(&sem);
+
+	assert_int_equal(testdata.result, ISC_R_TIMEDOUT);
+
+	isc_nm_stoplistening(sock);
+	isc_nmsocket_close(&sock);
+	assert_null(sock);
+
+	dns_dispatch_removeresponse(&dispentry);
+
+	dns_dispatch_detach(&dispatch);
+	dns_dispatchmgr_detach(&dispatchmgr);
+}
+
+/* test dispatch getnext */
+static void
+dispatch_getnext(void **state) {
+	isc_result_t result;
+	isc_region_t region;
+	isc_nmsocket_t *sock = NULL;
+	unsigned char message[12] = { 0 };
+	unsigned char rbuf[12] = { 0 };
+	uint16_t id;
+
+	UNUSED(state);
+
+	result = dns_dispatchmgr_create(dt_mctx, connect_nm, &dispatchmgr);
+	assert_int_equal(result, ISC_R_SUCCESS);
+
+	result = dns_dispatch_createudp(dispatchmgr, &udp_connect_addr, 0,
+					&dispatch);
+	assert_int_equal(result, ISC_R_SUCCESS);
 
 	/*
-	 * Shutdown the dispatch.
+	 * Create a local udp nameserver on the loopback.
 	 */
+	result = isc_nm_listenudp(netmgr, &udp_server_addr, nameserver, NULL, 0,
+				  &sock);
+	assert_int_equal(result, ISC_R_SUCCESS);
+
+	region.base = rbuf;
+	region.length = sizeof(rbuf);
+	result = dns_dispatch_addresponse(dispatch, 0, T_CONNECT,
+					  &udp_server_addr, connected,
+					  client_senddone, response_getnext,
+					  NULL, &region, &id, &dispentry);
+	assert_int_equal(result, ISC_R_SUCCESS);
+
+	memset(message, 0, sizeof(message));
+	message[0] = (id >> 8) & 0xff;
+	message[1] = id & 0xff;
+
+	region.base = message;
+	region.length = sizeof(message);
+
+	dns_dispatch_connect(dispentry);
+
+	uv_sem_wait(&sem);
+
+	assert_int_equal(testdata.responses, 2);
+
+	/* Cleanup */
+	isc_nm_stoplistening(sock);
+	isc_nmsocket_close(&sock);
+	assert_null(sock);
+
+	dns_dispatch_removeresponse(&dispentry);
 	dns_dispatch_detach(&dispatch);
 	dns_dispatchmgr_detach(&dispatchmgr);
 }
@@ -401,6 +704,14 @@ dispatch_getnext(void **state) {
 int
 main(void) {
 	const struct CMUnitTest tests[] = {
+		cmocka_unit_test_setup_teardown(dispatch_timeout_tcp_connect,
+						_setup, _teardown),
+		cmocka_unit_test_setup_teardown(dispatch_timeout_tcp_response,
+						_setup, _teardown),
+		cmocka_unit_test_setup_teardown(dispatch_tcp_response, _setup,
+						_teardown),
+		cmocka_unit_test_setup_teardown(dispatch_timeout_udp_response,
+						_setup, _teardown),
 		cmocka_unit_test_setup_teardown(dispatchset_create, _setup,
 						_teardown),
 		cmocka_unit_test_setup_teardown(dispatchset_get, _setup,
