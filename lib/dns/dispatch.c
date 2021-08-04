@@ -242,7 +242,7 @@ getentryhandle(dns_dispentry_t *resp);
 static void
 startrecv(isc_nmhandle_t *handle, dns_dispatch_t *disp, dns_dispentry_t *resp);
 void
-dispatch_getnext(dns_dispatch_t *disp, dns_dispentry_t *resp, uint16_t timeout);
+dispatch_getnext(dns_dispatch_t *disp, dns_dispentry_t *resp, int32_t timeout);
 
 #define LVL(x) ISC_LOG_DEBUG(x)
 
@@ -495,6 +495,11 @@ __dispentry_detach(dns_dispentry_t **respp, const char *func, const char *file,
  *	if event queue is not empty, queue.  else, send.
  *	restart.
  */
+
+/* FIXME: If we read invalid packet, we never receive next that could be valid
+ * and we also don't notify the read callback
+ */
+
 static void
 udp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	 void *arg) {
@@ -745,14 +750,13 @@ tcp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 
 next:
 	/* Restart the reading from the TCP socket */
-	dispatch_getnext(disp, resp, resp->timeout);
+	dispatch_getnext(disp, resp, -1);
 
 unlock:
 	UNLOCK(&disp->lock);
 
 	if (resp != NULL) {
 		resp->response(eresult, region, resp->arg);
-		dispentry_detach(&resp);
 	}
 
 	dns_dispatch_detach(&disp);
@@ -1493,12 +1497,8 @@ dns_dispatch_addresponse(dns_dispatch_t *disp, unsigned int options,
 }
 
 void
-dispatch_getnext(dns_dispatch_t *disp, dns_dispentry_t *resp,
-		 uint16_t timeout) {
-	isc_nmhandle_t *readhandle = NULL;
-
-	/* Both udp_recv and tcp_recv detach from dispentry */
-	dispentry_attach(resp, &(dns_dispentry_t *){ NULL });
+dispatch_getnext(dns_dispatch_t *disp, dns_dispentry_t *resp, int32_t timeout) {
+	REQUIRE(timeout <= UINT16_MAX);
 
 	/*
 	 * FIXME: Since there's no global timeout now, any call to getnext will
@@ -1508,16 +1508,20 @@ dispatch_getnext(dns_dispatch_t *disp, dns_dispentry_t *resp,
 	 */
 	switch (disp->socktype) {
 	case isc_socktype_udp:
-		isc_nmhandle_attach(resp->handle, &readhandle);
+		dispentry_attach(resp, &(dns_dispentry_t *){ NULL });
 
-		isc_nmhandle_settimeout(readhandle, timeout);
-		isc_nm_read(readhandle, udp_recv, resp);
+		if (timeout > 0) {
+			isc_nmhandle_settimeout(resp->handle, timeout);
+		}
+		isc_nm_read(resp->handle, udp_recv, resp);
 
 		break;
 	case isc_socktype_tcp:
 		dns_dispatch_attach(disp, &(dns_dispatch_t *){ NULL });
 
-		isc_nmhandle_settimeout(disp->handle, timeout);
+		if (timeout > 0) {
+			isc_nmhandle_settimeout(disp->handle, timeout);
+		}
 		isc_nm_read(disp->handle, tcp_recv, disp);
 		break;
 	default:
