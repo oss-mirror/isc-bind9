@@ -750,7 +750,7 @@ tcp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 
 next:
 	/* Restart the reading from the TCP socket */
-	dispatch_getnext(disp, resp, -1);
+	dispatch_getnext(disp, NULL, -1);
 
 unlock:
 	UNLOCK(&disp->lock);
@@ -1509,21 +1509,20 @@ dispatch_getnext(dns_dispatch_t *disp, dns_dispentry_t *resp, int32_t timeout) {
 	switch (disp->socktype) {
 	case isc_socktype_udp:
 		dispentry_attach(resp, &(dns_dispentry_t *){ NULL });
-
 		if (timeout > 0) {
 			isc_nmhandle_settimeout(resp->handle, timeout);
 		}
 		isc_nm_read(resp->handle, udp_recv, resp);
-
 		break;
+
 	case isc_socktype_tcp:
 		dns_dispatch_attach(disp, &(dns_dispatch_t *){ NULL });
-
 		if (timeout > 0) {
 			isc_nmhandle_settimeout(disp->handle, timeout);
 		}
 		isc_nm_read(disp->handle, tcp_recv, disp);
 		break;
+
 	default:
 		INSIST(0);
 		ISC_UNREACHABLE();
@@ -1537,14 +1536,12 @@ dns_dispatch_getnext(dns_dispentry_t *resp) {
 	REQUIRE(VALID_RESPONSE(resp));
 
 	disp = resp->disp;
+
 	REQUIRE(VALID_DISPATCH(disp));
 
 	LOCK(&disp->lock);
-
 	dispatch_getnext(disp, resp, resp->timeout);
-
 	UNLOCK(&disp->lock);
-
 	return (ISC_R_SUCCESS);
 }
 
@@ -1605,7 +1602,6 @@ startrecv(isc_nmhandle_t *handle, dns_dispatch_t *disp, dns_dispentry_t *resp) {
 		break;
 
 	case isc_socktype_tcp:
-		REQUIRE(resp != NULL && resp->handle == NULL);
 		REQUIRE(disp != NULL && disp->handle == NULL);
 
 		isc_nmhandle_attach(handle, &disp->handle);
@@ -1619,28 +1615,44 @@ startrecv(isc_nmhandle_t *handle, dns_dispatch_t *disp, dns_dispentry_t *resp) {
 	}
 }
 
-/*
- * FIXME: Split into tcp_connected() and udp_connected()
- */
+static void
+tcp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
+	dns_dispatch_t *disp = (dns_dispatch_t *)arg;
+	dns_dispentry_t *resp = NULL, *next = NULL;
+
+	if (MGR_IS_SHUTTINGDOWN(disp->mgr)) {
+		eresult = ISC_R_SHUTTINGDOWN;
+	}
+
+	if (eresult == ISC_R_SUCCESS) {
+		REQUIRE(atomic_compare_exchange_strong(
+			&disp->state,
+			&(dns_dispatchstate_t){ DNS_DISPATCHSTATE_CONNECTING },
+			DNS_DISPATCHSTATE_CONNECTED));
+
+		startrecv(handle, disp, NULL);
+	}
+
+	for (resp = ISC_LIST_HEAD(disp->pending); resp != NULL; resp = next) {
+		next = ISC_LIST_NEXT(resp, plink);
+		ISC_LIST_UNLINK(disp->pending, resp, plink);
+
+		if (resp->connected != NULL) {
+			resp->connected(eresult, NULL, resp->arg);
+		}
+		dispentry_detach(&resp);
+	}
+}
 
 static void
-disp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
+udp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	dns_dispentry_t *resp = (dns_dispentry_t *)arg;
-	dns_dispentry_t *pending = NULL, *next = NULL;
 	dns_dispatch_t *disp = resp->disp;
 
 	if (eresult == ISC_R_SUCCESS) {
 		if (resp->canceled) {
 			dispentry_detach(&resp);
 			return;
-		}
-
-		if (disp->socktype == isc_socktype_tcp) {
-			REQUIRE(atomic_compare_exchange_strong(
-				&disp->state,
-				&(dns_dispatchstate_t){
-					DNS_DISPATCHSTATE_CONNECTING },
-				DNS_DISPATCHSTATE_CONNECTED));
 		}
 
 		startrecv(handle, disp, resp);
@@ -1652,17 +1664,6 @@ disp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 
 	if (resp->connected != NULL) {
 		resp->connected(eresult, NULL, resp->arg);
-	}
-
-	for (pending = ISC_LIST_HEAD(disp->pending); pending != NULL;
-	     pending = next) {
-		next = ISC_LIST_NEXT(pending, plink);
-		ISC_LIST_UNLINK(disp->pending, pending, plink);
-
-		if (pending->connected != NULL) {
-			pending->connected(eresult, NULL, pending->arg);
-		}
-		dispentry_detach(&pending);
 	}
 
 	dispentry_detach(&resp);
@@ -1677,14 +1678,14 @@ dns_dispatch_connect(dns_dispentry_t *resp) {
 
 	disp = resp->disp;
 
-	/* This will be detached in disp_connected() */
+	/* This will be detached once we've connected. */
 	dispentry_attach(resp, &(dns_dispentry_t *){ NULL });
 
 	switch (disp->socktype) {
 	case isc_socktype_tcp:
 		/*
-		 * Check whether the dispatch was already connecting.
-		 * If so, add resp to the pending responses.
+		 * Check whether the dispatch is already connecting
+		 * or connected.
 		 */
 		atomic_compare_exchange_strong(&disp->state, &state,
 					       DNS_DISPATCHSTATE_CONNECTING);
@@ -1692,30 +1693,37 @@ dns_dispatch_connect(dns_dispentry_t *resp) {
 		switch (state) {
 		case DNS_DISPATCHSTATE_NONE:
 			/* First connection, continue with connecting */
-			INSIST(disp->handle == NULL);
+			INSIST(ISC_LIST_EMPTY(disp->pending));
+			ISC_LIST_APPEND(disp->pending, resp, plink);
 			isc_nm_tcpdnsconnect(disp->mgr->nm, &disp->local,
-					     &disp->peer, disp_connected, resp,
+					     &disp->peer, tcp_connected, disp,
 					     resp->timeout, 0);
 			break;
+
 		case DNS_DISPATCHSTATE_CONNECTING:
+			/* Connection pending; add resp to the list */
 			ISC_LIST_APPEND(disp->pending, resp, plink);
 			return (ISC_R_SUCCESS);
+
 		case DNS_DISPATCHSTATE_CONNECTED:
-			/* We are already connected, call the connected cb */
+			/* We are already connected; call the connected cb */
 			if (resp->connected != NULL) {
 				resp->connected(ISC_R_SUCCESS, NULL, resp->arg);
 			}
 			return (ISC_R_SUCCESS);
+
 		default:
 			INSIST(0);
 			ISC_UNREACHABLE();
 		}
 
 		break;
+
 	case isc_socktype_udp:
 		isc_nm_udpconnect(disp->mgr->nm, &resp->local, &resp->peer,
-				  disp_connected, resp, resp->timeout, 0);
+				  udp_connected, resp, resp->timeout, 0);
 		break;
+
 	default:
 		return (ISC_R_NOTIMPLEMENTED);
 	}
