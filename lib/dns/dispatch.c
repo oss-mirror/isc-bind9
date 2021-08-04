@@ -101,6 +101,12 @@ struct dns_dispentry {
 #define DNS_DISPATCH_UDPBUFSIZE 4096
 #endif /* ifndef DNS_DISPATCH_UDPBUFSIZE */
 
+typedef enum {
+	DNS_DISPATCHSTATE_NONE = 0,
+	DNS_DISPATCHSTATE_CONNECTING,
+	DNS_DISPATCHSTATE_CONNECTED
+} dns_dispatchstate_t;
+
 struct dns_dispatch {
 	/* Unlocked. */
 	unsigned int magic;	/*%< magic */
@@ -118,7 +124,7 @@ struct dns_dispatch {
 	/* Locked by "lock". */
 	isc_mutex_t lock; /*%< locks all below */
 	isc_socktype_t socktype;
-	unsigned int attributes;
+	_Atomic dns_dispatchstate_t state;
 	isc_refcount_t references;
 	unsigned int shutdown_out : 1;
 
@@ -226,7 +232,7 @@ static void
 dispatch_free(dns_dispatch_t **dispp);
 static isc_result_t
 dispatch_createudp(dns_dispatchmgr_t *mgr, const isc_sockaddr_t *localaddr,
-		   unsigned int attributes, dns_dispatch_t **dispp);
+		   dns_dispatch_t **dispp);
 static void
 qid_allocate(dns_dispatchmgr_t *mgr, dns_qid_t **qidp);
 static void
@@ -1017,7 +1023,7 @@ qid_destroy(isc_mem_t *mctx, dns_qid_t **qidp) {
  */
 static void
 dispatch_allocate(dns_dispatchmgr_t *mgr, isc_socktype_t type,
-		  unsigned int attributes, dns_dispatch_t **dispp) {
+		  dns_dispatch_t **dispp) {
 	dns_dispatch_t *disp = NULL;
 
 	REQUIRE(VALID_DISPATCHMGR(mgr));
@@ -1036,26 +1042,6 @@ dispatch_allocate(dns_dispatchmgr_t *mgr, isc_socktype_t type,
 	ISC_LINK_INIT(disp, link);
 	ISC_LIST_INIT(disp->active);
 	ISC_LIST_INIT(disp->pending);
-
-	attributes &= ~(DNS_DISPATCHATTR_UDP | DNS_DISPATCHATTR_TCP);
-
-	switch (type) {
-	case isc_socktype_tcp:
-		attributes |= DNS_DISPATCHATTR_TCP;
-		break;
-	case isc_socktype_udp:
-		attributes |= DNS_DISPATCHATTR_UDP;
-		break;
-	default:
-		INSIST(0);
-		ISC_UNREACHABLE();
-	}
-
-	/*
-	 * Set whatever attributes were passed in that were
-	 * not reset by the code above.
-	 */
-	disp->attributes |= attributes;
 
 	isc_mutex_init(&disp->lock);
 
@@ -1091,8 +1077,8 @@ dispatch_free(dns_dispatch_t **dispp) {
 
 isc_result_t
 dns_dispatch_createtcp(dns_dispatchmgr_t *mgr, const isc_sockaddr_t *localaddr,
-		       const isc_sockaddr_t *destaddr, unsigned int attributes,
-		       isc_dscp_t dscp, dns_dispatch_t **dispp) {
+		       const isc_sockaddr_t *destaddr, isc_dscp_t dscp,
+		       dns_dispatch_t **dispp) {
 	dns_dispatch_t *disp = NULL;
 
 	REQUIRE(VALID_DISPATCHMGR(mgr));
@@ -1102,7 +1088,7 @@ dns_dispatch_createtcp(dns_dispatchmgr_t *mgr, const isc_sockaddr_t *localaddr,
 
 	LOCK(&mgr->lock);
 
-	dispatch_allocate(mgr, isc_socktype_tcp, attributes, &disp);
+	dispatch_allocate(mgr, isc_socktype_tcp, &disp);
 
 	disp->peer = *destaddr;
 
@@ -1118,6 +1104,8 @@ dns_dispatch_createtcp(dns_dispatchmgr_t *mgr, const isc_sockaddr_t *localaddr,
 	/*
 	 * Append it to the dispatcher list.
 	 */
+
+	/* FIXME: There should be a lookup hashtable here */
 	ISC_LIST_APPEND(mgr->list, disp, link);
 	UNLOCK(&mgr->lock);
 
@@ -1131,28 +1119,25 @@ dns_dispatch_createtcp(dns_dispatchmgr_t *mgr, const isc_sockaddr_t *localaddr,
 	return (ISC_R_SUCCESS);
 }
 
-#define ATTRMATCH(_a1, _a2, _mask) (((_a1) & (_mask)) == ((_a2) & (_mask)))
-
 isc_result_t
 dns_dispatch_gettcp(dns_dispatchmgr_t *mgr, const isc_sockaddr_t *destaddr,
 		    const isc_sockaddr_t *localaddr, bool *connected,
 		    dns_dispatch_t **dispp) {
 	dns_dispatch_t *disp = NULL;
-	unsigned int attributes, mask;
 
 	REQUIRE(VALID_DISPATCHMGR(mgr));
 	REQUIRE(destaddr != NULL);
+	REQUIRE(connected != NULL);
 	REQUIRE(dispp != NULL && *dispp == NULL);
 
-	/* First pass  */
-	attributes = DNS_DISPATCHATTR_TCP | DNS_DISPATCHATTR_CONNECTED;
-	mask = DNS_DISPATCHATTR_TCP | DNS_DISPATCHATTR_PRIVATE |
-	       DNS_DISPATCHATTR_CONNECTED;
+	/* First pass, look for connected TCP dispatches */
+	*connected = true;
 
 	LOCK(&mgr->lock);
 again:
-	disp = ISC_LIST_HEAD(mgr->list);
-	while (disp != NULL && *dispp == NULL) {
+	for (disp = ISC_LIST_HEAD(mgr->list); disp != NULL && *dispp == NULL;
+	     disp = ISC_LIST_NEXT(disp, link))
+	{
 		isc_sockaddr_t sockname;
 		isc_sockaddr_t peeraddr;
 
@@ -1166,23 +1151,41 @@ again:
 			peeraddr = disp->peer;
 		}
 
-		if (ATTRMATCH(disp->attributes, attributes, mask) &&
-		    (localaddr == NULL ||
-		     isc_sockaddr_eqaddr(localaddr, &disp->local)))
+		if (*connected == true &&
+		    atomic_load(&disp->state) != DNS_DISPATCHSTATE_CONNECTED)
 		{
-			if (isc_sockaddr_equal(destaddr, &peeraddr) &&
-			    (localaddr == NULL ||
-			     isc_sockaddr_eqaddr(localaddr, &sockname)))
+			goto unlock;
+		}
+
+		/* We don't reuse UDP sockets */
+		if (disp->socktype != isc_socktype_tcp) {
+			goto unlock;
+		}
+
+		/* Different destination address */
+		if (!isc_sockaddr_equal(destaddr, &peeraddr)) {
+			goto unlock;
+		}
+
+		/* Different local addr */
+		if (localaddr != NULL) {
+			/* FIXME: This is weird as sockname == disp-local */
+			if (!isc_sockaddr_eqaddr(localaddr, &disp->local) ||
+			    !isc_sockaddr_eqaddr(localaddr, &sockname))
 			{
-				/* attach */
-				dns_dispatch_attach(disp, dispp);
-				if (connected != NULL) {
-					*connected = true;
-				}
+				goto unlock;
 			}
 		}
+
+		/*
+		 * The conditions match:
+		 * 1. socktype is TCP
+		 * 2. destination address is same
+		 * 3. local address is either NULL or same
+		 */
+		dns_dispatch_attach(disp, dispp);
+	unlock:
 		UNLOCK(&disp->lock);
-		disp = ISC_LIST_NEXT(disp, link);
 	}
 
 	if (*dispp != NULL) {
@@ -1190,10 +1193,9 @@ again:
 		return (ISC_R_SUCCESS);
 	}
 
-	if (connected != NULL) {
-		/* Second pass, only if connected != NULL */
-		attributes = DNS_DISPATCHATTR_TCP;
-		connected = NULL;
+	if (*connected) {
+		/* Second pass, look also for not-yet-connected dispatch */
+		*connected = false;
 		goto again;
 	}
 
@@ -1203,7 +1205,7 @@ again:
 
 isc_result_t
 dns_dispatch_createudp(dns_dispatchmgr_t *mgr, const isc_sockaddr_t *localaddr,
-		       unsigned int attributes, dns_dispatch_t **dispp) {
+		       dns_dispatch_t **dispp) {
 	isc_result_t result;
 	dns_dispatch_t *disp = NULL;
 
@@ -1212,7 +1214,7 @@ dns_dispatch_createudp(dns_dispatchmgr_t *mgr, const isc_sockaddr_t *localaddr,
 	REQUIRE(dispp != NULL && *dispp == NULL);
 
 	LOCK(&mgr->lock);
-	result = dispatch_createudp(mgr, localaddr, attributes, &disp);
+	result = dispatch_createudp(mgr, localaddr, &disp);
 	if (result == ISC_R_SUCCESS) {
 		*dispp = disp;
 	}
@@ -1223,12 +1225,12 @@ dns_dispatch_createudp(dns_dispatchmgr_t *mgr, const isc_sockaddr_t *localaddr,
 
 static isc_result_t
 dispatch_createudp(dns_dispatchmgr_t *mgr, const isc_sockaddr_t *localaddr,
-		   unsigned int attributes, dns_dispatch_t **dispp) {
+		   dns_dispatch_t **dispp) {
 	isc_result_t result = ISC_R_SUCCESS;
 	dns_dispatch_t *disp = NULL;
 	isc_sockaddr_t sa_any;
 
-	dispatch_allocate(mgr, isc_socktype_udp, attributes, &disp);
+	dispatch_allocate(mgr, isc_socktype_udp, &disp);
 
 	/*
 	 * Check whether this address/port is available locally.
@@ -1573,12 +1575,13 @@ startrecv(dns_dispatch_t *disp, dns_dispentry_t *resp) {
 		REQUIRE(resp != NULL && resp->handle == NULL);
 		REQUIRE(disp->handle != NULL);
 
+		/* tcp_recv will detach from previous nmhandle and dispentry */
+		isc_nmhandle_attach(disp->handle, &(isc_nmhandle_t *){ NULL });
+		dispentry_attach(resp, &(dns_dispentry_t *){ NULL });
+
 		if (isc_nmhandle_timer_running(disp->handle)) {
 			isc_nmhandle_settimeout(disp->handle, resp->timeout);
 		}
-
-		isc_nmhandle_attach(disp->handle, &(isc_nmhandle_t *){ NULL });
-		dispentry_attach(resp, &(dns_dispentry_t *){ NULL });
 		isc_nm_read(disp->handle, tcp_recv, resp);
 		break;
 
@@ -1607,11 +1610,14 @@ disp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 			break;
 		case isc_socktype_tcp:
 			REQUIRE(disp->handle == NULL);
-			LOCK(&disp->lock);
+
 			isc_nmhandle_attach(handle, &disp->handle);
-			disp->attributes &= ~DNS_DISPATCHATTR_CONNECTING;
-			disp->attributes |= DNS_DISPATCHATTR_CONNECTED;
-			UNLOCK(&disp->lock);
+			REQUIRE(atomic_compare_exchange_strong(
+				&disp->state,
+				&(dns_dispatchstate_t){
+					DNS_DISPATCHSTATE_CONNECTING },
+				DNS_DISPATCHSTATE_CONNECTED));
+
 			startrecv(disp, resp);
 			break;
 		default:
@@ -1645,7 +1651,7 @@ disp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 isc_result_t
 dns_dispatch_connect(dns_dispentry_t *resp) {
 	dns_dispatch_t *disp = NULL;
-	bool connecting;
+	dns_dispatchstate_t state = DNS_DISPATCHSTATE_NONE;
 
 	REQUIRE(VALID_RESPONSE(resp));
 
@@ -1654,27 +1660,37 @@ dns_dispatch_connect(dns_dispentry_t *resp) {
 	/* This will be detached in disp_connected() */
 	dispentry_attach(resp, &(dns_dispentry_t *){ NULL });
 
-	if (disp->socktype == isc_socktype_tcp) {
+	switch (disp->socktype) {
+	case isc_socktype_tcp:
 		/*
 		 * Check whether the dispatch was already connecting.
 		 * If so, add resp to the pending responses.
 		 */
-		LOCK(&disp->lock);
-		connecting = (disp->attributes & DNS_DISPATCHATTR_CONNECTING);
-		disp->attributes |= DNS_DISPATCHATTR_CONNECTING;
-		UNLOCK(&disp->lock);
+		atomic_compare_exchange_strong(&disp->state, &state,
+					       DNS_DISPATCHSTATE_CONNECTING);
 
-		if (connecting) {
+		switch (state) {
+		case DNS_DISPATCHSTATE_NONE:
+			/* First connection, continue with connecting */
+			INSIST(disp->handle == NULL);
+			isc_nm_tcpdnsconnect(disp->mgr->nm, &disp->local,
+					     &disp->peer, disp_connected, resp,
+					     resp->timeout, 0);
+			break;
+		case DNS_DISPATCHSTATE_CONNECTING:
 			ISC_LIST_APPEND(disp->pending, resp, plink);
 			return (ISC_R_SUCCESS);
+		case DNS_DISPATCHSTATE_CONNECTED:
+			/* We are already connected, call the connected cb */
+			if (resp->connected != NULL) {
+				resp->connected(ISC_R_SUCCESS, NULL, resp->arg);
+			}
+			return (ISC_R_SUCCESS);
+		default:
+			INSIST(0);
+			ISC_UNREACHABLE();
 		}
-	}
 
-	switch (disp->socktype) {
-	case isc_socktype_tcp:
-		INSIST(disp->handle == NULL);
-		isc_nm_tcpdnsconnect(disp->mgr->nm, &disp->local, &disp->peer,
-				     disp_connected, resp, resp->timeout, 0);
 		break;
 	case isc_socktype_udp:
 		isc_nm_udpconnect(disp->mgr->nm, &resp->local, &resp->peer,
@@ -1811,28 +1827,6 @@ dns_dispentry_getlocaladdress(dns_dispentry_t *resp, isc_sockaddr_t *addrp) {
 	return (ISC_R_NOTIMPLEMENTED);
 }
 
-unsigned int
-dns_dispatch_getattributes(dns_dispatch_t *disp) {
-	REQUIRE(VALID_DISPATCH(disp));
-
-	/*
-	 * We don't bother locking disp here; it's the caller's
-	 * responsibility to use only non volatile flags.
-	 */
-	return (disp->attributes);
-}
-
-void
-dns_dispatch_changeattributes(dns_dispatch_t *disp, unsigned int attributes,
-			      unsigned int mask) {
-	REQUIRE(VALID_DISPATCH(disp));
-
-	LOCK(&disp->lock);
-	disp->attributes &= ~mask;
-	disp->attributes |= (attributes & mask);
-	UNLOCK(&disp->lock);
-}
-
 dns_dispatch_t *
 dns_dispatchset_get(dns_dispatchset_t *dset) {
 	dns_dispatch_t *disp = NULL;
@@ -1862,7 +1856,7 @@ dns_dispatchset_create(isc_mem_t *mctx, dns_dispatch_t *source,
 	int i, j;
 
 	REQUIRE(VALID_DISPATCH(source));
-	REQUIRE((source->attributes & DNS_DISPATCHATTR_UDP) != 0);
+	REQUIRE(source->socktype == isc_socktype_udp);
 	REQUIRE(dsetp != NULL && *dsetp == NULL);
 
 	mgr = source->mgr;
@@ -1883,7 +1877,6 @@ dns_dispatchset_create(isc_mem_t *mctx, dns_dispatch_t *source,
 	for (i = 1; i < n; i++) {
 		dset->dispatches[i] = NULL;
 		result = dispatch_createudp(mgr, &source->local,
-					    source->attributes,
 					    &dset->dispatches[i]);
 		if (result != ISC_R_SUCCESS) {
 			goto fail;

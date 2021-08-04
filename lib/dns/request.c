@@ -148,7 +148,6 @@ dns_requestmgr_create(isc_mem_t *mctx, isc_taskmgr_t *taskmgr,
 		      dns_requestmgr_t **requestmgrp) {
 	dns_requestmgr_t *requestmgr;
 	int i;
-	unsigned int dispattr;
 
 	req_log(ISC_LOG_DEBUG(3), "dns_requestmgr_create");
 
@@ -156,39 +155,33 @@ dns_requestmgr_create(isc_mem_t *mctx, isc_taskmgr_t *taskmgr,
 	REQUIRE(taskmgr != NULL);
 	REQUIRE(dispatchmgr != NULL);
 
-	if (dispatchv4 != NULL) {
-		dispattr = dns_dispatch_getattributes(dispatchv4);
-		REQUIRE((dispattr & DNS_DISPATCHATTR_UDP) != 0);
-	}
-	if (dispatchv6 != NULL) {
-		dispattr = dns_dispatch_getattributes(dispatchv6);
-		REQUIRE((dispattr & DNS_DISPATCHATTR_UDP) != 0);
-	}
-
 	requestmgr = isc_mem_get(mctx, sizeof(*requestmgr));
+
+	*requestmgr = (dns_requestmgr_t){
+		.taskmgr = taskmgr,	    /* FIXME: Why we don't attach? */
+		.dispatchmgr = dispatchmgr, /* FIXME: Why we don't attach? */
+	};
 
 	isc_mutex_init(&requestmgr->lock);
 
 	for (i = 0; i < DNS_REQUEST_NLOCKS; i++) {
 		isc_mutex_init(&requestmgr->locks[i]);
 	}
-	requestmgr->taskmgr = taskmgr;
-	requestmgr->dispatchmgr = dispatchmgr;
-	requestmgr->dispatchv4 = NULL;
 	if (dispatchv4 != NULL) {
 		dns_dispatch_attach(dispatchv4, &requestmgr->dispatchv4);
 	}
-	requestmgr->dispatchv6 = NULL;
 	if (dispatchv6 != NULL) {
 		dns_dispatch_attach(dispatchv6, &requestmgr->dispatchv6);
 	}
-	requestmgr->mctx = NULL;
 	isc_mem_attach(mctx, &requestmgr->mctx);
+
 	isc_refcount_init(&requestmgr->references, 1);
+
 	ISC_LIST_INIT(requestmgr->whenshutdown);
 	ISC_LIST_INIT(requestmgr->requests);
+
 	atomic_init(&requestmgr->exiting, false);
-	requestmgr->hash = 0;
+
 	requestmgr->magic = REQUESTMGR_MAGIC;
 
 	req_log(ISC_LOG_DEBUG(3), "dns_requestmgr_create: %p", requestmgr);
@@ -454,7 +447,7 @@ tcp_dispatch(bool newtcp, dns_requestmgr_t *requestmgr,
 	}
 
 	result = dns_dispatch_createtcp(requestmgr->dispatchmgr, srcaddr,
-					destaddr, 0, dscp, dispatchp);
+					destaddr, dscp, dispatchp);
 	return (result);
 }
 
@@ -483,7 +476,7 @@ udp_dispatch(dns_requestmgr_t *requestmgr, const isc_sockaddr_t *srcaddr,
 		return (ISC_R_SUCCESS);
 	}
 
-	return (dns_dispatch_createudp(requestmgr->dispatchmgr, srcaddr, 0,
+	return (dns_dispatch_createudp(requestmgr->dispatchmgr, srcaddr,
 				       dispatchp));
 }
 

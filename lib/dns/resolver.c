@@ -2098,7 +2098,7 @@ fctx_query(fetchctx_t *fctx, dns_adbaddrinfo_t *addrinfo,
 		}
 
 		result = dns_dispatch_createtcp(res->dispatchmgr, &addr,
-						&addrinfo->sockaddr, 0,
+						&addrinfo->sockaddr,
 						query->dscp, &query->dispatch);
 		if (result != ISC_R_SUCCESS) {
 			goto cleanup_query;
@@ -2119,7 +2119,7 @@ fctx_query(fetchctx_t *fctx, dns_adbaddrinfo_t *addrinfo,
 				goto cleanup_query;
 			}
 			result = dns_dispatch_createudp(res->dispatchmgr, &addr,
-							0, &query->dispatch);
+							&query->dispatch);
 			if (result != ISC_R_SUCCESS) {
 				goto cleanup_query;
 			}
@@ -2832,12 +2832,8 @@ resquery_connected(isc_result_t eresult, isc_region_t *region, void *arg) {
 	switch (eresult) {
 	case ISC_R_SUCCESS:
 		/*
-		 * We are connected. Update the dispatcher and
-		 * send the query.
+		 * We are connected. Send the query.
 		 */
-		dns_dispatch_changeattributes(query->dispatch,
-					      DNS_DISPATCHATTR_CONNECTED,
-					      DNS_DISPATCHATTR_CONNECTED);
 
 		result = resquery_send(query);
 		if (result != ISC_R_SUCCESS) {

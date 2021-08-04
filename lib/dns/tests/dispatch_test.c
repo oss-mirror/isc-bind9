@@ -178,7 +178,7 @@ make_dispatchset(unsigned int ndisps) {
 	}
 
 	isc_sockaddr_any(&any);
-	result = dns_dispatch_createudp(dispatchmgr, &any, 0, &disp);
+	result = dns_dispatch_createudp(dispatchmgr, &any, &disp);
 	if (result != ISC_R_SUCCESS) {
 		return (result);
 	}
@@ -422,7 +422,7 @@ dispatch_timeout_tcp_connect(void **state) {
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	result = dns_dispatch_createtcp(dispatchmgr, &tcp_connect_addr,
-					&tcp_server_addr, 0, -1, &dispatch);
+					&tcp_server_addr, -1, &dispatch);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	region.base = rbuf;
@@ -478,7 +478,7 @@ dispatch_timeout_tcp_response(void **state __attribute__((unused))) {
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	result = dns_dispatch_createtcp(dispatchmgr, &tcp_connect_addr,
-					&tcp_server_addr, 0, -1, &dispatch);
+					&tcp_server_addr, -1, &dispatch);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	result = isc_nm_listentcpdns(netmgr, &tcp_server_addr, noop_nameserver,
@@ -534,7 +534,7 @@ dispatch_tcp_response(void **state __attribute__((unused))) {
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	result = dns_dispatch_createtcp(dispatchmgr, &tcp_connect_addr,
-					&tcp_server_addr, 0, -1, &dispatch);
+					&tcp_server_addr, -1, &dispatch);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
 	result = isc_nm_listentcpdns(netmgr, &tcp_server_addr, nameserver, NULL,
@@ -592,7 +592,7 @@ dispatch_timeout_udp_response(void **state __attribute__((unused))) {
 	result = dns_dispatchmgr_create(dt_mctx, connect_nm, &dispatchmgr);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
-	result = dns_dispatch_createudp(dispatchmgr, &tcp_connect_addr, 0,
+	result = dns_dispatch_createudp(dispatchmgr, &tcp_connect_addr,
 					&dispatch);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
@@ -646,7 +646,7 @@ dispatch_getnext(void **state) {
 	result = dns_dispatchmgr_create(dt_mctx, connect_nm, &dispatchmgr);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
-	result = dns_dispatch_createudp(dispatchmgr, &udp_connect_addr, 0,
+	result = dns_dispatch_createudp(dispatchmgr, &udp_connect_addr,
 					&dispatch);
 	assert_int_equal(result, ISC_R_SUCCESS);
 
