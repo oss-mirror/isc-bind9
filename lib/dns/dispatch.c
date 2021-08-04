@@ -240,7 +240,9 @@ qid_destroy(isc_mem_t *mctx, dns_qid_t **qidp);
 static inline isc_nmhandle_t *
 getentryhandle(dns_dispentry_t *resp);
 static void
-startrecv(dns_dispatch_t *disp, dns_dispentry_t *resp);
+startrecv(isc_nmhandle_t *handle, dns_dispatch_t *disp, dns_dispentry_t *resp);
+void
+dispatch_getnext(dns_dispatch_t *disp, dns_dispentry_t *resp, uint16_t timeout);
 
 #define LVL(x) ISC_LOG_DEBUG(x)
 
@@ -751,12 +753,12 @@ tcp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	}
 
 next:
-	startrecv(disp, resp0);
+	dispatch_getnext(disp, resp0, resp0->timeout);
 
 unlock:
-	isc_nmhandle_detach(&handle);
 	UNLOCK(&disp->lock);
 
+	isc_nmhandle_detach(&handle);
 	dispentry_detach(&resp0);
 
 	if (resp != NULL) {
@@ -1498,6 +1500,41 @@ dns_dispatch_addresponse(dns_dispatch_t *disp, unsigned int options,
 	return (ISC_R_SUCCESS);
 }
 
+void
+dispatch_getnext(dns_dispatch_t *disp, dns_dispentry_t *resp,
+		 uint16_t timeout) {
+	isc_nmhandle_t *readhandle = NULL;
+
+	/* Both udp_recv and tcp_recv detach from dispentry */
+	dispentry_attach(resp, &(dns_dispentry_t *){ NULL });
+
+	/*
+	 * FIXME: Since there's no global timeout now, any call to getnext will
+	 * always restart the read timer, so it's possible to keep the client
+	 * connecting until end of times by just feeding it with invalid
+	 * packets.
+	 */
+	switch (disp->socktype) {
+	case isc_socktype_udp:
+		isc_nmhandle_attach(resp->handle, &readhandle);
+
+		isc_nmhandle_settimeout(readhandle, timeout);
+		isc_nm_read(readhandle, udp_recv, resp);
+
+		break;
+	case isc_socktype_tcp:
+		isc_nmhandle_attach(disp->handle, &readhandle);
+
+		isc_nmhandle_settimeout(readhandle, timeout);
+		isc_nm_read(readhandle, tcp_recv, resp);
+
+		break;
+	default:
+		INSIST(0);
+		ISC_UNREACHABLE();
+	}
+}
+
 isc_result_t
 dns_dispatch_getnext(dns_dispentry_t *resp) {
 	dns_dispatch_t *disp = NULL;
@@ -1509,7 +1546,7 @@ dns_dispatch_getnext(dns_dispentry_t *resp) {
 
 	LOCK(&disp->lock);
 
-	startrecv(disp, resp);
+	dispatch_getnext(disp, resp, resp->timeout);
 
 	UNLOCK(&disp->lock);
 
@@ -1562,27 +1599,23 @@ dns_dispatch_removeresponse(dns_dispentry_t **respp) {
  * disp must be locked.
  */
 static void
-startrecv(dns_dispatch_t *disp, dns_dispentry_t *resp) {
+startrecv(isc_nmhandle_t *handle, dns_dispatch_t *disp, dns_dispentry_t *resp) {
 	switch (disp->socktype) {
 	case isc_socktype_udp:
-		REQUIRE(resp != NULL && resp->handle != NULL);
+		REQUIRE(resp != NULL && resp->handle == NULL);
 
+		isc_nmhandle_attach(handle, &resp->handle);
 		dispentry_attach(resp, &(dns_dispentry_t *){ NULL });
 		isc_nm_read(resp->handle, udp_recv, resp);
 		break;
 
 	case isc_socktype_tcp:
 		REQUIRE(resp != NULL && resp->handle == NULL);
-		REQUIRE(disp->handle != NULL);
+		REQUIRE(disp != NULL && disp->handle == NULL);
 
-		/* tcp_recv will detach from previous nmhandle and dispentry */
-		isc_nmhandle_attach(disp->handle, &(isc_nmhandle_t *){ NULL });
-		dispentry_attach(resp, &(dns_dispentry_t *){ NULL });
-
-		if (isc_nmhandle_timer_running(disp->handle)) {
-			isc_nmhandle_settimeout(disp->handle, resp->timeout);
-		}
-		isc_nm_read(disp->handle, tcp_recv, resp);
+		isc_nmhandle_attach(handle, &disp->handle);
+		dns_dispatch_attach(disp, &(dns_dispatch_t *){ NULL });
+		isc_nm_read(disp->handle, tcp_recv, disp);
 		break;
 
 	default:
@@ -1603,27 +1636,12 @@ disp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 			return;
 		}
 
-		switch (disp->socktype) {
-		case isc_socktype_udp:
-			isc_nmhandle_attach(handle, &resp->handle);
-			startrecv(disp, resp);
-			break;
-		case isc_socktype_tcp:
-			REQUIRE(disp->handle == NULL);
+		REQUIRE(atomic_compare_exchange_strong(
+			&disp->state,
+			&(dns_dispatchstate_t){ DNS_DISPATCHSTATE_CONNECTING },
+			DNS_DISPATCHSTATE_CONNECTED));
 
-			isc_nmhandle_attach(handle, &disp->handle);
-			REQUIRE(atomic_compare_exchange_strong(
-				&disp->state,
-				&(dns_dispatchstate_t){
-					DNS_DISPATCHSTATE_CONNECTING },
-				DNS_DISPATCHSTATE_CONNECTED));
-
-			startrecv(disp, resp);
-			break;
-		default:
-			INSIST(0);
-			ISC_UNREACHABLE();
-		}
+		startrecv(handle, disp, resp);
 	}
 
 	if (MGR_IS_SHUTTINGDOWN(disp->mgr)) {
@@ -1721,28 +1739,13 @@ send_done(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 void
 dns_dispatch_resume(dns_dispentry_t *resp, uint16_t timeout) {
 	dns_dispatch_t *disp = NULL;
-	isc_nmhandle_t *handle = NULL;
-
-	REQUIRE(resp != NULL);
+	REQUIRE(VALID_RESPONSE(resp));
 
 	disp = resp->disp;
 
-	switch (disp->socktype) {
-	case isc_socktype_udp:
-		REQUIRE(resp->handle != NULL);
-		handle = resp->handle;
-		break;
-	case isc_socktype_tcp:
-		REQUIRE(disp != NULL && disp->handle == NULL);
-		handle = disp->handle;
-		break;
-	default:
-		INSIST(0);
-		ISC_UNREACHABLE();
-	}
+	REQUIRE(VALID_DISPATCH(disp));
 
-	isc_nmhandle_settimeout(handle, timeout);
-	startrecv(disp, resp);
+	dispatch_getnext(disp, resp, timeout);
 }
 
 void
