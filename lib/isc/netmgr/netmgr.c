@@ -2029,6 +2029,8 @@ isc__nmsocket_readtimeout_cb(uv_timer_t *timer) {
 	if (atomic_load(&sock->client)) {
 		uv_timer_stop(timer);
 
+		sock->recv_read = false;
+
 		if (sock->recv_cb != NULL) {
 			isc__nm_uvreq_t *req = isc__nm_get_read_req(sock, NULL);
 			isc__nm_readcb(sock, req, ISC_R_TIMEDOUT);
@@ -2260,8 +2262,8 @@ processbuffer(isc_nmsocket_t *sock) {
  * Stop reading if this is a client socket, or if the server socket
  * has been set to sequential mode, or the number of queries we are
  * processing simultaneously has reached the clients-per-connection
- * limit. In this case we'll be called again by resume_processing()
- * later.
+ * limit. In this case we'll be called again later by
+ * isc__nm_resume_processing().
  */
 void
 isc__nm_process_sock_buffer(isc_nmsocket_t *sock) {
@@ -3349,11 +3351,10 @@ isc_nm_sequential(isc_nmhandle_t *handle) {
 	 * We don't want pipelining on this connection. That means
 	 * that we need to pause after reading each request, and
 	 * resume only after the request has been processed. This
-	 * is done in resume_processing(), which is the socket's
-	 * closehandle_cb callback, called whenever a handle
+	 * is done in isc__nm_resume_processing(), which is the
+	 * socket's closehandle_cb callback, called whenever a handle
 	 * is released.
 	 */
-
 	isc__nmsocket_timer_stop(sock);
 	isc__nm_stop_reading(sock);
 	atomic_store(&sock->sequential, true);

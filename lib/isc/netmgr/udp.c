@@ -356,7 +356,7 @@ udp_recv_cb(uv_udp_t *handle, ssize_t nrecv, const uv_buf_t *buf,
 #endif
 
 	/*
-	 * Three possible reasons to return now without processing:
+	 * Four possible reasons to return now without processing:
 	 */
 
 	/*
@@ -374,6 +374,15 @@ udp_recv_cb(uv_udp_t *handle, ssize_t nrecv, const uv_buf_t *buf,
 	}
 
 	/*
+	 * - If there was a networking error.
+	 */
+	if (nrecv < 0) {
+		isc__nm_failed_read_cb(sock, isc__nm_uverr2result(nrecv),
+				       false);
+		goto free;
+	}
+
+	/*
 	 * - If addr == NULL, in which case it's the end of stream;
 	 *   we can free the buffer and bail.
 	 */
@@ -387,12 +396,6 @@ udp_recv_cb(uv_udp_t *handle, ssize_t nrecv, const uv_buf_t *buf,
 	 */
 	if (!isc__nmsocket_active(sock)) {
 		isc__nm_failed_read_cb(sock, ISC_R_CANCELED, false);
-		goto free;
-	}
-
-	if (nrecv < 0) {
-		isc__nm_failed_read_cb(sock, isc__nm_uverr2result(nrecv),
-				       false);
 		goto free;
 	}
 

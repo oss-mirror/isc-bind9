@@ -779,8 +779,8 @@ isc__nm_tcpdns_processbuffer(isc_nmsocket_t *sock) {
 	REQUIRE(VALID_UVREQ(req));
 
 	/*
-	 * We need to launch the resume_processing after the buffer has
-	 * been consumed, thus we need to delay the detaching the handle.
+	 * We need to launch isc__nm_resume_processing() after the buffer
+	 * has been consumed, thus we must delay detaching the handle.
 	 */
 	isc_nmhandle_attach(req->handle, &handle);
 
@@ -799,9 +799,10 @@ isc__nm_tcpdns_processbuffer(isc_nmsocket_t *sock) {
 	sock->recv_read = false;
 
 	/*
-	 * The assertion failure here means that there's a errnoneous extra
-	 * nmhandle detach happening in the callback and resume_processing gets
-	 * called while we are still processing the buffer.
+	 * An assertion failure here means that there's an erroneous
+	 * extra nmhandle detach happening in the callback and
+	 * isc__nm_resume_processing() is called while we're
+	 * processing the buffer.
 	 */
 	REQUIRE(sock->processing == false);
 	sock->processing = true;
