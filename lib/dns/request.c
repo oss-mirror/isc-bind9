@@ -1118,10 +1118,12 @@ req_response(isc_result_t result, isc_region_t *region, void *arg) {
 			if (!DNS_REQUEST_SENDING(request)) {
 				req_send(request);
 			}
+			UNLOCK(&request->requestmgr->locks[request->hash]);
+			return;
+		} else {
+			UNLOCK(&request->requestmgr->locks[request->hash]);
+			goto done;
 		}
-		UNLOCK(&request->requestmgr->locks[request->hash]);
-
-		return;
 	}
 
 	REQUIRE(VALID_REQUEST(request));
