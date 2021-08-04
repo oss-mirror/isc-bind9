@@ -1147,7 +1147,8 @@ req_response(isc_result_t result, isc_region_t *region, void *arg) {
 
 		LOCK(&request->requestmgr->locks[request->hash]);
 		if (--request->udpcount != 0) {
-			dns_dispatch_read(request->dispentry, request->timeout);
+			dns_dispatch_resume(request->dispentry,
+					    request->timeout);
 			if (!DNS_REQUEST_SENDING(request)) {
 				req_send(request);
 			}

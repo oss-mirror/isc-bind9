@@ -1976,7 +1976,7 @@ resquery_timeout(resquery_t *query) {
 		return (ISC_R_SUCCESS);
 	}
 
-	dns_dispatch_read(query->dispentry, (timeleft / US_PER_MSEC));
+	dns_dispatch_resume(query->dispentry, (timeleft / US_PER_MSEC));
 	return (ISC_R_COMPLETE);
 }
 

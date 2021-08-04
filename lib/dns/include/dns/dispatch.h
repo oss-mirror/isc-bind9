@@ -87,15 +87,10 @@ struct dns_dispatchset {
  *
  * _TCP, _UDP
  *	The dispatcher is a TCP or UDP socket.
- *
- * _IPV4, _IPV6
- *	The dispatcher uses an IPv4 or IPv6 socket.
  */
 #define DNS_DISPATCHATTR_PRIVATE    0x00000001U
 #define DNS_DISPATCHATTR_TCP	    0x00000002U
 #define DNS_DISPATCHATTR_UDP	    0x00000004U
-#define DNS_DISPATCHATTR_IPV4	    0x00000008U
-#define DNS_DISPATCHATTR_IPV6	    0x00000010U
 #define DNS_DISPATCHATTR_CONNECTING 0x00000040U
 #define DNS_DISPATCHATTR_CONNECTED  0x00000080U
 /*@}*/
@@ -289,7 +284,14 @@ dns_dispatch_send(dns_dispentry_t *resp, isc_region_t *r, isc_dscp_t dscp);
  */
 
 void
-dns_dispatch_read(dns_dispentry_t *resp, uint16_t timeout);
+dns_dispatch_resume(dns_dispentry_t *resp, uint16_t timeout);
+/*%<
+ * Reset the read timeout in the socket associated with 'resp' and
+ * continue reading.
+ *
+ * Requires:
+ *\li	'resp' is valid.
+ */
 
 isc_result_t
 dns_dispatch_gettcp(dns_dispatchmgr_t *mgr, const isc_sockaddr_t *destaddr,
