@@ -7,6 +7,10 @@ variables:
   CI_REGISTRY_IMAGE: registry.gitlab.isc.org/isc-projects/images/bind9
   CCACHE_DIR: "/ccache"
   SOFTHSM2_CONF: "/var/tmp/softhsm2/softhsm2.conf"
+  SOFTHSM2_MODULE: "/usr/lib/softhsm/libsofthsm2.so"
+  ENGINES_DIR: "/var/tmp/engines"
+  SSLCNF: "/etc/ssl/openssl.cnf"
+  OPENSSL_CONF: "/var/tmp/etc/openssl.cnf"
 
   GIT_DEPTH: 1
   BUILD_PARALLEL_JOBS: 6
@@ -290,6 +294,9 @@ stages:
         sudo sh -x bin/tests/system/ifconfig.sh up;
       fi
 
+.setup_openssl: &setup_openssl
+    - sh -x bin/tests/prepare-openssl.sh
+
 .setup_softhsm: &setup_softhsm
     - export SLOT=$(sh -x bin/tests/prepare-softhsm2.sh)
     - test -n "${SLOT}" && test "${SLOT}" -gt 0
@@ -299,6 +306,7 @@ stages:
   stage: system
   before_script:
     - *setup_softhsm
+    - *setup_openssl
     - *retrieve_out_of_tree_workspace
     - *setup_interfaces
   script:
@@ -340,6 +348,7 @@ stages:
   stage: unit
   before_script:
     - *setup_softhsm
+    - *setup_openssl
     - *retrieve_out_of_tree_workspace
   script:
     - make -j${TEST_PARALLEL_JOBS:-1} -k unit V=1
@@ -1272,6 +1281,7 @@ respdiff:
     - *configure
     - *setup_interfaces
     - *setup_softhsm
+    - *setup_openssl
     - make -j${BUILD_PARALLEL_JOBS:-1} -k all V=1
     - make DESTDIR="${INSTALL_PATH}" install
     - git clone --depth 1 https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.isc.org/isc-private/bind-qa.git

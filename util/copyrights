@@ -105,6 +105,7 @@
 ./bin/rndc/rndc.rst				RST	2020,2021
 ./bin/rndc/util.c				C	2000,2001,2004,2005,2007,2015,2016,2018,2019,2020,2021
 ./bin/rndc/util.h				C	2000,2001,2004,2005,2007,2009,2016,2018,2019,2020,2021
+./bin/tests/prepare-openssl.sh			SH	2021
 ./bin/tests/prepare-softhsm2.sh			SH	2020,2021
 ./bin/tests/startperf/README			X	2011,2018,2019,2020,2021
 ./bin/tests/startperf/clean.sh			SH	2011,2012,2016,2018,2019,2020,2021
@@ -451,6 +452,9 @@
 ./bin/tests/system/keepalive/expected		X	2017,2018,2019,2020,2021
 ./bin/tests/system/keepalive/setup.sh		SH	2017,2018,2019,2020,2021
 ./bin/tests/system/keepalive/tests.sh		SH	2017,2018,2019,2020,2021
+./bin/tests/system/keyfromlabel/clean.sh	SH	2021
+./bin/tests/system/keyfromlabel/setup.sh	SH	2021
+./bin/tests/system/keyfromlabel/tests.sh	SH	2021
 ./bin/tests/system/keymgr2kasp/README		TXT.BRIEF	2021
 ./bin/tests/system/keymgr2kasp/clean.sh		SH	2021
 ./bin/tests/system/keymgr2kasp/ns3/setup.sh	SH	2021
