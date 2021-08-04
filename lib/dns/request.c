@@ -80,8 +80,6 @@ struct dns_request {
 	isc_buffer_t *tsig;
 	dns_tsigkey_t *tsigkey;
 	isc_socketevent_t sendevent;
-	isc_event_t ctlevent;
-	bool canceling; /* ctlevent outstanding */
 	isc_sockaddr_t destaddr;
 	unsigned int timeout;
 	unsigned int udpcount;
@@ -129,8 +127,8 @@ static void
 req_destroy(dns_request_t *request);
 static void
 req_log(int level, const char *fmt, ...) ISC_FORMAT_PRINTF(2, 3);
-static void
-do_cancel(isc_task_t *task, isc_event_t *event);
+void
+request_cancel(dns_request_t *request);
 
 #define req_attach(source, targetp) \
 	__req_attach(source, targetp, __FILE__, __LINE__, __func__)
@@ -387,9 +385,6 @@ new_request(isc_mem_t *mctx, dns_request_t **requestp) {
 	request = isc_mem_get(mctx, sizeof(*request));
 	*request = (dns_request_t){ .dscp = -1 };
 	ISC_LINK_INIT(request, link);
-	ISC_EVENT_INIT(&request->ctlevent, sizeof(request->ctlevent), 0, NULL,
-		       DNS_EVENT_REQUESTCONTROL, do_cancel, request, NULL, NULL,
-		       NULL);
 
 	isc_refcount_init(&request->references, 1);
 	isc_mem_attach(mctx, &request->mctx);
@@ -931,24 +926,13 @@ cleanup:
  */
 static void
 send_if_done(dns_request_t *request, isc_result_t result) {
-	if (request->event != NULL && !request->canceling) {
+	if (request->event != NULL) {
 		req_sendevent(request, result);
 	}
 }
 
-/*
- * Handle the control event.
- */
-static void
-do_cancel(isc_task_t *task, isc_event_t *event) {
-	dns_request_t *request = event->ev_arg;
-
-	UNUSED(task);
-
-	INSIST(event->ev_type == DNS_EVENT_REQUESTCONTROL);
-
-	LOCK(&request->requestmgr->locks[request->hash]);
-	request->canceling = false;
+void
+request_cancel(dns_request_t *request) {
 	if (!DNS_REQUEST_CANCELED(request)) {
 		req_log(ISC_LOG_DEBUG(3), "do_cancel: request %p", request);
 
@@ -962,16 +946,6 @@ do_cancel(isc_task_t *task, isc_event_t *event) {
 
 		dns_dispatch_detach(&request->dispatch);
 	}
-	send_if_done(request, ISC_R_CANCELED);
-	UNLOCK(&request->requestmgr->locks[request->hash]);
-}
-
-static void
-request_cancel(dns_request_t *request) {
-	if (!request->canceling && !DNS_REQUEST_CANCELED(request)) {
-		isc_event_t *ev = &request->ctlevent;
-		isc_task_send(request->event->ev_sender, &ev);
-	}
 }
 
 void
@@ -980,10 +954,8 @@ dns_request_cancel(dns_request_t *request) {
 
 	req_log(ISC_LOG_DEBUG(3), "dns_request_cancel: request %p", request);
 	LOCK(&request->requestmgr->locks[request->hash]);
-	if (!request->canceling) {
-		request_cancel(request);
-		request->canceling = true;
-	}
+	request_cancel(request);
+	send_if_done(request, ISC_R_CANCELED);
 	UNLOCK(&request->requestmgr->locks[request->hash]);
 }
 
