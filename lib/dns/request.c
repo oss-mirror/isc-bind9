@@ -1103,13 +1103,14 @@ static void
 req_response(isc_result_t result, isc_region_t *region, void *arg) {
 	dns_request_t *request = (dns_request_t *)arg;
 
+	req_log(ISC_LOG_DEBUG(3), "req_response: request %p: %s", request,
+		dns_result_totext(result));
+
 	if (result == ISC_R_CANCELED) {
 		return;
 	}
 
 	if (result == ISC_R_TIMEDOUT) {
-		req_log(ISC_LOG_DEBUG(3), "req_timeout: request %p", request);
-
 		LOCK(&request->requestmgr->locks[request->hash]);
 		if (--request->udpcount != 0) {
 			dns_dispatch_resume(request->dispentry,
@@ -1125,9 +1126,6 @@ req_response(isc_result_t result, isc_region_t *region, void *arg) {
 
 	REQUIRE(VALID_REQUEST(request));
 
-	req_log(ISC_LOG_DEBUG(3), "req_response: request %p: %s", request,
-		dns_result_totext(result));
-
 	LOCK(&request->requestmgr->locks[request->hash]);
 	if (result != ISC_R_SUCCESS) {
 		goto done;
@@ -1141,6 +1139,7 @@ req_response(isc_result_t result, isc_region_t *region, void *arg) {
 	if (result != ISC_R_SUCCESS) {
 		isc_buffer_free(&request->answer);
 	}
+
 done:
 	/*
 	 * Cleanup.

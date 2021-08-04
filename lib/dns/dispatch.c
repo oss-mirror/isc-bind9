@@ -61,7 +61,6 @@ struct dns_dispatchmgr {
 	unsigned int state;
 	ISC_LIST(dns_dispatch_t) list;
 
-	/* locked by buffer_lock */
 	dns_qid_t *qid;
 
 	in_port_t *v4ports;    /*%< available ports for IPv4 */
@@ -495,11 +494,6 @@ __dispentry_detach(dns_dispentry_t **respp, const char *func, const char *file,
  *	if event queue is not empty, queue.  else, send.
  *	restart.
  */
-
-/* FIXME: If we read invalid packet, we never receive next that could be valid
- * and we also don't notify the read callback
- */
-
 static void
 udp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	 void *arg) {
@@ -518,6 +512,7 @@ udp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	REQUIRE(VALID_DISPATCH(resp->disp));
 
 	disp = resp->disp;
+	response = resp->response;
 
 	LOCK(&disp->lock);
 
@@ -526,32 +521,20 @@ udp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 			     disp->requests);
 	}
 
-	if (eresult == ISC_R_CANCELED) {
-		/*
-		 * This dispatcher is shutting down.
-		 */
-		goto sendevent;
-	}
-
-	if (!ISC_LINK_LINKED(resp, alink)) {
-		goto unlock;
-	}
-
-	id = resp->id;
-
-	peer = isc_nmhandle_peeraddr(handle);
-	isc_netaddr_fromsockaddr(&netaddr, &peer);
-
 	if (eresult != ISC_R_SUCCESS) {
 		/*
 		 * This is most likely a network error on a connected
-		 * socket, or a timeout on a timer that has not been
-		 * reset. It makes no sense to check the address or
-		 * parse the packet, but it will help to return the
-		 * error to the caller.
+		 * socket, a timeout, or the query has been canceled.
+		 * It makes no sense to check the address or parse the
+		 * packet, but we can return the error to the caller.
 		 */
-		goto sendevent;
+		goto done;
 	}
+
+	INSIST(ISC_LINK_LINKED(resp, alink));
+
+	peer = isc_nmhandle_peeraddr(handle);
+	isc_netaddr_fromsockaddr(&netaddr, &peer);
 
 	/*
 	 * If this is from a blackholed address, drop it.
@@ -568,18 +551,19 @@ udp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 			dispatch_log(disp, LVL(10), "blackholed packet from %s",
 				     netaddrstr);
 		}
-		goto unlock;
+		goto next;
 	}
 
 	/*
 	 * Peek into the buffer to see what we can see.
 	 */
+	id = resp->id;
 	isc_buffer_init(&source, region->base, region->length);
 	isc_buffer_add(&source, region->length);
 	dres = dns_message_peekheader(&source, &id, &flags);
 	if (dres != ISC_R_SUCCESS) {
 		dispatch_log(disp, LVL(10), "got garbage packet");
-		goto unlock;
+		goto next;
 	}
 
 	dispatch_log(disp, LVL(92),
@@ -587,12 +571,10 @@ udp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 		     (((flags & DNS_MESSAGEFLAG_QR) != 0) ? '1' : '0'), id);
 
 	/*
-	 * Look at flags.  If query, drop it. If response,
-	 * look to see where it goes.
+	 * Look at the message flags.  If it's a query, ignore it.
 	 */
 	if ((flags & DNS_MESSAGEFLAG_QR) == 0) {
-		/* query */
-		goto unlock;
+		goto next;
 	}
 
 	/*
@@ -601,19 +583,23 @@ udp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	if (resp->id != id || !isc_sockaddr_equal(&peer, &resp->peer)) {
 		dispatch_log(disp, LVL(90), "response doesn't match");
 		inc_stats(disp->mgr, dns_resstatscounter_mismatch);
-		goto unlock;
+		goto next;
 	}
 
-sendevent:
 	/*
-	 * At this point, rev contains the event we want to fill in, and
-	 * resp contains the information on the place to send it to.
-	 * Send the event off.
+	 * We have the right resp, so call the caller back.
 	 */
+	goto done;
 
-	response = resp->response;
+next:
+	/*
+	 * This is the wrong response. Don't call the caller back
+	 * but keep listening.
+	 */
+	response = NULL;
+	dispatch_getnext(disp, resp, resp->timeout);
 
-unlock:
+done:
 	UNLOCK(&disp->lock);
 
 	if (response != NULL) {
@@ -668,13 +654,12 @@ tcp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	case ISC_R_SUCCESS:
 		/* got our answer */
 		break;
-	case ISC_R_CANCELED:
-		dispatch_log(disp, LVL(90), "shutting down on cancel");
-		goto unlock;
 
+	case ISC_R_CANCELED:
 	case ISC_R_EOF:
-		dispatch_log(disp, LVL(90), "shutting down on EOF");
-		goto unlock;
+		dispatch_log(disp, LVL(90), "shutting down: %s",
+			     isc_result_totext(eresult));
+		goto done;
 
 	case ISC_R_TIMEDOUT:
 		/*
@@ -687,7 +672,7 @@ tcp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 		ISC_LIST_UNLINK(disp->active, resp, alink);
 		ISC_LIST_APPEND(disp->active, resp, alink);
 
-		goto unlock;
+		goto done;
 
 	default:
 		if (eresult == ISC_R_CONNECTIONRESET) {
@@ -701,11 +686,11 @@ tcp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 			     "shutting down due to TCP "
 			     "receive error: %s: %s",
 			     buf, isc_result_totext(eresult));
-		goto unlock;
+		goto done;
 	}
 
-	dispatch_log(disp, LVL(90), "result %d, length == %d, addr = %p",
-		     eresult, region->length, region->base);
+	dispatch_log(disp, LVL(90), "success, length == %d, addr = %p",
+		     region->length, region->base);
 
 	/*
 	 * Peek into the buffer to see what we can see.
@@ -723,13 +708,8 @@ tcp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 		     (((flags & DNS_MESSAGEFLAG_QR) != 0) ? '1' : '0'), id);
 
 	/*
-	 * Allocate an event to send to the query or response client, and
-	 * allocate a new buffer for our use.
-	 */
-
-	/*
-	 * Look at flags.  If query, drop it. If response,
-	 * look to see where it goes.
+	 * Look at the message flags.  If it's a query, ignore it
+	 * and keep reading.
 	 */
 	if ((flags & DNS_MESSAGEFLAG_QR) == 0) {
 		/*
@@ -739,7 +719,8 @@ tcp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	}
 
 	/*
-	 * We have a response; find the associated dispentry.
+	 * We have a valid response; find the associated dispentry object
+	 * and call the caller back.
 	 */
 	bucket = dns_hash(qid, &peer, id, disp->localport);
 	LOCK(&qid->lock);
@@ -749,10 +730,9 @@ tcp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	UNLOCK(&qid->lock);
 
 next:
-	/* Restart the reading from the TCP socket */
 	dispatch_getnext(disp, NULL, -1);
 
-unlock:
+done:
 	UNLOCK(&disp->lock);
 
 	if (resp != NULL) {
@@ -1749,6 +1729,7 @@ send_done(isc_nmhandle_t *handle, isc_result_t result, void *cbarg) {
 void
 dns_dispatch_resume(dns_dispentry_t *resp, uint16_t timeout) {
 	dns_dispatch_t *disp = NULL;
+
 	REQUIRE(VALID_RESPONSE(resp));
 
 	disp = resp->disp;
