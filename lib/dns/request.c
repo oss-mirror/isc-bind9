@@ -1146,7 +1146,9 @@ done:
 	/*
 	 * Cleanup.
 	 */
-	dns_dispatch_removeresponse(&request->dispentry);
+	if (request->dispentry != NULL) {
+		dns_dispatch_removeresponse(&request->dispentry);
+	}
 	request_cancel(request);
 
 	/*

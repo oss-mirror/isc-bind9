@@ -1803,7 +1803,8 @@ resquery_senddone(isc_result_t eresult, isc_region_t *region, void *arg) {
 
 	switch (eresult) {
 	case ISC_R_SUCCESS:
-		goto detach;
+	case ISC_R_CANCELED:
+		break;
 
 	case ISC_R_HOSTUNREACH:
 	case ISC_R_NETUNREACH:
@@ -1824,8 +1825,7 @@ resquery_senddone(isc_result_t eresult, isc_region_t *region, void *arg) {
 		FCTX_ATTR_CLR(fctx, FCTX_ATTR_ADDRWAIT);
 		fctx_try(fctx, true, false);
 		break;
-	case ISC_R_CANCELED:
-		break;
+
 	default:
 		FCTXTRACE3("query canceled in resquery_senddone() "
 			   "due to unexpected result; responding",
@@ -2859,7 +2859,10 @@ resquery_connected(isc_result_t eresult, isc_region_t *region, void *arg) {
 			dns_rdatatypestats_increment(res->view->resquerystats,
 						     fctx->type);
 		}
-		goto detach;
+		break;
+
+	case ISC_R_CANCELED:
+		break;
 
 	case ISC_R_NETUNREACH:
 	case ISC_R_HOSTUNREACH:
@@ -2884,9 +2887,6 @@ resquery_connected(isc_result_t eresult, isc_region_t *region, void *arg) {
 
 		FCTX_ATTR_CLR(fctx, FCTX_ATTR_ADDRWAIT);
 		fctx_try(fctx, true, false);
-		break;
-
-	case ISC_R_CANCELED:
 		break;
 
 	default:
@@ -6930,6 +6930,8 @@ fctx_decreference(fetchctx_t *fctx) {
 		 * No one cares about the result of this fetch anymore.
 		 */
 		if (fctx->pending == 0 && fctx->nqueries == 0 &&
+		    ISC_LIST_EMPTY(fctx->finds) &&
+		    ISC_LIST_EMPTY(fctx->altfinds) &&
 		    ISC_LIST_EMPTY(fctx->validators) && SHUTTINGDOWN(fctx))
 		{
 			/*
