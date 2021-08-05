@@ -1106,7 +1106,7 @@ req_response(isc_result_t result, isc_region_t *region, void *arg) {
 	req_log(ISC_LOG_DEBUG(3), "req_response: request %p: %s", request,
 		dns_result_totext(result));
 
-	if (result == ISC_R_CANCELED) {
+	if (result == ISC_R_CANCELED || result == ISC_R_EOF) {
 		return;
 	}
 

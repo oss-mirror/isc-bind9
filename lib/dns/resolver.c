@@ -7233,7 +7233,7 @@ resquery_response(isc_result_t eresult, isc_region_t *region, void *arg) {
 	fetchctx_t *fctx = NULL;
 	respctx_t rctx;
 
-	if (eresult == ISC_R_CANCELED) {
+	if (eresult == ISC_R_CANCELED || eresult == ISC_R_EOF) {
 		return;
 	}
 
