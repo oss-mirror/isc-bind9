@@ -2171,6 +2171,7 @@ fctx_query(fetchctx_t *fctx, dns_adbaddrinfo_t *addrinfo,
 	}
 
 	LOCK(&res->buckets[fctx->bucketnum].lock);
+	ISC_LIST_APPEND(fctx->queries, query, link);
 	fctx->nqueries++;
 	UNLOCK(&res->buckets[fctx->bucketnum].lock);
 
@@ -2848,7 +2849,6 @@ resquery_connected(isc_result_t eresult, isc_region_t *region, void *arg) {
 
 		fctx->querysent++;
 
-		ISC_LIST_APPEND(fctx->queries, query, link);
 		pf = isc_sockaddr_pf(&query->addrinfo->sockaddr);
 		if (pf == PF_INET) {
 			inc_stats(res, dns_resstatscounter_queryv4);
