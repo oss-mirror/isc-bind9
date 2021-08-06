@@ -759,6 +759,7 @@ use_tcp:
 		/*
 		 * Try again using TCP.
 		 */
+		req_detach(&rclone);
 		dns_message_renderreset(message);
 		dns_dispatch_removeresponse(&request->dispentry);
 		dns_dispatch_detach(&request->dispatch);
@@ -814,6 +815,9 @@ unlink:
 cleanup:
 	if (tclone != NULL) {
 		isc_task_detach(&tclone);
+	}
+	if (rclone != NULL) {
+		req_detach(&rclone);
 	}
 	req_detach(&request);
 	req_log(ISC_LOG_DEBUG(3), "dns_request_createvia: failed %s",
@@ -885,7 +889,7 @@ req_render(dns_message_t *message, isc_buffer_t **bufferp, unsigned int options,
 	 * Copy rendered message to exact sized buffer.
 	 */
 	isc_buffer_usedregion(buf1, &r);
-	if (r.length > 512) {
+	if ((options & DNS_REQUESTOPT_TCP) == 0 && r.length > 512) {
 		result = DNS_R_USETCP;
 		goto cleanup;
 	}
@@ -1221,7 +1225,9 @@ __req_detach(dns_request_t **requestp, const char *file, unsigned int line,
 	UNUSED(ref);
 #endif /* REQ_TRACE */
 
-	if (atomic_load_acquire(&request->requestmgr->exiting)) {
+	if (request->requestmgr != NULL &&
+	    atomic_load_acquire(&request->requestmgr->exiting))
+	{
 		/* We are shutting down and this was last request */
 		LOCK(&request->requestmgr->lock);
 		if (ISC_LIST_EMPTY(request->requestmgr->requests)) {
