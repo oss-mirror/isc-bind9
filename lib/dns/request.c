@@ -154,12 +154,10 @@ dns_requestmgr_create(isc_mem_t *mctx, isc_taskmgr_t *taskmgr,
 	REQUIRE(dispatchmgr != NULL);
 
 	requestmgr = isc_mem_get(mctx, sizeof(*requestmgr));
+	*requestmgr = (dns_requestmgr_t){ 0 };
 
-	*requestmgr = (dns_requestmgr_t){
-		.taskmgr = taskmgr,	    /* FIXME: Why we don't attach? */
-		.dispatchmgr = dispatchmgr, /* FIXME: Why we don't attach? */
-	};
-
+	isc_taskmgr_attach(taskmgr, &requestmgr->taskmgr);
+	dns_dispatchmgr_attach(dispatchmgr, &requestmgr->dispatchmgr);
 	isc_mutex_init(&requestmgr->lock);
 
 	for (i = 0; i < DNS_REQUEST_NLOCKS; i++) {
@@ -348,6 +346,12 @@ mgr_destroy(dns_requestmgr_t *requestmgr) {
 	}
 	if (requestmgr->dispatchv6 != NULL) {
 		dns_dispatch_detach(&requestmgr->dispatchv6);
+	}
+	if (requestmgr->dispatchmgr != NULL) {
+		dns_dispatchmgr_detach(&requestmgr->dispatchmgr);
+	}
+	if (requestmgr->taskmgr != NULL) {
+		isc_taskmgr_detach(&requestmgr->taskmgr);
 	}
 	requestmgr->magic = 0;
 	isc_mem_putanddetach(&requestmgr->mctx, requestmgr,
