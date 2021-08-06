@@ -10875,8 +10875,7 @@ dns_resolver_disable_algorithm(dns_resolver_t *resolver, const dns_name_t *name,
 				memmove(tmp, algorithms, *algorithms);
 			}
 			tmp[len - 1] |= mask;
-			/* 'tmp[0]' should contain the length of 'tmp'.
-			 */
+			/* tmp[0] should contain the length of 'tmp'. */
 			*tmp = len;
 			node->data = tmp;
 			/* Free the older bitfield. */

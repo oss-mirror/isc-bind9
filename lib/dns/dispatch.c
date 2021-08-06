@@ -512,12 +512,19 @@ udp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	REQUIRE(VALID_DISPATCH(resp->disp));
 
 	disp = resp->disp;
-	response = resp->response;
 
 	LOCK(&disp->lock);
 
-	dispatch_log(disp, LVL(90), "UDP response %s: requests %d",
+	dispatch_log(disp, LVL(90), "UDP response %p:%s:requests %d", resp,
 		     isc_result_totext(eresult), disp->requests);
+
+	/*
+	 * The resp may have been deactivated by shutdown; if
+	 * so, we can skip the response callback.
+	 */
+	if (ISC_LINK_LINKED(resp, alink)) {
+		response = resp->response;
+	}
 
 	if (eresult != ISC_R_SUCCESS) {
 		/*
@@ -601,6 +608,9 @@ done:
 	UNLOCK(&disp->lock);
 
 	if (response != NULL) {
+		dispatch_log(disp, LVL(90),
+			     "UDP response (%p) event %p:%s to %p", disp,
+			     response, isc_result_totext(eresult), resp->arg);
 		response(eresult, region, resp->arg);
 	}
 
@@ -643,7 +653,7 @@ tcp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 
 	LOCK(&disp->lock);
 
-	dispatch_log(disp, LVL(90), "TCP response %s: requests %d, buffers %d",
+	dispatch_log(disp, LVL(90), "TCP read:%s:requests %d, buffers %d",
 		     isc_result_totext(eresult), disp->requests,
 		     disp->tcpbuffers);
 
@@ -666,11 +676,10 @@ tcp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 		 * no event has already been sent.
 		 */
 		resp = ISC_LIST_HEAD(disp->active);
-		INSIST(resp != NULL);
-
-		ISC_LIST_UNLINK(disp->active, resp, alink);
-		ISC_LIST_APPEND(disp->active, resp, alink);
-
+		if (resp != NULL) {
+			ISC_LIST_UNLINK(disp->active, resp, alink);
+			ISC_LIST_APPEND(disp->active, resp, alink);
+		}
 		goto done;
 
 	default:
@@ -735,6 +744,10 @@ done:
 	UNLOCK(&disp->lock);
 
 	if (resp != NULL) {
+		dispatch_log(disp, LVL(90),
+			     "TCP response (%p) event %p: %s to %p", resp,
+			     resp->response, isc_result_totext(eresult),
+			     resp->arg);
 		resp->response(eresult, region, resp->arg);
 	}
 
