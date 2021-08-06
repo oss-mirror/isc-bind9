@@ -1124,15 +1124,16 @@ req_response(isc_result_t result, isc_region_t *region, void *arg) {
 			}
 			UNLOCK(&request->requestmgr->locks[request->hash]);
 			return;
-		} else {
-			UNLOCK(&request->requestmgr->locks[request->hash]);
-			goto done;
 		}
+
+		/* The lock is unlocked below */
+		goto done;
 	}
 
 	REQUIRE(VALID_REQUEST(request));
 
 	LOCK(&request->requestmgr->locks[request->hash]);
+
 	if (result != ISC_R_SUCCESS) {
 		goto done;
 	}
