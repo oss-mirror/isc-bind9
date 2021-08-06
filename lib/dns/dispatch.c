@@ -367,10 +367,6 @@ deactivate_dispentry(dns_dispatch_t *disp, dns_dispentry_t *resp) {
 		ISC_LIST_UNLINK(disp->active, resp, alink);
 	}
 
-	if (ISC_LINK_LINKED(resp, plink)) {
-		ISC_LIST_UNLINK(disp->pending, resp, plink);
-	}
-
 	if (resp->handle != NULL) {
 		INSIST(disp->socktype == isc_socktype_udp);
 
@@ -438,6 +434,10 @@ __dispentry_destroy(dns_dispentry_t *resp) {
 	dns_dispatch_t *disp = resp->disp;
 
 	resp->magic = 0;
+
+	if (ISC_LINK_LINKED(resp, plink)) {
+		ISC_LIST_UNLINK(disp->pending, resp, plink);
+	}
 
 	if (resp->handle != NULL) {
 		isc_nmhandle_detach(&resp->handle);

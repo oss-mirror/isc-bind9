@@ -1435,8 +1435,8 @@ __fctx_cancelquery(resquery_t *query, isc_time_t *finish, bool no_response,
 	}
 
 	/*
-	 * Check for any outstanding dispatch responses.  If they exist,
-	 * cancel them and let their callbacks finish the cleanup.
+	 * Check for any outstanding dispatch responses and if they
+	 * exist, cancel them.
 	 */
 	if (query->dispentry != NULL) {
 		dns_dispatch_cancel(query->dispentry);
