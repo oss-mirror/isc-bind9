@@ -516,10 +516,8 @@ udp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 
 	LOCK(&disp->lock);
 
-	if (isc_log_wouldlog(dns_lctx, LVL(90))) {
-		dispatch_log(disp, LVL(90), "got UDP packet: requests %d",
-			     disp->requests);
-	}
+	dispatch_log(disp, LVL(90), "UDP response %s: requests %d",
+		     isc_result_totext(eresult), disp->requests);
 
 	if (eresult != ISC_R_SUCCESS) {
 		/*
@@ -645,8 +643,9 @@ tcp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 
 	LOCK(&disp->lock);
 
-	dispatch_log(disp, LVL(90), "got TCP packet: requests %d, buffers %d",
-		     disp->requests, disp->tcpbuffers);
+	dispatch_log(disp, LVL(90), "TCP response %s: requests %d, buffers %d",
+		     isc_result_totext(eresult), disp->requests,
+		     disp->tcpbuffers);
 
 	peer = isc_nmhandle_peeraddr(handle);
 
@@ -1087,11 +1086,8 @@ dns_dispatch_createtcp(dns_dispatchmgr_t *mgr, const isc_sockaddr_t *localaddr,
 	ISC_LIST_APPEND(mgr->list, disp, link);
 	UNLOCK(&mgr->lock);
 
-	if (isc_log_wouldlog(dns_lctx, 90)) {
-		mgr_log(mgr, LVL(90),
-			"dns_dispatch_createtcp: created TCP dispatch %p",
-			disp);
-	}
+	mgr_log(mgr, LVL(90), "dns_dispatch_createtcp: created TCP dispatch %p",
+		disp);
 	*dispp = disp;
 
 	return (ISC_R_SUCCESS);
