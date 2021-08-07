@@ -623,14 +623,14 @@ again:
 		req_send(request);
 		req_detach(&rclone);
 	} else {
+		request->flags |= DNS_REQUEST_F_CONNECTING;
+		if (tcp) {
+			request->flags |= DNS_REQUEST_F_TCP;
+		}
+
 		result = dns_dispatch_connect(request->dispentry);
 		if (result != ISC_R_SUCCESS) {
 			goto unlink;
-		}
-		request->flags |= DNS_REQUEST_F_CONNECTING;
-
-		if (tcp) {
-			request->flags |= DNS_REQUEST_F_TCP;
 		}
 	}
 
@@ -796,14 +796,15 @@ use_tcp:
 		req_send(request);
 		req_detach(&rclone);
 	} else {
-		result = dns_dispatch_connect(request->dispentry);
-		if (result != ISC_R_SUCCESS) {
-			goto unlink;
-		}
 		request->flags |= DNS_REQUEST_F_CONNECTING;
 
 		if (tcp) {
 			request->flags |= DNS_REQUEST_F_TCP;
+		}
+
+		result = dns_dispatch_connect(request->dispentry);
+		if (result != ISC_R_SUCCESS) {
+			goto unlink;
 		}
 	}
 
