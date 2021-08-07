@@ -290,6 +290,7 @@ struct fetchctx {
 	char *info;
 	isc_mem_t *mctx;
 	isc_stdtime_t now;
+	isc_task_t *task;
 
 	/* Atomic */
 	isc_refcount_t references;
@@ -712,7 +713,6 @@ resume_qmin(isc_task_t *task, isc_event_t *event);
  */
 
 typedef struct respctx {
-	isc_task_t *task;
 	resquery_t *query;
 	fetchctx_t *fctx;
 	isc_result_t result;
@@ -4538,7 +4538,6 @@ fctx_add_event(fetchctx_t *fctx, isc_task_t *task, const isc_sockaddr_t *client,
 	       dns_messageid_t id, isc_taskaction_t action, void *arg,
 	       dns_rdataset_t *rdataset, dns_rdataset_t *sigrdataset,
 	       dns_fetch_t *fetch, isc_eventtype_t event_type) {
-	isc_task_t *tclone = NULL;
 	dns_fetchevent_t *event = NULL;
 
 	/*
@@ -4546,10 +4545,9 @@ fctx_add_event(fetchctx_t *fctx, isc_task_t *task, const isc_sockaddr_t *client,
 	 * sender field.  We'll make the fetch the sender when we
 	 * actually send the event.
 	 */
-	isc_task_attach(task, &tclone);
-	event = (dns_fetchevent_t *)isc_event_allocate(fctx->res->mctx, tclone,
-						       event_type, action, arg,
-						       sizeof(*event));
+	isc_task_attach(task, &(isc_task_t *){ NULL });
+	event = (dns_fetchevent_t *)isc_event_allocate(
+		fctx->res->mctx, task, event_type, action, arg, sizeof(*event));
 	event->result = DNS_R_SERVFAIL;
 	event->qtype = fctx->type;
 	event->db = NULL;
@@ -4604,11 +4602,11 @@ log_ns_ttl(fetchctx_t *fctx, const char *where) {
 }
 
 static isc_result_t
-fctx_create(dns_resolver_t *res, const dns_name_t *name, dns_rdatatype_t type,
-	    const dns_name_t *domain, dns_rdataset_t *nameservers,
-	    const isc_sockaddr_t *client, unsigned int options,
-	    unsigned int bucketnum, unsigned int depth, isc_counter_t *qc,
-	    fetchctx_t **fctxp) {
+fctx_create(dns_resolver_t *res, isc_task_t *task, const dns_name_t *name,
+	    dns_rdatatype_t type, const dns_name_t *domain,
+	    dns_rdataset_t *nameservers, const isc_sockaddr_t *client,
+	    unsigned int options, unsigned int bucketnum, unsigned int depth,
+	    isc_counter_t *qc, fetchctx_t **fctxp) {
 	fetchctx_t *fctx = NULL;
 	isc_result_t result;
 	isc_result_t iresult;
@@ -4631,6 +4629,7 @@ fctx_create(dns_resolver_t *res, const dns_name_t *name, dns_rdatatype_t type,
 		.qmintype = type,
 		.options = options,
 		.res = res,
+		.task = task,
 		.bucketnum = bucketnum,
 		.dbucketnum = RES_NOBUCKET,
 		.state = fetchstate_init,
@@ -9433,7 +9432,7 @@ rctx_chaseds(respctx_t *rctx, dns_message_t *message,
 
 	result = dns_resolver_createfetch(
 		fctx->res, fctx->nsname, dns_rdatatype_ns, NULL, NULL, NULL,
-		NULL, 0, fctx->options, 0, NULL, rctx->task, resume_dslookup,
+		NULL, 0, fctx->options, 0, NULL, fctx->task, resume_dslookup,
 		fctx, &fctx->nsrrset, NULL, &fctx->nsfetch);
 	if (result != ISC_R_SUCCESS) {
 		if (result == DNS_R_DUPLICATE) {
@@ -10189,8 +10188,7 @@ dns_resolver_attach(dns_resolver_t *source, dns_resolver_t **targetp) {
 void
 dns_resolver_whenshutdown(dns_resolver_t *res, isc_task_t *task,
 			  isc_event_t **eventp) {
-	isc_task_t *tclone;
-	isc_event_t *event;
+	isc_event_t *event = NULL;
 
 	REQUIRE(VALID_RESOLVER(res));
 	REQUIRE(eventp != NULL);
@@ -10209,9 +10207,8 @@ dns_resolver_whenshutdown(dns_resolver_t *res, isc_task_t *task,
 		event->ev_sender = res;
 		isc_task_send(task, &event);
 	} else {
-		tclone = NULL;
-		isc_task_attach(task, &tclone);
-		event->ev_sender = tclone;
+		isc_task_attach(task, &(isc_task_t *){ NULL });
+		event->ev_sender = task;
 		ISC_LIST_APPEND(res->whenshutdown, event, ev_link);
 	}
 
@@ -10506,7 +10503,7 @@ dns_resolver_createfetch(dns_resolver_t *res, const dns_name_t *name,
 	}
 
 	if (fctx == NULL) {
-		result = fctx_create(res, name, type, domain, nameservers,
+		result = fctx_create(res, task, name, type, domain, nameservers,
 				     client, options, bucketnum, depth, qc,
 				     &fctx);
 		if (result != ISC_R_SUCCESS) {
