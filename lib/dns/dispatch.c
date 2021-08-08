@@ -1682,8 +1682,10 @@ dns_dispatch_connect(dns_dispentry_t *resp) {
 		switch (state) {
 		case DNS_DISPATCHSTATE_NONE:
 			/* First connection, continue with connecting */
+			LOCK(&disp->lock);
 			INSIST(ISC_LIST_EMPTY(disp->pending));
 			ISC_LIST_APPEND(disp->pending, resp, plink);
+			UNLOCK(&disp->lock);
 			isc_nm_tcpdnsconnect(disp->mgr->nm, &disp->local,
 					     &disp->peer, tcp_connected, disp,
 					     resp->timeout, 0);
@@ -1691,15 +1693,18 @@ dns_dispatch_connect(dns_dispentry_t *resp) {
 
 		case DNS_DISPATCHSTATE_CONNECTING:
 			/* Connection pending; add resp to the list */
+			LOCK(&disp->lock);
 			ISC_LIST_APPEND(disp->pending, resp, plink);
-			return (ISC_R_SUCCESS);
+			UNLOCK(&disp->lock);
+			break;
 
 		case DNS_DISPATCHSTATE_CONNECTED:
 			/* We are already connected; call the connected cb */
 			if (resp->connected != NULL) {
 				resp->connected(ISC_R_SUCCESS, NULL, resp->arg);
 			}
-			return (ISC_R_SUCCESS);
+			dispentry_detach(&resp);
+			break;
 
 		default:
 			INSIST(0);
