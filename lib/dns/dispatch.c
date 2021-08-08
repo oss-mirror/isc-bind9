@@ -127,8 +127,8 @@ struct dns_dispatch {
 	isc_refcount_t references;
 	unsigned int shutdown_out : 1;
 
-	ISC_LIST(dns_dispentry_t) pending;
-	ISC_LIST(dns_dispentry_t) active;
+	dns_displist_t pending;
+	dns_displist_t active;
 	unsigned int nsockets;
 
 	unsigned int requests;	 /*%< how many requests we have */
@@ -608,9 +608,6 @@ done:
 	UNLOCK(&disp->lock);
 
 	if (response != NULL) {
-		dispatch_log(disp, LVL(90),
-			     "UDP response (%p) event %p:%s to %p", disp,
-			     response, isc_result_totext(eresult), resp->arg);
 		response(eresult, region, resp->arg);
 	}
 
@@ -646,6 +643,7 @@ tcp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	char buf[ISC_SOCKADDR_FORMATSIZE];
 	isc_buffer_t source;
 	isc_sockaddr_t peer;
+	dns_displist_t empty, resps;
 
 	REQUIRE(VALID_DISPATCH(disp));
 
@@ -658,6 +656,7 @@ tcp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 		     disp->tcpbuffers);
 
 	peer = isc_nmhandle_peeraddr(handle);
+	ISC_LIST_INIT(resps);
 
 	switch (eresult) {
 	case ISC_R_SUCCESS:
@@ -668,12 +667,20 @@ tcp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	case ISC_R_EOF:
 		dispatch_log(disp, LVL(90), "shutting down: %s",
 			     isc_result_totext(eresult));
+		/*
+		 * If there are any active responses, shut them all down.
+		 */
+		ISC_LIST_INIT(empty);
+		resps = disp->active;
+		disp->active = empty;
 		goto done;
 
 	case ISC_R_TIMEDOUT:
 		/*
-		 * Time out the first active response for which
-		 * no event has already been sent.
+		 * Time out the oldest response in the active queue,
+		 * and move it to the end. (We don't remove it from the
+		 * active queue immediately, though, because the callback
+		 * might decide to keep waiting and leave it active.)
 		 */
 		resp = ISC_LIST_HEAD(disp->active);
 		if (resp != NULL) {
@@ -744,11 +751,16 @@ done:
 	UNLOCK(&disp->lock);
 
 	if (resp != NULL) {
-		dispatch_log(disp, LVL(90),
-			     "TCP response (%p) event %p: %s to %p", resp,
-			     resp->response, isc_result_totext(eresult),
-			     resp->arg);
+		/* answer or timeout */
 		resp->response(eresult, region, resp->arg);
+	} else {
+		/* cancel all the resps */
+		dns_dispentry_t *next = NULL;
+		for (resp = ISC_LIST_HEAD(resps); resp != NULL; resp = next) {
+			next = ISC_LIST_NEXT(resp, link);
+			ISC_LIST_UNLINK(resps, resp, alink);
+			resp->response(ISC_R_SHUTTINGDOWN, region, resp->arg);
+		}
 	}
 
 	dns_dispatch_detach(&disp);
