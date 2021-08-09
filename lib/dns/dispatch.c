@@ -1551,7 +1551,6 @@ dns_dispatch_removeresponse(dns_dispentry_t **respp) {
 	dns_dispatchmgr_t *mgr = NULL;
 	dns_dispatch_t *disp = NULL;
 	dns_dispentry_t *resp = NULL;
-	unsigned int bucket;
 	dns_qid_t *qid = NULL;
 
 	REQUIRE(respp != NULL);
@@ -1573,17 +1572,17 @@ dns_dispatch_removeresponse(dns_dispentry_t **respp) {
 	LOCK(&disp->lock);
 	INSIST(disp->requests > 0);
 	disp->requests--;
+
 	dec_stats(disp->mgr, (qid == disp->mgr->qid)
 				     ? dns_resstatscounter_disprequdp
 				     : dns_resstatscounter_dispreqtcp);
-	deactivate_dispentry(disp, resp);
-	UNLOCK(&disp->lock);
 
-	bucket = resp->bucket;
+	deactivate_dispentry(disp, resp);
 
 	LOCK(&qid->lock);
-	ISC_LIST_UNLINK(qid->qid_table[bucket], resp, link);
+	ISC_LIST_UNLINK(qid->qid_table[resp->bucket], resp, link);
 	UNLOCK(&qid->lock);
+	UNLOCK(&disp->lock);
 
 	dispentry_detach(respp);
 }
