@@ -615,6 +615,11 @@ udp_connect_direct(isc_nmsocket_t *sock, isc__nm_uvreq_t *req) {
 	RUNTIME_CHECK(r == 0);
 	uv_handle_set_data((uv_handle_t *)&sock->timer, sock);
 
+	if (isc__nm_closing(sock)) {
+		result = ISC_R_SHUTTINGDOWN;
+		goto error;
+	}
+
 	r = uv_udp_open(&sock->uv_handle.udp, sock->fd);
 	if (r != 0) {
 		isc__nm_incstats(sock->mgr, sock->statsindex[STATID_OPENFAIL]);
@@ -656,6 +661,7 @@ udp_connect_direct(isc_nmsocket_t *sock, isc__nm_uvreq_t *req) {
 
 done:
 	result = isc__nm_uverr2result(r);
+error:
 
 	LOCK(&sock->lock);
 	sock->result = result;
@@ -860,15 +866,22 @@ void
 isc__nm_async_udpread(isc__networker_t *worker, isc__netievent_t *ev0) {
 	isc__netievent_udpread_t *ievent = (isc__netievent_udpread_t *)ev0;
 	isc_nmsocket_t *sock = ievent->sock;
+	isc_result_t result = ISC_R_SUCCESS;
 
 	UNUSED(worker);
 
 	REQUIRE(VALID_NMSOCK(sock));
 	REQUIRE(sock->tid == isc_nm_tid());
 
-	if (isc__nmsocket_closing(sock)) {
+	if (isc__nm_closing(sock)) {
+		result = ISC_R_SHUTTINGDOWN;
+	} else if (isc__nmsocket_closing(sock)) {
+		result = ISC_R_CANCELED;
+	}
+
+	if (result != ISC_R_SUCCESS) {
 		atomic_store(&sock->reading, true);
-		isc__nm_failed_read_cb(sock, ISC_R_CANCELED, false);
+		isc__nm_failed_read_cb(sock, result, false);
 		return;
 	}
 

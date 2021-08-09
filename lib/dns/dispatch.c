@@ -663,6 +663,7 @@ tcp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 		/* got our answer */
 		break;
 
+	case ISC_R_SHUTTINGDOWN:
 	case ISC_R_CANCELED:
 	case ISC_R_EOF:
 		dispatch_log(disp, LVL(90), "shutting down: %s",

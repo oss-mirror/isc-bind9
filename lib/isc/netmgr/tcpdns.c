@@ -107,7 +107,7 @@ tcpdns_connect_direct(isc_nmsocket_t *sock, isc__nm_uvreq_t *req) {
 	RUNTIME_CHECK(r == 0);
 
 	if (isc__nm_closing(sock)) {
-		result = ISC_R_CANCELED;
+		result = ISC_R_SHUTTINGDOWN;
 		goto error;
 	}
 

@@ -2236,7 +2236,7 @@ isc__nm_closing(isc_nmsocket_t *sock) {
 bool
 isc__nmsocket_closing(isc_nmsocket_t *sock) {
 	return (!isc__nmsocket_active(sock) || atomic_load(&sock->closing) ||
-		atomic_load(&sock->mgr->closing) ||
+		isc__nm_closing(sock) ||
 		(sock->server != NULL && !isc__nmsocket_active(sock->server)));
 }
 

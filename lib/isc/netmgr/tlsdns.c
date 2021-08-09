@@ -124,7 +124,7 @@ tlsdns_connect_direct(isc_nmsocket_t *sock, isc__nm_uvreq_t *req) {
 	uv_handle_set_data((uv_handle_t *)&sock->timer, sock);
 
 	if (isc__nm_closing(sock)) {
-		result = ISC_R_CANCELED;
+		result = ISC_R_SHUTTINGDOWN;
 		goto error;
 	}
 
@@ -344,6 +344,7 @@ isc_nm_tlsdnsconnect(isc_nm_t *mgr, isc_sockaddr_t *local, isc_sockaddr_t *peer,
 	}
 
 	if (isc__nm_closing(sock)) {
+		result = ISC_R_SHUTTINGDOWN;
 		goto failure;
 	}
 
@@ -373,6 +374,7 @@ isc_nm_tlsdnsconnect(isc_nm_t *mgr, isc_sockaddr_t *local, isc_sockaddr_t *peer,
 	BROADCAST(&sock->scond);
 	UNLOCK(&sock->lock);
 	return;
+
 failure:
 	if (isc__nm_in_netthread()) {
 		sock->tid = isc_nm_tid();
