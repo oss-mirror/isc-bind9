@@ -354,8 +354,15 @@ response(isc_result_t eresult, isc_region_t *region, void *arg) {
 	fprintf(stderr, "%s(..., %s, ...)\n", __func__,
 		isc_result_totext(eresult));
 
-	testdata.responses++;
-	testdata.result = eresult;
+	switch (eresult) {
+	case ISC_R_EOF:
+	case ISC_R_CANCELED:
+	case ISC_R_SHUTTINGDOWN:
+		break;
+	default:
+		testdata.responses++;
+		testdata.result = eresult;
+	}
 
 	uv_sem_post(&sem);
 }
