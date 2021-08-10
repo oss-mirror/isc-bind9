@@ -17,6 +17,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <isc/atomic.h>
 #include <isc/mem.h>
 #include <isc/mutex.h>
 #include <isc/netmgr.h>
@@ -101,7 +102,7 @@ struct dns_dispentry {
 #endif /* ifndef DNS_DISPATCH_UDPBUFSIZE */
 
 typedef enum {
-	DNS_DISPATCHSTATE_NONE = 0,
+	DNS_DISPATCHSTATE_NONE = 0UL,
 	DNS_DISPATCHSTATE_CONNECTING,
 	DNS_DISPATCHSTATE_CONNECTED
 } dns_dispatchstate_t;
@@ -123,7 +124,7 @@ struct dns_dispatch {
 	/* Locked by "lock". */
 	isc_mutex_t lock; /*%< locks all below */
 	isc_socktype_t socktype;
-	_Atomic dns_dispatchstate_t state;
+	atomic_uint_fast32_t state;
 	isc_refcount_t references;
 	unsigned int shutdown_out : 1;
 
@@ -1628,7 +1629,7 @@ tcp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 	if (eresult == ISC_R_SUCCESS) {
 		REQUIRE(atomic_compare_exchange_strong(
 			&disp->state,
-			&(dns_dispatchstate_t){ DNS_DISPATCHSTATE_CONNECTING },
+			&(uint_fast32_t){ DNS_DISPATCHSTATE_CONNECTING },
 			DNS_DISPATCHSTATE_CONNECTED));
 
 		startrecv(handle, disp, NULL);
@@ -1673,7 +1674,7 @@ udp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 isc_result_t
 dns_dispatch_connect(dns_dispentry_t *resp) {
 	dns_dispatch_t *disp = NULL;
-	dns_dispatchstate_t state = DNS_DISPATCHSTATE_NONE;
+	uint_fast32_t state = DNS_DISPATCHSTATE_NONE;
 
 	REQUIRE(VALID_RESPONSE(resp));
 
@@ -1688,7 +1689,8 @@ dns_dispatch_connect(dns_dispentry_t *resp) {
 		 * Check whether the dispatch is already connecting
 		 * or connected.
 		 */
-		atomic_compare_exchange_strong(&disp->state, &state,
+		atomic_compare_exchange_strong(&disp->state,
+					       (uint_fast32_t *)&state,
 					       DNS_DISPATCHSTATE_CONNECTING);
 
 		switch (state) {
