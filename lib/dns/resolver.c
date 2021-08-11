@@ -7739,7 +7739,6 @@ rctx_dispfail(respctx_t *rctx) {
 		 * There's no hope for this response.
 		 */
 		rctx->next_server = true;
-
 		/*
 		 * If this is a network error, mark the server as bad so
 		 * that we won't try it for this fetch again.  Also
@@ -7784,8 +7783,12 @@ rctx_timedout(respctx_t *rctx) {
 		} else {
 			FCTXTRACE("query timed out; no response");
 			rctx->no_response = true;
-			rctx->resend = true;
 			rctx->finish = NULL;
+			if (!ISFORWARDER(rctx->query->addrinfo) ||
+			    fctx->fwdpolicy != dns_fwdpolicy_first)
+			{
+				rctx->resend = true;
+			}
 		}
 
 		rctx_done(rctx, rctx->result);
