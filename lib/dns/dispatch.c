@@ -92,6 +92,7 @@ struct dns_dispentry {
 	ISC_LINK(dns_dispentry_t) link;
 	ISC_LINK(dns_dispentry_t) alink;
 	ISC_LINK(dns_dispentry_t) plink;
+	ISC_LINK(dns_dispentry_t) rlink;
 };
 
 /*%
@@ -440,6 +441,9 @@ __dispentry_destroy(dns_dispentry_t *resp) {
 		ISC_LIST_UNLINK(disp->pending, resp, plink);
 	}
 
+	INSIST(!ISC_LINK_LINKED(resp, alink));
+	INSIST(!ISC_LINK_LINKED(resp, rlink));
+
 	if (resp->handle != NULL) {
 		isc_nmhandle_detach(&resp->handle);
 	}
@@ -634,7 +638,7 @@ static void
 tcp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	 void *arg) {
 	dns_dispatch_t *disp = (dns_dispatch_t *)arg;
-	dns_dispentry_t *resp = NULL;
+	dns_dispentry_t *resp = NULL, *next = NULL;
 	dns_messageid_t id;
 	isc_result_t dres;
 	unsigned int flags;
@@ -644,7 +648,7 @@ tcp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 	char buf[ISC_SOCKADDR_FORMATSIZE];
 	isc_buffer_t source;
 	isc_sockaddr_t peer;
-	dns_displist_t empty, resps;
+	dns_displist_t resps;
 
 	REQUIRE(VALID_DISPATCH(disp));
 
@@ -672,9 +676,12 @@ tcp_recv(isc_nmhandle_t *handle, isc_result_t eresult, isc_region_t *region,
 		/*
 		 * If there are any active responses, shut them all down.
 		 */
-		ISC_LIST_INIT(empty);
-		resps = disp->active;
-		disp->active = empty;
+		for (resp = ISC_LIST_HEAD(disp->active); resp != NULL;
+		     resp = next) {
+			next = ISC_LIST_NEXT(resp, alink);
+			ISC_LIST_UNLINK(disp->active, resp, alink);
+			ISC_LIST_APPEND(resps, resp, rlink);
+		}
 		goto done;
 
 	case ISC_R_TIMEDOUT:
@@ -756,11 +763,10 @@ done:
 		/* answer or timeout */
 		resp->response(eresult, region, resp->arg);
 	} else {
-		/* cancel all the resps */
-		dns_dispentry_t *next = NULL;
+		/* cancel all the outstanding resps */
 		for (resp = ISC_LIST_HEAD(resps); resp != NULL; resp = next) {
-			next = ISC_LIST_NEXT(resp, link);
-			ISC_LIST_UNLINK(resps, resp, alink);
+			next = ISC_LIST_NEXT(resp, rlink);
+			ISC_LIST_UNLINK(resps, resp, rlink);
 			resp->response(ISC_R_SHUTTINGDOWN, region, resp->arg);
 		}
 	}
@@ -1427,6 +1433,7 @@ dns_dispatch_addresponse(dns_dispatch_t *disp, unsigned int options,
 	ISC_LINK_INIT(res, link);
 	ISC_LINK_INIT(res, alink);
 	ISC_LINK_INIT(res, plink);
+	ISC_LINK_INIT(res, rlink);
 
 	if (disp->socktype == isc_socktype_udp) {
 		isc_result_t result = setup_socket(disp, res, dest, &localport);
