@@ -1095,7 +1095,11 @@ isc__nm_udp_shutdown(isc_nmsocket_t *sock) {
 	 * interested in the callback.
 	 */
 	if (sock->statichandle != NULL) {
-		isc__nm_failed_read_cb(sock, ISC_R_CANCELED, false);
+		if (isc__nm_closing(sock)) {
+			isc__nm_failed_read_cb(sock, ISC_R_SHUTTINGDOWN, false);
+		} else {
+			isc__nm_failed_read_cb(sock, ISC_R_CANCELED, false);
+		}
 		return;
 	}
 

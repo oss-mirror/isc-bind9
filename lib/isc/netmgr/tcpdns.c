@@ -217,7 +217,11 @@ tcpdns_connect_cb(uv_connect_t *uvreq, int status) {
 	REQUIRE(VALID_NMHANDLE(req->handle));
 
 	if (isc__nmsocket_closing(sock)) {
-		/* Socket was closed midflight by isc__nm_tcpdns_shutdown() */
+		/* Network manager shutting down */
+		result = ISC_R_SHUTTINGDOWN;
+		goto error;
+	} else if (isc__nmsocket_closing(sock)) {
+		/* Connection canceled */
 		result = ISC_R_CANCELED;
 		goto error;
 	} else if (status == UV_ETIMEDOUT) {
@@ -1394,7 +1398,11 @@ isc__nm_tcpdns_shutdown(isc_nmsocket_t *sock) {
 	}
 
 	if (sock->statichandle != NULL) {
-		isc__nm_failed_read_cb(sock, ISC_R_CANCELED, false);
+		if (isc__nm_closing(sock)) {
+			isc__nm_failed_read_cb(sock, ISC_R_SHUTTINGDOWN, false);
+		} else {
+			isc__nm_failed_read_cb(sock, ISC_R_CANCELED, false);
+		}
 		return;
 	}
 

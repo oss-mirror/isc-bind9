@@ -1804,6 +1804,7 @@ resquery_senddone(isc_result_t eresult, isc_region_t *region, void *arg) {
 	switch (eresult) {
 	case ISC_R_SUCCESS:
 	case ISC_R_CANCELED:
+	case ISC_R_SHUTTINGDOWN:
 		break;
 
 	case ISC_R_HOSTUNREACH:
@@ -2862,6 +2863,13 @@ resquery_connected(isc_result_t eresult, isc_region_t *region, void *arg) {
 		break;
 
 	case ISC_R_CANCELED:
+		break;
+
+	case ISC_R_SHUTTINGDOWN:
+		FCTXTRACE3("shutdown in resquery_connected(): no response",
+			   eresult);
+		fctx_cancelquery(query, NULL, true, false);
+		fctx_done(fctx, eresult, __LINE__);
 		break;
 
 	case ISC_R_NETUNREACH:
@@ -7748,7 +7756,8 @@ rctx_dispfail(respctx_t *rctx) {
 		if (rctx->result == ISC_R_HOSTUNREACH ||
 		    rctx->result == ISC_R_NETUNREACH ||
 		    rctx->result == ISC_R_CONNREFUSED ||
-		    rctx->result == ISC_R_CANCELED)
+		    rctx->result == ISC_R_CANCELED ||
+		    rctx->result == ISC_R_SHUTTINGDOWN)
 		{
 			rctx->broken_server = rctx->result;
 			rctx->broken_type = badns_unreachable;
