@@ -45,7 +45,7 @@ offer support on a "best effort" basis for some.
 As of Nov 2020, BIND 9.16 is fully supported and regularly tested on the
 following systems:
 
-* Debian 9, 10
+* Debian 9, 10, 11
 * Ubuntu LTS 18.04, 20.04
 * Fedora 34
 * Red Hat Enterprise Linux / CentOS 7, 8
