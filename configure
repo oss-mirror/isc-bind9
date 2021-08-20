@@ -12596,11 +12596,11 @@ else
 fi
 
 
-if test "$with_python" = "yes"; then :
+if test "yes" = "$with_python"; then :
   with_python=$default_with_python
 fi
 
-if test "$with_python" = "no"; then :
+if test "no" = "$with_python"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: checking for Python support" >&5
 $as_echo_n "checking for Python support... " >&6; }
        unset PYTHON
@@ -17962,7 +17962,7 @@ $as_echo_n "checking for using OpenSSL for hash functions... " >&6; }
 ISC_PLATFORM_OPENSSLHASH="#undef ISC_PLATFORM_OPENSSLHASH"
 case $want_openssl_hash in
 	yes)
-		if test "$CRYPTO" != "-DOPENSSL"
+		if test "X$CRYPTO" != "X-DOPENSSL"
 		then
 			as_fn_error $? "No OpenSSL for hash functions" "$LINENO" 5
 		fi
@@ -23707,7 +23707,7 @@ case $use_libidn2 in #(
      ;;
 esac
 
-if test "$use_libidn2" != "no"; then :
+if test "no" != "$use_libidn2"; then :
   save_CFLAGS="$CFLAGS"
        save_LIBS="$LIBS"
        save_LDFLAGS="$LDFLAGS"
@@ -23813,15 +23813,15 @@ fi
 #
 
 # check if idnkit and libidn2 are not used at the same time
-if test "$use_idnkit" != no && test "$use_libidn2" != no; then
+if test "no" != "$use_idnkit" && test "no" != "$use_libidn2"; then
     as_fn_error $? "idnkit and libidn2 cannot be used at the same time." "$LINENO" 5
 fi
 # the IDN support is on
-if test "$use_idnkit" != no || test "$use_libidn2" != no; then
+if test "no" != "$use_idnkit" || test "no" != "$use_libidn2"; then
 
 $as_echo "#define WITH_IDN_SUPPORT 1" >>confdefs.h
 
-	if test "$use_libidn2" = no || test "$use_libidn2_out" != no; then
+	if test "no" = "$use_libidn2" || test "no" != "$use_libidn2_out"; then
 
 $as_echo "#define WITH_IDN_OUT_SUPPORT 1" >>confdefs.h
 
@@ -24040,7 +24040,7 @@ esac
 # and bail out if execution engine was not found
 #
 
-if test "$with_cmocka" != "no"; then :
+if test "no" != "$with_cmocka"; then :
   for ac_prog in kyua
 do
   # Extract the first word of "$ac_prog", so it can be a program name with args.
@@ -24383,7 +24383,7 @@ esac
 #
 # If PIC is disabled, dlopen must also be
 #
-if test "$pic_mode" = "no"; then :
+if test "no" = "$pic_mode"; then :
   case $with_dlopen in #(
   auto) :
     with_dlopen="no" ;; #(
@@ -24473,14 +24473,14 @@ done
      ;;
 esac
 
-if test "$with_dlopen" = "yes"; then :
+if test "yes" = "$with_dlopen"; then :
   case $host in #(
   *-linux*|*-gnu*) :
 
 		 LDFLAGS="${LDFLAGS} -Wl,--export-dynamic"
 		 SO_CFLAGS="-fPIC"
 		 SO_LDFLAGS=""
-		 if test "$use_libtool" = "yes"; then :
+		 if test "yes" = "$use_libtool"; then :
 
 			 SO_LDFLAGS="-Xcompiler -shared"
 			 SO_LD="${CC}"
@@ -24496,7 +24496,7 @@ fi
 
 		 LDFLAGS="${LDFLAGS} -Wl,-E"
 		 SO_CFLAGS="-fpic"
-		 if test "$use_libtool" = "yes"; then :
+		 if test "yes" = "$use_libtool"; then :
 
 			 SO_LDFLAGS="-Xcompiler -shared"
 			 SO_LD="${CC}"
@@ -24512,7 +24512,7 @@ fi
 
 		 SO_CFLAGS="-fPIC"
                  SO_LD="${CC}"
-		 if test "$use_libtool" = "yes"; then :
+		 if test "yes" = "$use_libtool"; then :
 
 			 SO_LDFLAGS="-Xcompiler -dynamiclib -undefined dynamic_lookup"
 
@@ -24539,11 +24539,11 @@ fi
 		 SO_CFLAGS="-fPIC"
 	        ;;
 esac
-       if test "$GCC" = "yes"; then :
+       if test "yes" = "$GCC"; then :
 
 	       SO_CFLAGS="-fPIC"
 	       if test -z "$SO_LD"; then :
-  if test "$use_libtool" = "yes"; then :
+  if test "yes" = "$use_libtool"; then :
 
 			      SO_LDFLAGS="-Xcompiler -shared"
 			      SO_LD="${CC}"
@@ -24569,7 +24569,7 @@ fi
 
 fi
 
-if test "$with_dlopen" = "no" -a "$want_native_pkcs11" = "yes"; then :
+if test "no" = "$with_dlopen" -a "yes" = "$want_native_pkcs11"; then :
   as_fn_error $? "PKCS11 requires dlopen() support" "$LINENO" 5
 fi
 
@@ -28054,7 +28054,7 @@ report() {
 	echo "        Filesystem (--with-dlz-filesystem)"
     test "no" = "$use_dlz_stub" || \
 	echo "        Stub (--with-dlz-stub)"
-    test "$use_dlz_bdb $use_dlz_ldap $use_dlz_mysql $use_dlz_odbc $use_dlz_postgres $use_dlz_filesystem $use_dlz_stub" = "no no no no no no no" && echo "        None"
+    test "no no no no no no no" = "$use_dlz_bdb $use_dlz_ldap $use_dlz_mysql $use_dlz_odbc $use_dlz_postgres $use_dlz_filesystem $use_dlz_stub" && echo "        None"
 
     echo "-------------------------------------------------------------------------------"
 
@@ -28111,7 +28111,7 @@ report() {
     echo "    localstatedir: $localstatedir"
     echo "-------------------------------------------------------------------------------"
     echo "Compiler: $CC"
-    if test "yes" == "$GCC"; then
+    if test "yes" = "$GCC"; then
 	$CC --version 2>&1 | sed 's/^/    /'
     else
 	case "$host_os" in

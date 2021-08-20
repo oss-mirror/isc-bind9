@@ -288,10 +288,10 @@ AC_ARG_WITH([python-install-dir],
 			   [installation directory for Python modules]),
 	    [], with_python_install_dir="")
 
-AS_IF([test "$with_python" = "yes"],
+AS_IF([test "yes" = "$with_python"],
       [with_python=$default_with_python])
 
-AS_IF([test "$with_python" = "no"],
+AS_IF([test "no" = "$with_python"],
       [AC_MSG_CHECKING([for Python support])
        unset PYTHON
        AC_MSG_RESULT([disabled])],
@@ -2154,7 +2154,7 @@ AC_MSG_CHECKING(for using OpenSSL for hash functions)
 ISC_PLATFORM_OPENSSLHASH="#undef ISC_PLATFORM_OPENSSLHASH"
 case $want_openssl_hash in
 	yes)
-		if test "$CRYPTO" != "-DOPENSSL"
+		if test "X$CRYPTO" != "X-DOPENSSL"
 		then
 			AC_MSG_ERROR([No OpenSSL for hash functions])
 		fi
@@ -4883,7 +4883,7 @@ AS_CASE([$use_libidn2],
 	    LIBIDN2_LDFLAGS="-L$use_libidn2/lib"
 	])
 
-AS_IF([test "$use_libidn2" != "no"],
+AS_IF([test "no" != "$use_libidn2"],
       [save_CFLAGS="$CFLAGS"
        save_LIBS="$LIBS"
        save_LDFLAGS="$LDFLAGS"
@@ -4911,13 +4911,13 @@ AC_SUBST([LIBIDN2_LIBS])
 #
 
 # check if idnkit and libidn2 are not used at the same time
-if test "$use_idnkit" != no && test "$use_libidn2" != no; then
+if test "no" != "$use_idnkit" && test "no" != "$use_libidn2"; then
     AC_MSG_ERROR([idnkit and libidn2 cannot be used at the same time.])
 fi
 # the IDN support is on
-if test "$use_idnkit" != no || test "$use_libidn2" != no; then
+if test "no" != "$use_idnkit" || test 'no" != "$use_libidn2"; then
 	AC_DEFINE(WITH_IDN_SUPPORT, 1, [define if IDN input support is to be included.])
-	if test "$use_libidn2" = no || test "$use_libidn2_out" != no; then
+	if test "no" != "$use_libidn2" || test "no" != "$use_libidn2_out"; then
 		AC_DEFINE(WITH_IDN_OUT_SUPPORT, 1, [define if IDN output support is to be included.])
 	fi
 fi
@@ -4965,7 +4965,7 @@ AC_SUBST([CMOCKA_LIBS])
 # and bail out if execution engine was not found
 #
 AC_ARG_VAR([KYUA], [path to kyua execution engine])
-AS_IF([test "$with_cmocka" != "no"],
+AS_IF([test "no" != "$with_cmocka"],
       [AC_PATH_PROGS([KYUA], [kyua], [])
        AS_IF([test -z "$KYUA"],
              [AC_MSG_WARN([kyua test execution engine not found])],
@@ -5196,7 +5196,7 @@ AS_CASE([$host],[*-sunos*],[with_dlopen="no"])
 #
 # If PIC is disabled, dlopen must also be
 #
-AS_IF([test "$pic_mode" = "no"],
+AS_IF([test "no" = "$pic_mode"],
       [AS_CASE([$with_dlopen],
 	       [auto],[with_dlopen="no"],
 	       [yes],[AC_MSG_ERROR([--with-dlopen requires PIC])])])
@@ -5210,13 +5210,13 @@ AS_CASE([$with_dlopen],
 			 [with_dlopen="no"])
 	])
 
-AS_IF([test "$with_dlopen" = "yes"],
+AS_IF([test "yes" = "$with_dlopen"],
       [AS_CASE([$host],
 	       [*-linux*|*-gnu*],[
 		 LDFLAGS="${LDFLAGS} -Wl,--export-dynamic"
 		 SO_CFLAGS="-fPIC"
 		 SO_LDFLAGS=""
-		 AS_IF([test "$use_libtool" = "yes"],[
+		 AS_IF([test "yes" = "$use_libtool"],[
 			 SO_LDFLAGS="-Xcompiler -shared"
 			 SO_LD="${CC}"
 		       ],[
@@ -5227,7 +5227,7 @@ AS_IF([test "$with_dlopen" = "yes"],
 	       [*-freebsd*|*-openbsd*|*-netbsd*],[
 		 LDFLAGS="${LDFLAGS} -Wl,-E"
 		 SO_CFLAGS="-fpic"
-		 AS_IF([test "$use_libtool" = "yes"],[
+		 AS_IF([test "yes" = "$use_libtool"],[
 			 SO_LDFLAGS="-Xcompiler -shared"
 			 SO_LD="${CC}"
 		       ],[
@@ -5238,7 +5238,7 @@ AS_IF([test "$with_dlopen" = "yes"],
 	       [*-darwin*],[
 		 SO_CFLAGS="-fPIC"
                  SO_LD="${CC}"
-		 AS_IF([test "$use_libtool" = "yes"],[
+		 AS_IF([test "yes" = "$use_libtool"],[
 			 SO_LDFLAGS="-Xcompiler -dynamiclib -undefined dynamic_lookup"
 		       ],[
 			 SO_LDFLAGS="-dynamiclib -undefined dynamic_lookup"
@@ -5257,10 +5257,10 @@ AS_IF([test "$with_dlopen" = "yes"],
 	       [
 		 SO_CFLAGS="-fPIC"
 	       ])
-       AS_IF([test "$GCC" = "yes"],[
+       AS_IF([test "yes" = "$GCC"],[
 	       SO_CFLAGS="-fPIC"
 	       AS_IF([test -z "$SO_LD"],
-		     [AS_IF([test "$use_libtool" = "yes"],[
+		     [AS_IF([test "yes" = "$use_libtool"],[
 			      SO_LDFLAGS="-Xcompiler -shared"
 			      SO_LD="${CC}"
 			    ],[
@@ -5277,7 +5277,7 @@ AS_IF([test "$with_dlopen" = "yes"],
 	     ])
       ])
 
-AS_IF([test "$with_dlopen" = "no" -a "$want_native_pkcs11" = "yes"],
+AS_IF([test "no" = "$with_dlopen" -a "yes" = "$want_native_pkcs11"],
       [AC_MSG_ERROR([PKCS11 requires dlopen() support])])
 
 CFLAGS="$CFLAGS $SO_CFLAGS"
@@ -5712,7 +5712,7 @@ report() {
 	echo "        Filesystem (--with-dlz-filesystem)"
     test "no" = "$use_dlz_stub" || \
 	echo "        Stub (--with-dlz-stub)"
-    test "$use_dlz_bdb $use_dlz_ldap $use_dlz_mysql $use_dlz_odbc $use_dlz_postgres $use_dlz_filesystem $use_dlz_stub" = "no no no no no no no" && echo "        None"
+    test "no no no no no no no" = "$use_dlz_bdb $use_dlz_ldap $use_dlz_mysql $use_dlz_odbc $use_dlz_postgres $use_dlz_filesystem $use_dlz_stub" && echo "        None"
 
     echo "-------------------------------------------------------------------------------"
 
@@ -5769,7 +5769,7 @@ report() {
     echo "    localstatedir: $localstatedir"
     echo "-------------------------------------------------------------------------------"
     echo "Compiler: $CC"
-    if test "yes" == "$GCC"; then
+    if test "yes" = "$GCC"; then
 	$CC --version 2>&1 | sed 's/^/    /'
     else
 	case "$host_os" in
