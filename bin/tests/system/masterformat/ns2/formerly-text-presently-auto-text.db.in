@@ -9,15 +9,15 @@
 
 $ORIGIN .
 $TTL 86400	; 1 day
-transfer4		IN SOA	ns.transfer4. hostmaster.transfer4. (
+transfer5		IN SOA	ns.transfer5. hostmaster.transfer5. (
 				1          ; serial
 				3600       ; refresh (1 hour)
 				1800       ; retry (30 minutes)
 				1814400    ; expire (3 weeks)
 				3          ; minimum (3 seconds)
 				)
-			NS	ns.transfer4.
-$ORIGIN transfer4.
+			NS	ns.transfer5.
+$ORIGIN transfer5.
 a			A	10.53.0.1
 			A	10.53.0.2
 aaaa			AAAA	2001:db8::53
@@ -35,7 +35,7 @@ $TTL 86400	; 1 day
 mx			MX	10 mail
 ns			A	10.53.0.1
 $TTL 600	; 10 minutes
-nsec			NSEC	nsecnext.transfer4. NS DS RRSIG NSEC
+nsec			NSEC	nsecnext.transfer5. NS DS RRSIG NSEC
 $TTL 300	; 5 minutes
 rrsig			RRSIG	SOA 1 0 300 (
 				20050714214747 20050614214747 30795 .

@@ -144,11 +144,18 @@ status=$((status+ret))
 echo_i "waiting for transfers to complete"
 for i in 0 1 2 3 4 5 6 7 8 9
 do
-	test -f ns2/transfer.db.raw -a -f ns2/transfer.db.txt && break
+	test -f ns2/transfer.db.raw -a -f ns2/transfer.db.auto.raw -a -f ns2/transfer.db.txt && break
 	sleep 1
 done
 
 echo_i "checking that secondary was saved in raw format by default ($n)"
+ret=0
+israw ns2/transfer.db.raw || ret=1
+n=$((n+1))
+[ $ret -eq 0 ] || echo_i "failed"
+status=$((status+ret))
+
+echo_i "checking that secondary was saved in raw format when configured as auto ($n)"
 ret=0
 israw ns2/transfer.db.raw || ret=1
 n=$((n+1))
@@ -176,6 +183,20 @@ do
     ret=0
     israw ns2/formerly-text.db > /dev/null 2>&1 || ret=1
     [ "$(rawversion ns2/formerly-text.db)" -eq 1 ] || ret=1
+    [ $ret -eq 0 ] && break
+    sleep 1
+done
+n=$((n+1))
+[ $ret -eq 0 ] || echo_i "failed"
+status=$((status+ret))
+
+echo_i "checking that secondary formerly in text format is now in text format too, using auto ($n)"
+for i in 0 1 2 3 4 5 6 7 8 9
+do
+    ret=0
+    test -f ns2/formerly-text-presently-auto-text.db > /dev/null 2>&1 || ret=1
+    israw ns2/formerly-text-presently-auto-text.db > /dev/null 2>&1 && ret=1
+    ismap ns2/formerly-text-presently-auto-text.db > /dev/null 2>&1 && ret=1
     [ $ret -eq 0 ] && break
     sleep 1
 done

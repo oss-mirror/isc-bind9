@@ -35,17 +35,31 @@ zone "transfer1" {
 zone "transfer2" {
 	type secondary;
 	primaries { 10.53.0.1; };
-	masterfile-format text;
-	file "transfer.db.txt";
+	masterfile-format auto;
+	file "transfer.db.auto.raw";
 };
 
 zone "transfer3" {
 	type secondary;
 	primaries { 10.53.0.1; };
-	file "formerly-text.db";
+	masterfile-format text;
+	file "transfer.db.txt";
 };
 
 zone "transfer4" {
+	type secondary;
+	primaries { 10.53.0.1; };
+	file "formerly-text.db";
+};
+
+zone "transfer5" {
+	type secondary;
+	primaries { 10.53.0.1; };
+	masterfile-format auto;
+	file "formerly-text-presently-auto-text.db";
+};
+
+zone "transfer6" {
 	type secondary;
 	primaries { 10.53.0.1; };
 	masterfile-format text;

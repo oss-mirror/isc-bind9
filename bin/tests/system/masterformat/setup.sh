@@ -20,6 +20,7 @@ copy_setports ns3/named.conf.in ns3/named.conf
 
 cp ns1/example.db ns2/
 cp ns2/formerly-text.db.in ns2/formerly-text.db
+cp ns2/formerly-text-presently-auto-text.db.in ns2/formerly-text-presently-auto-text.db
 cp ns1/large.db.in ns1/large.db
 awk 'END {
 	 for (i = 0; i < 512; i++ ) { print "a TXT", i; }

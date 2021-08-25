@@ -67,6 +67,17 @@ zone "transfer4" {
 	allow-transfer { any; };
 };
 
+zone "transfer5" {
+	type primary;
+	file "example.db";
+	allow-transfer { any; };
+};
+
+zone "transfer6" {
+	type primary;
+	file "example.db";
+	allow-transfer { any; };
+};
 
 zone "large" {
 	type primary;

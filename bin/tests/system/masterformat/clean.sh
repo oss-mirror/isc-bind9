@@ -23,6 +23,7 @@ rm -f ./*/named.run
 rm -f ./ns2/example.db
 rm -f ./ns2/transfer.db.*
 rm -f ./ns2/formerly-text.db
+rm -f ./ns2/formerly-text-presently-auto-text.db
 rm -f ./ns2/db-*
 rm -f ./ns2/large.bk
 rm -f ./ns3/example.db.map ./ns3/dynamic.db.map
