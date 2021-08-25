@@ -437,6 +437,18 @@ configure_zone(const char *vclass, const char *view, const cfg_obj_t *zconfig,
 			masterformat = dns_masterformat_raw;
 		} else if (strcasecmp(masterformatstr, "map") == 0) {
 			masterformat = dns_masterformat_map;
+		} else if (strcasecmp(masterformatstr, "auto") == 0) {
+			result = dns_master_masterformat_autodetect(
+				zfile, &masterformat);
+			if (result != ISC_R_SUCCESS &&
+			    result != ISC_R_FILENOTFOUND) {
+				fprintf(stderr,
+					"%s/%s/%s: 'masterfile-format auto': "
+					"%s\n",
+					view, zname, zclass,
+					dns_result_totext(result));
+				return (result);
+			}
 		} else {
 			INSIST(0);
 			ISC_UNREACHABLE();

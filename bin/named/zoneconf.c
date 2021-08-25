@@ -1053,6 +1053,19 @@ named_zone_configure(const cfg_obj_t *config, const cfg_obj_t *vconfig,
 			masterformat = dns_masterformat_raw;
 		} else if (strcasecmp(masterformatstr, "map") == 0) {
 			masterformat = dns_masterformat_map;
+		} else if (strcasecmp(masterformatstr, "auto") == 0) {
+			result = dns_master_masterformat_autodetect(
+				filename, &masterformat);
+			if (result != ISC_R_SUCCESS &&
+			    result != ISC_R_FILENOTFOUND) {
+				isc_log_write(
+					named_g_lctx, NAMED_LOGCATEGORY_GENERAL,
+					NAMED_LOGMODULE_SERVER, ISC_LOG_ERROR,
+					"zone '%s': "
+					"'masterfile-format auto': %s\n",
+					zname, dns_result_totext(result));
+				return (ISC_R_FAILURE);
+			}
 		} else {
 			INSIST(0);
 			ISC_UNREACHABLE();
@@ -1068,7 +1081,9 @@ named_zone_configure(const cfg_obj_t *config, const cfg_obj_t *vconfig,
 			cfg_obj_log(obj, named_g_lctx, ISC_LOG_ERROR,
 				    "zone '%s': 'masterfile-style' "
 				    "can only be used with "
-				    "'masterfile-format text'",
+				    "'masterfile-format text' or "
+				    "'masterfile-format auto' with an "
+				    "auto-detected format of 'text'",
 				    zname);
 			return (ISC_R_FAILURE);
 		}
@@ -1089,7 +1104,9 @@ named_zone_configure(const cfg_obj_t *config, const cfg_obj_t *vconfig,
 		isc_log_write(named_g_lctx, NAMED_LOGCATEGORY_GENERAL,
 			      NAMED_LOGMODULE_SERVER, ISC_LOG_ERROR,
 			      "zone '%s': 'max-zone-ttl' is not compatible "
-			      "with 'masterfile-format map'",
+			      "with 'masterfile-format map' or "
+			      "'masterfile-format auto' with an "
+			      "auto-detected format of 'map'",
 			      zname);
 		return (ISC_R_FAILURE);
 	} else if (result == ISC_R_SUCCESS) {

@@ -3582,10 +3582,17 @@ Tuning
    ``masterfile-format`` statement within the ``zone`` or ``view`` block
    in the configuration file.
 
+   When set to ``auto``, BIND 9 will try to automatically detect the used
+   format, based on the existing file on the disk. When the file does not
+   exist ``auto`` will be equal to the default value of ``text``, except
+   for secondary and mirror zones in which case ``auto`` will be equal to
+   the default value of ``raw``.
+
 ``masterfile-style``
    This specifies the formatting of zone files during dump, when the
-   ``masterfile-format`` is ``text``. This option is ignored with any
-   other ``masterfile-format``.
+   ``masterfile-format`` is ``text`` or when ``masterfile-format`` is
+   ``auto`` with an auto-detected value of ``text``. This option is ignored
+   with any other ``masterfile-format``.
 
    When set to ``relative``, records are printed in a multi-line format,
    with owner names expressed relative to a shared origin. When set to
@@ -5125,9 +5132,10 @@ The following options can be specified in a ``dnssec-policy`` statement:
   ``max-zone-ttl``
     Like the ``max-zone-ttl`` zone option, this specifies the maximum
     permissible TTL value, in seconds, for the zone.  When loading a
-    zone file using a ``masterfile-format`` of ``text`` or ``raw``, any
-    record encountered with a TTL higher than ``max-zone-ttl`` is capped
-    at the maximum permissible TTL value.
+    zone file using a ``masterfile-format`` of ``text`` or ``raw``, or
+    using ``masterfile-format`` of ``auto`` with auto-detected values of
+    either ``text`` or ``raw``, any record encountered with a TTL higher
+    than ``max-zone-ttl`` is capped at the maximum permissible TTL value.
 
     This is needed in DNSSEC-maintained zones because when rolling to a
     new DNSKEY, the old key needs to remain available until RRSIG

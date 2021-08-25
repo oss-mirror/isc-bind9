@@ -257,6 +257,34 @@ dns_master_initrawheader(dns_masterrawheader_t *header);
  * Initializes the header for a raw master file, setting all
  * values to zero.
  */
+
+isc_result_t
+dns_master_masterformat_autodetect(const char *	       master_file,
+				   dns_masterformat_t *result_masterformat);
+/*%<
+ * Autodetects the master file's format.
+ *
+ * There are no heuristics, it is expected that the given master file is in one
+ * of the supported formats - "text", "raw", or "map".
+ *
+ * The "raw" and "map" type master files have a specific header, which will
+ * be recognized by this function. If neither of those formats are detected,
+ * the functions will assume that the given master file is in "text" format.
+ *
+ * Requires:
+ *\li	'master_file' points to a valid string.
+ *\li	'result_masterformat != NULL'.
+ *
+ * Ensures:
+ *\li	'*result_masterformat' is not altered when the return value is not
+ *		ISC_R_SUCCESS.
+ *
+ * Returns:
+ *\li	ISC_R_SUCCESS upon successfully detection.
+ *\li	ISC_R_FILENOTFOUND when the master_file was not found.
+ *\li	Any isc_stdio_read() error code.
+ *\li	Any isc_stdio_close() error code.
+ */
 ISC_LANG_ENDDECLS
 
 #endif /* DNS_MASTER_H */

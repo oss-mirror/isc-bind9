@@ -1410,7 +1410,8 @@ static cfg_type_t cfg_type_mustbesecure = {
 	cfg_doc_tuple,	&cfg_rep_tuple,	 mustbesecure_fields
 };
 
-static const char *masterformat_enums[] = { "map", "raw", "text", NULL };
+static const char *masterformat_enums[] = { "map", "raw", "text", "auto",
+					    NULL };
 static cfg_type_t cfg_type_masterformat = {
 	"masterformat", cfg_parse_enum,	 cfg_print_ustring,
 	cfg_doc_enum,	&cfg_rep_string, &masterformat_enums

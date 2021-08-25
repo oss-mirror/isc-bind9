@@ -144,7 +144,7 @@
   	lmdb-mapsize <sizeval>;
   	lock-file ( <quoted_string> | none );
   	managed-keys-directory <quoted_string>;
-  	masterfile-format ( map | raw | text );
+  	masterfile-format ( map | raw | text | auto );
   	masterfile-style ( full | relative );
   	match-mapped-addresses <boolean>;
   	max-cache-size ( default | unlimited | <sizeval> | <percentage> );

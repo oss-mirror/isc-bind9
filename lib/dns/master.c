@@ -16,6 +16,7 @@
 
 #include <isc/atomic.h>
 #include <isc/event.h>
+#include <isc/file.h>
 #include <isc/lex.h>
 #include <isc/magic.h>
 #include <isc/mem.h>
@@ -3225,4 +3226,57 @@ dns_loadctx_cancel(dns_loadctx_t *lctx) {
 void
 dns_master_initrawheader(dns_masterrawheader_t *header) {
 	memset(header, 0, sizeof(dns_masterrawheader_t));
+}
+
+isc_result_t
+dns_master_masterformat_autodetect(const char *master_file,
+				   dns_masterformat_t *result_masterformat) {
+	FILE *f;
+	dns_masterrawheader_t header;
+	unsigned char data[sizeof header.format + sizeof header.version];
+	isc_buffer_t target;
+	isc_result_t result;
+
+	if (!isc_file_exists(master_file)) {
+		return (ISC_R_FILENOTFOUND);
+	}
+
+	result = isc_stdio_open(master_file, "rb", &f);
+	if (result != ISC_R_SUCCESS) {
+		return (result);
+	}
+
+	dns_master_initrawheader(&header);
+
+	isc_buffer_init(&target, data, sizeof data);
+
+	result = isc_stdio_read(data, sizeof data, 1, f, NULL);
+	if (result != ISC_R_SUCCESS) {
+		/*
+		 * We can't report multiple errors so ignore
+		 * the result of isc_stdio_close().
+		 */
+		(void)isc_stdio_close(f);
+		return (result);
+	}
+
+	result = isc_stdio_close(f);
+	if (result != ISC_R_SUCCESS) {
+		return (result);
+	}
+
+	isc_buffer_add(&target, (unsigned int)sizeof data);
+	header.format = isc_buffer_getuint32(&target);
+	header.version = isc_buffer_getuint32(&target);
+
+	if (((dns_masterformat_t)header.format == dns_masterformat_raw ||
+	     (dns_masterformat_t)header.format == dns_masterformat_map) &&
+	    header.version <= (uint32_t)DNS_RAWFORMAT_VERSION)
+	{
+		*result_masterformat = (dns_masterformat_t)header.format;
+	} else {
+		*result_masterformat = dns_masterformat_text;
+	}
+
+	return (ISC_R_SUCCESS);
 }

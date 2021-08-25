@@ -3350,6 +3350,13 @@ check_zoneconf(const cfg_obj_t *zconfig, const cfg_obj_t *voptions,
 			masterformat = dns_masterformat_raw;
 		} else if (strcasecmp(masterformatstr, "map") == 0) {
 			masterformat = dns_masterformat_map;
+		} else if (strcasecmp(masterformatstr, "auto") == 0) {
+			if (ztype == CFG_ZONE_SLAVE || ztype == CFG_ZONE_MIRROR)
+			{
+				masterformat = dns_masterformat_raw;
+			} else {
+				masterformat = dns_masterformat_text;
+			}
 		} else {
 			INSIST(0);
 			ISC_UNREACHABLE();
