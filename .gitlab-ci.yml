@@ -117,15 +117,15 @@ stages:
   <<: *linux_amd64
 
 .debian-buster-amd64: &debian_buster_amd64_image
-  image: "$CI_REGISTRY_IMAGE:debian-buster-amd64"
-  <<: *linux_amd64
-
-.debian-buster-amd64cross32: &debian_buster_amd64cross32_image
-  image: "$CI_REGISTRY_IMAGE:debian-buster-amd64cross32"
+  image: "$CI_REGISTRY_IMAGE-staging:debian-buster-amd64"
   <<: *linux_amd64
 
 .debian-bullseye-amd64: &debian_bullseye_amd64_image
   image: "$CI_REGISTRY_IMAGE-staging:debian-bullseye-amd64"
+  <<: *linux_amd64
+
+.debian-bullseye-amd64cross32: &debian_bullseye_amd64cross32_image
+  image: "$CI_REGISTRY_IMAGE-staging:debian-bullseye-amd64cross32"
   <<: *linux_amd64
 
 .debian-sid-amd64: &debian_sid_amd64_image
@@ -162,7 +162,7 @@ stages:
 # This is a meta image that is used as a base for non-specific jobs
 
 .base: &base_image
-  <<: *debian_buster_amd64_image
+  <<: *debian_bullseye_amd64_image
 
 ### QCOW2 Image Templates
 
@@ -508,7 +508,7 @@ tarball-create:
     - job: autoreconf
       artifacts: true
 
-# Jobs for doc builds on Debian 10 "buster" (amd64)
+# Jobs for doc builds on Debian 11 "bullseye" (amd64)
 
 docs:
   <<: *release_branch_triggering_rules
@@ -645,7 +645,7 @@ unit:gcc:stretch:amd64:
 gcc:buster:amd64:
   variables:
     CC: gcc
-    CFLAGS: "${CFLAGS_COMMON} --coverage -O0"
+    CFLAGS: "${CFLAGS_COMMON}"
     EXTRA_CONFIGURE: "--with-libidn2"
   <<: *debian_buster_amd64_image
   <<: *build_job
@@ -669,7 +669,7 @@ unit:gcc:buster:amd64:
 gcc:bullseye:amd64:
   variables:
     CC: gcc
-    CFLAGS: "${CFLAGS_COMMON}"
+    CFLAGS: "${CFLAGS_COMMON} --coverage -O0"
     EXTRA_CONFIGURE: "--with-libidn2 ${WITH_READLINE_LIBEDIT}"
   <<: *debian_bullseye_amd64_image
   <<: *build_job
@@ -688,32 +688,7 @@ unit:gcc:bullseye:amd64:
     - job: gcc:bullseye:amd64
       artifacts: true
 
-# Jobs for cross-compiled GCC builds on Debian 10 "buster" (amd64) with
-# 32-bit libraries
-
-gcc:buster:amd64cross32:
-  variables:
-    CFLAGS: "${CFLAGS_COMMON}"
-    CROSS_COMPILATION: 1
-    EXTRA_CONFIGURE: "--build=x86_64-linux-gnu --host=i686-linux-gnu --with-libidn2"
-  <<: *debian_buster_amd64cross32_image
-  <<: *build_job
-
-system:gcc:buster:amd64cross32:
-  <<: *debian_buster_amd64cross32_image
-  <<: *system_test_job
-  needs:
-    - job: gcc:buster:amd64cross32
-      artifacts: true
-
-unit:gcc:buster:amd64cross32:
-  <<: *debian_buster_amd64cross32_image
-  <<: *unit_test_job
-  needs:
-    - job: gcc:buster:amd64cross32
-      artifacts: true
-
-# Jobs for scan-build builds on Debian 10 "buster" (amd64)
+# Jobs for scan-build builds on Debian 11 "bullseye" (amd64)
 
 .scan_build: &scan_build
   - ${SCAN_BUILD} --html-title="BIND 9 ($CI_COMMIT_SHORT_SHA)"
@@ -807,7 +782,7 @@ unit:gcc:out-of-tree:
   <<: *unit_test_job
   <<: *schedules_tags_web_triggering_rules
 
-# Jobs for tarball GCC builds on Debian 10 "buster" (amd64)
+# Jobs for tarball GCC builds on Debian 11 "bullseye" (amd64)
 
 gcc:tarball:
   variables:
@@ -917,7 +892,7 @@ unit:gcc:focal:amd64:
     - job: gcc:focal:amd64
       artifacts: true
 
-# Jobs for ASAN builds on Debian 10 "buster" (amd64)
+# Jobs for ASAN builds on Debian 11 "bullseye" (amd64)
 
 gcc:asan:
   variables:
@@ -973,7 +948,7 @@ unit:clang:asan:
     - job: clang:asan
       artifacts: true
 
-# Jobs for TSAN builds on Debian 10 "buster" (amd64)
+# Jobs for TSAN builds on Debian 11 "bullseye" (amd64)
 
 gcc:tsan:
   <<: *base_image
@@ -1050,30 +1025,6 @@ unit:clang:buster:amd64:
   <<: *unit_test_job
   needs:
     - job: clang:buster:amd64
-      artifacts: true
-
-# Jobs for PKCS#11-enabled GCC builds on Debian "sid" (amd64)
-
-gcc:softhsm2.4:
-  variables:
-    CC: gcc
-    CFLAGS: "${CFLAGS_COMMON}"
-    EXTRA_CONFIGURE: "--without-jemalloc --enable-native-pkcs11 --with-pkcs11=/usr/lib/softhsm/libsofthsm2.so"
-  <<: *base_image
-  <<: *build_job
-
-system:gcc:softhsm2.4:
-  <<: *base_image
-  <<: *system_test_job
-  needs:
-    - job: gcc:softhsm2.4
-      artifacts: true
-
-unit:gcc:softhsm2.4:
-  <<: *base_image
-  <<: *unit_test_job
-  needs:
-    - job: gcc:softhsm2.4
       artifacts: true
 
 # Jobs for PKCS#11-enabled GCC builds on Fedora 34 (amd64)
@@ -1339,6 +1290,7 @@ respdiff:
     untracked: true
     expire_in: "1 day"
     when: always
+  timeout: 2h
 
 # "Stress" tests
 
@@ -1451,7 +1403,7 @@ gcov:
   <<: *default_triggering_rules
   stage: postcheck
   needs:
-    - job: system:gcc:buster:amd64
+    - job: system:gcc:bullseye:amd64
       artifacts: true
   script:
     # *.gcno and *.gcda files generated for shared library objects are created
