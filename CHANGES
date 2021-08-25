@@ -1,3 +1,9 @@
+5703.	[func]		Implement a 'masterfile-format auto' feature which
+			automatically recognizes the existing master file's
+			format or uses the default format for the particular
+			zone type when there is no existing master file.
+			[GL #2846]
+
 5702.	[bug]		Improve compatibility with DNS-over-HTTPS clients by
 			allowing HTTP/2 request headers in any order. [GL #2875]
 
