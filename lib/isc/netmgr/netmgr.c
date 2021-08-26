@@ -3347,6 +3347,33 @@ isc_nm_bad_request(isc_nmhandle_t *handle) {
 	}
 }
 
+bool
+isc_nm_xfr_allowed(isc_nmhandle_t *handle) {
+	isc_nmsocket_t *sock;
+
+	REQUIRE(VALID_NMHANDLE(handle));
+	REQUIRE(VALID_NMSOCK(handle->sock));
+
+	sock = handle->sock;
+
+	switch (sock->type) {
+	case isc_nm_tcpdnssocket:
+		return (true);
+		break;
+	case isc_nm_tlsdnssocket:
+		return (isc__nm_tlsdns_xfr_allowed(sock));
+		break;
+	default:
+		return (false);
+		break;
+	}
+
+	INSIST(0);
+	ISC_UNREACHABLE();
+
+	return (false);
+}
+
 #ifdef NETMGR_TRACE
 /*
  * Dump all active sockets in netmgr. We output to stderr

@@ -2018,3 +2018,19 @@ isc__nm_async_tlsdnscancel(isc__networker_t *worker, isc__netievent_t *ev0) {
 
 	isc__nm_failed_read_cb(sock, ISC_R_EOF, false);
 }
+
+/* Zone transfers/updates over TLS are allowed only when "dot" ALPN
+ * was negotiated.
+ *
+ * TODO: per the XoT spec, we should also check that the TLS version
+ * is >= 1.3. The check should be added here as soon as BIND has
+ * gained support for specifying TLS versions in the configuration
+ * file.
+ */
+bool
+isc__nm_tlsdns_xfr_allowed(isc_nmsocket_t *sock) {
+	REQUIRE(VALID_NMSOCK(sock));
+	REQUIRE(sock->type == isc_nm_tlsdnssocket);
+
+	return (sock->tls.alpn_negotiated);
+}
