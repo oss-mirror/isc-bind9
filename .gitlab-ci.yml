@@ -1266,7 +1266,7 @@ respdiff:
   variables:
     CC: gcc
     CFLAGS: "${CFLAGS_COMMON} -Og"
-    BIND_BASELINE_VERSION: v9_11_24
+    BIND_BASELINE_VERSION: v9_17_17
     MAX_DISAGREEMENTS_PERCENTAGE: "0.5"
   script:
     - autoreconf -fi
