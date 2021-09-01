@@ -27,6 +27,11 @@ CRYPTO_zalloc(size_t num, const char *file, int line);
 #define OPENSSL_zalloc(num) CRYPTO_zalloc(num, __FILE__, __LINE__)
 #endif
 
+#if !HAVE_EVP_PKEY_NEW_RAW_PRIVATE_KEY
+#define EVP_PKEY_new_raw_private_key(type, e, key, keylen) \
+	EVP_PKEY_new_mac_key(type, e, key, (int)(keylen))
+#endif /* if !HAVE_EVP_PKEY_NEW_RAW_PRIVATE_KEY */
+
 #if !HAVE_EVP_CIPHER_CTX_NEW
 EVP_CIPHER_CTX *
 EVP_CIPHER_CTX_new(void);
