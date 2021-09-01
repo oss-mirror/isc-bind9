@@ -65,7 +65,7 @@ stages:
 # This is a meta image that is used as a base for non-specific jobs
 
 .base: &base_image
-  <<: *debian_buster_amd64_image
+  <<: *debian_bullseye_amd64_image
 
 ### Job Templates
 
