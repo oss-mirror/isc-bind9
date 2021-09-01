@@ -69,15 +69,6 @@ stages:
 
 ### Job Templates
 
-.autoconf: &autoconf_job
-  <<: *base_image
-  stage: autoconf
-  script:
-    - autoreconf -fi
-  artifacts:
-    untracked: true
-    expire_in: "1 day"
-
 .setup_interfaces: &setup_interfaces
     - if [ "$(id -u)" -eq "0" ]; then
         sh -x bin/tests/system/ifconfig.sh up;
@@ -86,29 +77,6 @@ stages:
       fi
 
 ### Job Definitions
-
-# Jobs in the precheck stage
-
-autoreconf:
-  <<: *autoconf_job
-
-tarball-create:
-  stage: precheck
-  <<: *base_image
-  script:
-    - ./configure --enable-maintainer-mode
-    - make maintainer-clean
-    - autoreconf -fi
-    - ./configure --enable-maintainer-mode
-    - make -j${BUILD_PARALLEL_JOBS:-1} all V=1
-    - if test "$(git status --porcelain | grep -Ev '\?\?' | wc -l)" -gt "0"; then git status --short; exit 1; fi
-    - make -j${BUILD_PARALLEL_JOBS:-1} dist V=1
-  artifacts:
-    paths:
-      - bind-*.tar.${TARBALL_EXTENSION}
-  needs:
-    - job: autoreconf
-      artifacts: true
 
 # Respdiff test
 
@@ -133,9 +101,6 @@ respdiff:
     - make -j${BUILD_PARALLEL_JOBS:-1} V=1
     - cd ../bind-qa/bind9/respdiff
     - bash respdiff.sh -q "${PWD}/100k_mixed.txt" -c 3 -w "${PWD}/rspworkdir" "${CI_PROJECT_DIR}/refbind" "${CI_PROJECT_DIR}"
-  needs:
-    - job: tarball-create
-      artifacts: true
   artifacts:
     paths:
       - refbind
