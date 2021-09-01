@@ -86,7 +86,7 @@ respdiff:
   variables:
     CC: gcc
     CFLAGS: "${CFLAGS_COMMON} -Og"
-    BIND_BASELINE_VERSION: v9_16_20
+    BIND_BASELINE_VERSION: v9_11_24
     MAX_DISAGREEMENTS_PERCENTAGE: "0.5"
   script:
     - echo -e "\e[0Ksection_start:$(date +%s):build1[collapsed=true]\r\e[0KBuild version under test"
