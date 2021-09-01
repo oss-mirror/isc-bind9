@@ -92,7 +92,7 @@ respdiff:
     - echo -e "\e[0Ksection_start:$(date +%s):build1[collapsed=true]\r\e[0KBuild version under test"
     - autoreconf -fi
     - ./configure
-    - make -j${BUILD_PARALLEL_JOBS:-1} V=1
+    - make -j${BUILD_PARALLEL_JOBS:-1}
     - echo -e "\e[0Ksection_end:$(date +%s):build1\r\e[0K"
     - *setup_interfaces
     - git clone --depth 1 https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.isc.org/isc-private/bind-qa.git
@@ -101,7 +101,7 @@ respdiff:
     - cd refbind/
     - autoreconf -fi
     - ./configure
-    - make -j${BUILD_PARALLEL_JOBS:-1} V=1
+    - make -j${BUILD_PARALLEL_JOBS:-1}
     - echo -e "\e[0Ksection_end:$(date +%s):build2\r\e[0K"
     - cd ../bind-qa/bind9/respdiff
     - bash respdiff.sh -q "${PWD}/100k_mixed.txt" -c 3 -w "${PWD}/rspworkdir" "${CI_PROJECT_DIR}/refbind" "${CI_PROJECT_DIR}"
