@@ -5,36 +5,15 @@ variables:
   LC_ALL: C
 
   CI_REGISTRY_IMAGE: registry.gitlab.isc.org/isc-projects/images/bind9
-  CCACHE_DIR: "/ccache"
-  SOFTHSM2_CONF: "/var/tmp/softhsm2/softhsm2.conf"
 
   GIT_DEPTH: 1
   BUILD_PARALLEL_JOBS: 6
-  TEST_PARALLEL_JOBS: 6
-
-  CONFIGURE: ./configure
-  CLANG: clang-12
-  SCAN_BUILD: scan-build-12
-  ASAN_SYMBOLIZER_PATH: /usr/lib/llvm-12/bin/llvm-symbolizer
-  CLANG_FORMAT: clang-format-12
 
   CFLAGS_COMMON: -fno-omit-frame-pointer -fno-optimize-sibling-calls -O1 -g -Wall -Wextra 
-
-  # Pass run-time flags to AddressSanitizer to get core dumps on error.
-  ASAN_OPTIONS_COMMON: abort_on_error=1:disable_coredump=0:unmap_shadow_on_exit=1
-  TSAN_OPTIONS_COMMON: "disable_coredump=0 second_deadlock_stack=1 history_size=7 log_exe_name=true log_path=tsan external_symbolizer_path=/usr/lib/llvm-12/bin/llvm-symbolizer"
 
   TARBALL_EXTENSION: xz
 
   AM_COLOR_TESTS: always
-
-  WITHOUT_READLINE: "--without-readline"
-  WITH_READLINE: "--with-readline"
-  WITH_READLINE_EDITLINE: "--with-readline=editline"
-  WITH_READLINE_LIBEDIT: "--with-readline=libedit"
-  WITH_READLINE_READLINE: "--with-readline=readline"
-
-  INSTALL_PATH: "${CI_PROJECT_DIR}/.local"
 
   # In multithreaded unit tests, abort on the first failure
   CMOCKA_TEST_ABORT: 1
@@ -42,10 +21,6 @@ variables:
   # Disable pytest's "cacheprovider" plugin to prevent it from creating
   # cross-testrun files as there is no need to use that feature in CI.
   PYTEST_ADDOPTS: "-p no:cacheprovider"
-
-  # Default platforms to run "stress" tests on
-  BIND_STRESS_TEST_OS: linux
-  BIND_STRESS_TEST_ARCH: amd64
 
 stages:
   - autoconf
@@ -61,54 +36,12 @@ stages:
 
 ### Runner Tag Templates
 
-.libvirt-amd64: &libvirt_amd64
-  tags:
-    - libvirt
-    - amd64
-
 .linux-amd64: &linux_amd64
   tags:
     - linux
     - amd64
 
-.linux-stress-amd64: &linux_stress_amd64
-  tags:
-    - amd64
-    - aws
-    - linux-stress
-    - stress
-
-.linux-stress-arm64: &linux_stress_arm64
-  tags:
-    - aarch64
-    - aws
-    - linux-stress
-    - stress
-
-.freebsd-stress-amd64: &freebsd_stress_amd64
-  tags:
-    - amd64
-    - aws
-    - bsd-stress
-    - stress
-
 ### Docker Image Templates
-
-# Alpine Linux
-
-.alpine-3.14-amd64: &alpine_3_14_amd64_image
-  image: "$CI_REGISTRY_IMAGE:alpine-3.14-amd64"
-  <<: *linux_amd64
-
-# CentOS
-
-.centos-centos7-amd64: &centos_centos7_amd64_image
-  image: "$CI_REGISTRY_IMAGE:centos-centos7-amd64"
-  <<: *linux_amd64
-
-.centos-centos8-amd64: &centos_centos8_amd64_image
-  image: "$CI_REGISTRY_IMAGE:centos-centos8-amd64"
-  <<: *linux_amd64
 
 # Debian
 
@@ -124,38 +57,8 @@ stages:
   image: "$CI_REGISTRY_IMAGE-staging:debian-bullseye-amd64"
   <<: *linux_amd64
 
-.debian-bullseye-amd64cross32: &debian_bullseye_amd64cross32_image
-  image: "$CI_REGISTRY_IMAGE-staging:debian-bullseye-amd64cross32"
-  <<: *linux_amd64
-
 .debian-sid-amd64: &debian_sid_amd64_image
   image: "$CI_REGISTRY_IMAGE:debian-sid-amd64"
-  <<: *linux_amd64
-
-# openSUSE Tumbleweed
-
-.tumbleweed-latest-amd64: &tumbleweed_latest_amd64_image
-  image: "$CI_REGISTRY_IMAGE:tumbleweed-latest-amd64"
-  <<: *linux_amd64
-
-# Fedora
-
-.fedora-34-amd64: &fedora_34_amd64_image
-  image: "$CI_REGISTRY_IMAGE:fedora-34-amd64"
-  <<: *linux_amd64
-
-.fedora-34-arm64: &fedora_34_arm64_image
-  image: "$CI_REGISTRY_IMAGE:fedora-34-arm64"
-  <<: *linux_stress_arm64
-
-# Ubuntu
-
-.ubuntu-bionic-amd64: &ubuntu_bionic_amd64_image
-  image: "$CI_REGISTRY_IMAGE:ubuntu-bionic-amd64"
-  <<: *linux_amd64
-
-.ubuntu-focal-amd64: &ubuntu_focal_amd64_image
-  image: "$CI_REGISTRY_IMAGE:ubuntu-focal-amd64"
   <<: *linux_amd64
 
 # Base image
@@ -164,29 +67,7 @@ stages:
 .base: &base_image
   <<: *debian_bullseye_amd64_image
 
-### QCOW2 Image Templates
-
-.freebsd-11-amd64: &freebsd_11_amd64_image
-  image: "freebsd-11.4-x86_64"
-  <<: *libvirt_amd64
-
-.freebsd-12-amd64: &freebsd_12_amd64_image
-  image: "freebsd-12.2-x86_64"
-  <<: *libvirt_amd64
-
-.freebsd-13-amd64: &freebsd_13_amd64_image
-  image: "freebsd-13.0-x86_64"
-  <<: *libvirt_amd64
-
-.openbsd-amd64: &openbsd_amd64_image
-  image: "openbsd-6.9-x86_64"
-  <<: *libvirt_amd64
-
 ### Job Templates
-
-.precheck: &precheck_job
-  <<: *base_image
-  stage: precheck
 
 .autoconf: &autoconf_job
   <<: *base_image
@@ -196,71 +77,6 @@ stages:
   artifacts:
     untracked: true
     expire_in: "1 day"
-
-.configure: &configure
-    - ${CONFIGURE}
-      --disable-maintainer-mode
-      --enable-developer
-      --enable-option-checking=fatal
-      --enable-dnstap
-      --with-cmocka
-      --with-libxml2
-      --with-json-c
-      $EXTRA_CONFIGURE
-      || (test -s config.log && cat config.log; exit 1)
-
-.check_readline_setup: &check_readline_setup
-    - if [[ -n "${WITHOUT_READLINE}" ]]; then
-        ! grep "^#define HAVE_READLINE" config.h;
-      elif [[ -n "${WITH_READLINE}" ]]; then
-        grep -e "^#define HAVE_READLINE_READLINE"
-             -e "^#define HAVE_READLINE_LIBEDIT"
-             -e "^#define HAVE_READLINE_EDITLINE" config.h;
-      elif [[ -n "${WITH_READLINE_EDITLINE}" ]]; then
-        grep "^#define HAVE_READLINE_EDITLINE" config.h;
-      elif [[ -n "${WITH_READLINE_LIBEDIT}" ]]; then
-        grep "^#define HAVE_READLINE_LIBEDIT" config.h;
-      elif [[ -n "${WITH_READLINE_READLINE}" ]]; then
-        grep "^#define HAVE_READLINE_READLINE" config.h;
-      fi
-
-# Move the out-of-tree workspace to CI project dir to save it for use in
-# dependent jobs.
-.save_out_of_tree_workspace: &save_out_of_tree_workspace
-  - test -n "${OUT_OF_TREE_WORKSPACE}" && mv "${OUT_OF_TREE_WORKSPACE}" "${CI_PROJECT_DIR}"
-
-# Move the artifacts from the out-of-tree build job to their original
-# location (the out-of-tree workspace) and then continue work in the
-# out-of-tree workspace.
-.retrieve_out_of_tree_workspace: &retrieve_out_of_tree_workspace
-  - test -n "${OUT_OF_TREE_WORKSPACE}" && mv "$(basename "${OUT_OF_TREE_WORKSPACE}")" "${OUT_OF_TREE_WORKSPACE}"
-  - test -n "${OUT_OF_TREE_WORKSPACE}" && cd "${OUT_OF_TREE_WORKSPACE}"
-
-.build: &build_job
-  stage: build
-  before_script:
-    - test -w "${CCACHE_DIR}" && export PATH="/usr/lib/ccache:${PATH}"
-    - test -n "${OUT_OF_TREE_WORKSPACE}" && mkdir "${OUT_OF_TREE_WORKSPACE}" && cd "${OUT_OF_TREE_WORKSPACE}"
-  script:
-    - *configure
-    - *check_readline_setup
-    - make -j${BUILD_PARALLEL_JOBS:-1} -k all V=1
-    - test -z "${RUN_MAKE_INSTALL}" || make DESTDIR="${INSTALL_PATH}" install
-    - test -z "${RUN_MAKE_INSTALL}" || DESTDIR="${INSTALL_PATH}" sh util/check-make-install
-    - if [[ "${CFLAGS}" == *"-fsanitize=address"* ]]; then ( ! grep -F AddressSanitizer config.log ); fi
-    - test -z "${CROSS_COMPILATION}" || grep -F -A 1 "checking whether we are cross compiling" config.log | grep -q "result.*yes"
-    - test -z "${CROSS_COMPILATION}" || file lib/dns/gen | grep -F -q "ELF 64-bit LSB"
-    - test -z "${CROSS_COMPILATION}" || ( ! git ls-files -z --others --exclude lib/dns/gen | xargs -0 file | grep "ELF 64-bit LSB" )
-    - if test -z "${OUT_OF_TREE_WORKSPACE}" && test "$(git status --porcelain | grep -Ev '\?\?' | wc -l)" -gt "0"; then git status --short; exit 1; fi
-  after_script:
-    - *save_out_of_tree_workspace
-  needs:
-    - job: autoreconf
-      artifacts: true
-  artifacts:
-    untracked: true
-    expire_in: "1 day"
-    when: always
 
 .setup_interfaces: &setup_interfaces
     - if [ "$(id -u)" -eq "0" ]; then
