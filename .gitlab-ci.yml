@@ -98,7 +98,7 @@ respdiff:
     - *setup_interfaces
     - git clone --depth 1 https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.isc.org/isc-private/bind-qa.git
     - git clone --branch "${BIND_BASELINE_VERSION}" --depth 1 https://gitlab.isc.org/isc-projects/bind9.git refbind
-    - echo -e "\e[0Ksection_start:$(date +%s):build2[collapsed=true]\r\e[Build reference version"
+    - echo -e "\e[0Ksection_start:$(date +%s):build2[collapsed=true]\r\e[0KBuild reference version"
     - cd refbind/
     - autoreconf -fi
     - ./configure
