@@ -71,11 +71,13 @@ stages:
 ### Job Templates
 
 .setup_interfaces: &setup_interfaces
+    - echo -e "\e[0Ksection_start:$(date +%s):setup_interfaces[collapsed=true]\r\e[0KSetup networking"
     - if [ "$(id -u)" -eq "0" ]; then
         sh -x bin/tests/system/ifconfig.sh up;
       else
         sudo sh -x bin/tests/system/ifconfig.sh up;
       fi
+    - echo -e "\e[0Ksection_end:$(date +%s):setup_interfaces\r\e[0K"
 
 ### Job Definitions
 
