@@ -91,7 +91,6 @@ respdiff:
     BIND_BASELINE_VERSION: v9_11_24
     MAX_DISAGREEMENTS_PERCENTAGE: "0.5"
   script:
-    - cp -fvl /dev/urandom /dev/random
     - echo -e "\e[0Ksection_start:$(date +%s):build1[collapsed=true]\r\e[0KBuild version under test"
     - autoreconf -fi
     - ./configure
