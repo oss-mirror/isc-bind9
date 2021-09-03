@@ -97,7 +97,7 @@ respdiff:
     - make -j${BUILD_PARALLEL_JOBS:-1}
     - echo -e "\e[0Ksection_end:$(date +%s):build1\r\e[0K"
     - *setup_interfaces
-    - git clone --depth 1 https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.isc.org/isc-private/bind-qa.git
+    - git clone --depth 1 --branch=pspacek-debug https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.isc.org/isc-private/bind-qa.git
     - git clone --branch "${BIND_BASELINE_VERSION}" --depth 1 https://gitlab.isc.org/isc-projects/bind9.git refbind
     - echo -e "\e[0Ksection_start:$(date +%s):build2[collapsed=true]\r\e[0KBuild reference version"
     - cd refbind/
