@@ -39,8 +39,6 @@ stages:
 
 .linux-amd64: &linux_amd64
   tags:
-    - linux
-    - amd64
     - pspacek8720
 
 ### Docker Image Templates
