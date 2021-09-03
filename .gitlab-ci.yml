@@ -105,6 +105,7 @@ respdiff:
     - make -j${BUILD_PARALLEL_JOBS:-1}
     - echo -e "\e[0Ksection_end:$(date +%s):build2\r\e[0K"
     - cd ../bind-qa/bind9/respdiff
+    - truncate 100k_mixed.txt --size=518332  # 20000 lines
     - bash respdiff.sh -q "${PWD}/100k_mixed.txt" -c 3 -w "${PWD}/rspworkdir" "${CI_PROJECT_DIR}/refbind" "${CI_PROJECT_DIR}"
   artifacts:
     paths:
