@@ -1,4 +1,5 @@
 variables:
+  GIT_CLEAN_FLAGS: -ffdxq
   # Not normally needed, but may be if some script uses `apt-get install`.
   DEBIAN_FRONTEND: noninteractive
   # Locale settings do not affect the build, but might affect tests.
