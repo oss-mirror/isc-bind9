@@ -1817,13 +1817,19 @@ dns_dispatch_cancel(dns_dispentry_t *resp) {
 
 static inline isc_nmhandle_t *
 getentryhandle(dns_dispentry_t *resp) {
+	isc_nmhandle_t *handle = NULL;
+
 	REQUIRE(VALID_RESPONSE(resp));
 
 	if (resp->disp->socktype == isc_socktype_tcp) {
-		return (resp->disp->handle);
+		handle = resp->disp->handle;
 	} else {
-		return (resp->handle);
+		handle = resp->handle;
 	}
+
+	INSIST(handle != NULL);
+
+	return (handle);
 }
 
 isc_result_t
