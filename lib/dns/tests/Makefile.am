@@ -94,16 +94,16 @@ dnstap_test_LDADD =		\
 endif
 
 dh_test_CPPFLAGS =		\
-	$(AM_CPPFLAGS)		\
-	$(OPENSSL_CFLAGS)
+	$(OPENSSL_CFLAGS)	\
+	$(AM_CPPFLAGS)
 
 dst_test_CPPFLAGS =		\
-	$(AM_CPPFLAGS)		\
-	$(OPENSSL_CFLAGS)
+	$(OPENSSL_CFLAGS)	\
+	$(AM_CPPFLAGS)
 
 rsa_test_CPPFLAGS =		\
-	$(AM_CPPFLAGS)		\
-	$(OPENSSL_CFLAGS)
+	$(OPENSSL_CFLAGS)	\
+	$(AM_CPPFLAGS)
 
 EXTRA_DIST =			\
 	Kdh.+002+18602.key	\

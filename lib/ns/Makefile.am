@@ -40,19 +40,19 @@ libns_la_SOURCES =		\
 	update.c		\
 	xfrout.c
 
-libns_la_CPPFLAGS =				\
-	$(AM_CPPFLAGS)				\
-	$(LIBDNS_CFLAGS)			\
-	$(LIBISC_CFLAGS)			\
-	$(LIBNS_CFLAGS)				\
-	$(LIBUV_CFLAGS)				\
-	$(OPENSSL_CFLAGS)
+libns_la_CPPFLAGS =		\
+	$(AM_CPPFLAGS)		\
+	$(LIBDNS_CFLAGS)	\
+	$(LIBISC_CFLAGS)	\
+	$(LIBNS_CFLAGS)		\
+	$(OPENSSL_CFLAGS)	\
+	$(LIBUV_CFLAGS)
 
 libns_la_LIBADD =	\
 	$(LIBDNS_LIBS)	\
 	$(LIBISC_LIBS)	\
-	$(LIBUV_LIBS)	\
-	$(OPENSSL_LIBS)
+	$(OPENSSL_LIBS) \
+	$(LIBUV_LIBS)
 
 libns_la_LDFLAGS =		\
 	$(AM_LDFLAGS)		\
