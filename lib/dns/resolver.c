@@ -1908,7 +1908,7 @@ fctx_setretryinterval(fetchctx_t *fctx, unsigned int rtt) {
 	if ((fctx->options & DNS_FETCHOPT_TRYSTALE_ONTIMEOUT) != 0) {
 		uint64_t stale = isc_time_microdiff(&fctx->expires_try_stale,
 						    &now);
-		if (us > stale) {
+		if (stale != 0 && us > stale) {
 			us = stale;
 		}
 	}
