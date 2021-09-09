@@ -9505,6 +9505,13 @@ rctx_done(respctx_t *rctx, isc_result_t result) {
 	/* Cancel the query */
 	fctx_cancelquery(query, rctx->finish, rctx->no_response, false);
 
+	/*
+	 * If nobody's waiting for results, don't resend.
+	 */
+	if (ISC_LIST_EMPTY(fctx->events)) {
+		rctx->resend = false;
+	}
+
 	if (rctx->next_server) {
 		rctx_nextserver(rctx, message, addrinfo, result);
 	} else if (rctx->resend) {
