@@ -62,7 +62,8 @@
 #include <dns/tsig.h>
 #include <dns/validator.h>
 
-#define RESOLVER_TRACE 1
+/* Define for detailed resquery attach/detach logging */
+#undef RESOLVER_TRACE
 
 #define WANT_QUERYTRACE 1
 

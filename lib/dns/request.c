@@ -32,7 +32,8 @@
 #include <dns/result.h>
 #include <dns/tsig.h>
 
-#define REQ_TRACE
+/* Define for detailed request/requestmgr attach/detach logging */
+#undef REQ_TRACE
 
 #define REQUESTMGR_MAGIC      ISC_MAGIC('R', 'q', 'u', 'M')
 #define VALID_REQUESTMGR(mgr) ISC_MAGIC_VALID(mgr, REQUESTMGR_MAGIC)

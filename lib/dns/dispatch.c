@@ -36,7 +36,8 @@
 #include <dns/stats.h>
 #include <dns/types.h>
 
-#define DISPATCH_TRACE
+/* Define for detailed dispatch and dispatchmgr attach/detach logging */
+#undef DISPATCH_TRACE
 
 typedef ISC_LIST(dns_dispentry_t) dns_displist_t;
 
