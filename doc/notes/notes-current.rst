@@ -43,6 +43,10 @@ Feature Changes
 - SHA-1 CDS records are no longer used by ``dnssec-cds`` to make DS
   records. Thanks to Tony Finch. :gl:`!2946`
 
+- Zone transfers over TLS (XoT) now need "dot" Application-Layer Protocol
+  Negotiation (ALPN) tag to be negotiated, as required by the RFC 9103.
+  :gl: `#2794`
+
 Bug Fixes
 ~~~~~~~~~
 
