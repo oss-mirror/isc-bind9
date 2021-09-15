@@ -10582,6 +10582,7 @@ unlock:
 		FTRACE("created");
 		*fetchp = fetch;
 	} else {
+		dns_resolver_detach(&fetch->res);
 		isc_mem_putanddetach(&fetch->mctx, fetch, sizeof(*fetch));
 	}
 
