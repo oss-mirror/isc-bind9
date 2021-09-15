@@ -1819,8 +1819,8 @@ zone_xmlrender(dns_zone_t *zone, void *arg) {
 
 	/*
 	 * Export zone timers to the statistics channel in XML format.  For
-	 * master zones, only include the loaded time.  For slave zones, also
-	 * include the expires and refresh times.
+	 * primary zones, only include the loaded time.  For secondary
+	 * zones, also include the expires and refresh times.
 	 */
 
 	CHECK(dns_zone_getloadtime(zone, &timestamp));
@@ -2579,9 +2579,9 @@ zone_jsonrender(dns_zone_t *zone, void *arg) {
 	}
 
 	/*
-	 * Export zone timers to the statistics channel in JSON format.  For
-	 * master zones, only include the loaded time.  For slave zones, also
-	 * include the expires and refresh times.
+	 * Export zone timers to the statistics channel in JSON format.
+	 * For primary zones, only include the loaded time.  For secondary
+	 * zones, also include the expires and refresh times.
 	 */
 
 	isc_time_t timestamp;

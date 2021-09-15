@@ -2226,7 +2226,7 @@ do_next_command(char *cmdline) {
 		fprintf(stdout, "nsupdate " PACKAGE_VERSION ":\n"
 				"local address [port]      (set local "
 				"resolver)\n"
-				"server address [port]     (set master server "
+				"server address [port]     (set primary server "
 				"for zone)\n"
 				"send                      (send the update "
 				"request)\n"
@@ -3239,7 +3239,7 @@ start_update(void) {
 	/*
 	 * If we have both the zone and the servers we have enough information
 	 * to send the update straight away otherwise we need to discover
-	 * the zone and / or the master server.
+	 * the zone and / or the primary server.
 	 */
 	if (userzone != NULL && !default_servers && !usegsstsig) {
 		master_from_servers();

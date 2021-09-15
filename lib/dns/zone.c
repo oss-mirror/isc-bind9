@@ -1859,7 +1859,7 @@ dns_zone_getjournal(dns_zone_t *zone) {
  * master file (if any) is written by the server, rather than being
  * updated manually and read by the server.
  *
- * This is true for slave zones, mirror zones, stub zones, key zones,
+ * This is true for secondary zones, mirror zones, stub zones, key zones,
  * and zones that allow dynamic updates either by having an update
  * policy ("ssutable") or an "allow-update" ACL with a value other than
  * exactly "{ none; }".
@@ -2128,8 +2128,8 @@ zone_load(dns_zone_t *zone, unsigned int flags, bool locked) {
 	is_dynamic = dns_zone_isdynamic(zone, false);
 	if (zone->db != NULL && is_dynamic) {
 		/*
-		 * This is a slave, stub, or dynamically updated zone being
-		 * reloaded.  Do nothing - the database we already
+		 * This is a secondary, stub, or dynamically updated zone
+		 * being reloaded.  Do nothing - the database we already
 		 * have is guaranteed to be up-to-date.
 		 */
 		if (zone->type == dns_zone_primary && !hasraw) {
@@ -2483,7 +2483,7 @@ get_master_options(dns_zone_t *zone) {
 	if (zone->type == dns_zone_secondary || zone->type == dns_zone_mirror ||
 	    (zone->type == dns_zone_redirect && zone->masters == NULL))
 	{
-		options |= DNS_MASTER_SLAVE;
+		options |= DNS_MASTER_SECONDARY;
 	}
 	if (zone->type == dns_zone_key) {
 		options |= DNS_MASTER_KEY;
@@ -5055,8 +5055,8 @@ zone_postload(dns_zone_t *zone, dns_db_t *db, isc_time_t loadtime,
 			unsigned int oldsoacount;
 
 			/*
-			 * This is checked in zone_replacedb() for slave zones
-			 * as they don't reload from disk.
+			 * This is checked in zone_replacedb() for
+			 * secondary zones as they don't reload from disk.
 			 */
 			result = zone_get_from_db(
 				zone, zone->db, NULL, &oldsoacount, NULL,
@@ -5106,7 +5106,7 @@ zone_postload(dns_zone_t *zone, dns_db_t *db, isc_time_t loadtime,
 					      ISC_LOG_ERROR,
 					      "zone serial (%u) unchanged. "
 					      "zone may fail to transfer "
-					      "to slaves.",
+					      "to secondaries.",
 					      serial);
 			}
 		}
@@ -12823,7 +12823,7 @@ zone_notify(dns_zone_t *zone, isc_time_t *now) {
 	}
 
 	/*
-	 * Find serial and master server's name.
+	 * Find serial and primary server's name.
 	 */
 	dns_name_init(&master, NULL);
 	result = dns_rdataset_first(&soardset);
@@ -12942,7 +12942,7 @@ zone_notify(dns_zone_t *zone, isc_time_t *now) {
 		RUNTIME_CHECK(result == ISC_R_SUCCESS);
 		dns_rdata_reset(&rdata);
 		/*
-		 * Don't notify the master server unless explicitly
+		 * Don't notify the primary server unless explicitly
 		 * configured to do so.
 		 */
 		if (!DNS_ZONE_OPTION(zone, DNS_ZONEOPT_NOTIFYTOSOA) &&
@@ -13074,7 +13074,7 @@ add_opt(dns_message_t *message, uint16_t udpsize, bool reqnsid,
 /*
  * Called when stub zone update is finished.
  * Update zone refresh, retry, expire values accordingly with
- * SOA received from master, sync database to file, restart
+ * SOA received from primary, sync database to file, restart
  * zone management timer.
  */
 static void
@@ -13168,7 +13168,7 @@ stub_glue_response_cb(isc_task_t *task, isc_event_t *event) {
 		dns_zonemgr_unreachableadd(zone->zmgr, &zone->masteraddr,
 					   &zone->sourceaddr, &now);
 		dns_zone_log(zone, ISC_LOG_INFO,
-			     "could not refresh stub from master %s"
+			     "could not refresh stub from primary %s"
 			     " (source %s): %s",
 			     master, source, dns_result_totext(revent->result));
 		goto cleanup;
@@ -13224,7 +13224,7 @@ stub_glue_response_cb(isc_task_t *task, isc_event_t *event) {
 		if (dns_request_usedtcp(revent->request)) {
 			dns_zone_log(zone, ISC_LOG_INFO,
 				     "refreshing stub: truncated TCP "
-				     "response from master %s (source %s)",
+				     "response from primary %s (source %s)",
 				     master, source);
 		}
 		goto cleanup;
@@ -13237,7 +13237,7 @@ stub_glue_response_cb(isc_task_t *task, isc_event_t *event) {
 		dns_zone_log(zone, ISC_LOG_INFO,
 			     "refreshing stub: "
 			     "non-authoritative answer from "
-			     "master %s (source %s)",
+			     "primary %s (source %s)",
 			     master, source);
 		goto cleanup;
 	}
@@ -13253,7 +13253,7 @@ stub_glue_response_cb(isc_task_t *task, isc_event_t *event) {
 	if (cnamecnt != 0) {
 		dns_zone_log(zone, ISC_LOG_INFO,
 			     "refreshing stub: unexpected CNAME response "
-			     "from master %s (source %s)",
+			     "from primary %s (source %s)",
 			     master, source);
 		goto cleanup;
 	}
@@ -13261,7 +13261,7 @@ stub_glue_response_cb(isc_task_t *task, isc_event_t *event) {
 	if (addr_count == 0) {
 		dns_zone_log(zone, ISC_LOG_INFO,
 			     "refreshing stub: no %s records in response "
-			     "from master %s (source %s)",
+			     "from primary %s (source %s)",
 			     request->ipv4 ? "A" : "AAAA", master, source);
 		goto cleanup;
 	}
@@ -13331,7 +13331,7 @@ cleanup:
 }
 
 /*
- * Create and send an A or AAAA query to the master
+ * Create and send an A or AAAA query to the primary
  * server of the stub zone given.
  */
 static isc_result_t
@@ -13592,14 +13592,14 @@ stub_callback(isc_task_t *task, isc_event_t *event) {
 			DNS_ZONE_SETFLAG(zone, DNS_ZONEFLG_NOEDNS);
 			dns_zone_log(zone, ISC_LOG_DEBUG(1),
 				     "refreshing stub: timeout retrying "
-				     " without EDNS master %s (source %s)",
+				     " without EDNS primary %s (source %s)",
 				     master, source);
 			goto same_master;
 		}
 		dns_zonemgr_unreachableadd(zone->zmgr, &zone->masteraddr,
 					   &zone->sourceaddr, &now);
 		dns_zone_log(zone, ISC_LOG_INFO,
-			     "could not refresh stub from master %s"
+			     "could not refresh stub from primary %s"
 			     " (source %s): %s",
 			     master, source, dns_result_totext(revent->result));
 		goto next_master;
@@ -13646,7 +13646,7 @@ stub_callback(isc_task_t *task, isc_event_t *event) {
 		{
 			dns_zone_log(zone, ISC_LOG_DEBUG(1),
 				     "refreshing stub: rcode (%.*s) retrying "
-				     "without EDNS master %s (source %s)",
+				     "without EDNS primary %s (source %s)",
 				     (int)rb.used, rcode, master, source);
 			DNS_ZONE_SETFLAG(zone, DNS_ZONEFLG_NOEDNS);
 			goto same_master;
@@ -13666,7 +13666,7 @@ stub_callback(isc_task_t *task, isc_event_t *event) {
 		if (dns_request_usedtcp(revent->request)) {
 			dns_zone_log(zone, ISC_LOG_INFO,
 				     "refreshing stub: truncated TCP "
-				     "response from master %s (source %s)",
+				     "response from primary %s (source %s)",
 				     master, source);
 			goto next_master;
 		}
@@ -13675,13 +13675,13 @@ stub_callback(isc_task_t *task, isc_event_t *event) {
 	}
 
 	/*
-	 * If non-auth log and next master.
+	 * If non-auth log and next primary.
 	 */
 	if ((msg->flags & DNS_MESSAGEFLAG_AA) == 0) {
 		dns_zone_log(zone, ISC_LOG_INFO,
 			     "refreshing stub: "
 			     "non-authoritative answer from "
-			     "master %s (source %s)",
+			     "primary %s (source %s)",
 			     master, source);
 		goto next_master;
 	}
@@ -13695,7 +13695,7 @@ stub_callback(isc_task_t *task, isc_event_t *event) {
 	if (cnamecnt != 0) {
 		dns_zone_log(zone, ISC_LOG_INFO,
 			     "refreshing stub: unexpected CNAME response "
-			     "from master %s (source %s)",
+			     "from primary %s (source %s)",
 			     master, source);
 		goto next_master;
 	}
@@ -13703,7 +13703,7 @@ stub_callback(isc_task_t *task, isc_event_t *event) {
 	if (nscnt == 0) {
 		dns_zone_log(zone, ISC_LOG_INFO,
 			     "refreshing stub: no NS records in response "
-			     "from master %s (source %s)",
+			     "from primary %s (source %s)",
 			     master, source);
 		goto next_master;
 	}
@@ -13718,7 +13718,7 @@ stub_callback(isc_task_t *task, isc_event_t *event) {
 	if (result != ISC_R_SUCCESS) {
 		dns_zone_log(zone, ISC_LOG_INFO,
 			     "refreshing stub: unable to save NS records "
-			     "from master %s (source %s)",
+			     "from primary %s (source %s)",
 			     master, source);
 		goto next_master;
 	}
@@ -13754,7 +13754,7 @@ next_master:
 	isc_event_free(&event);
 	dns_request_destroy(&zone->request);
 	/*
-	 * Skip to next failed / untried master.
+	 * Skip to next failed / untried primary.
 	 */
 	do {
 		zone->curmaster++;
@@ -13784,7 +13784,7 @@ next_master:
 		if (!done) {
 			zone->curmaster = 0;
 			/*
-			 * Find the next failed master.
+			 * Find the next failed primary.
 			 */
 			while (zone->curmaster < zone->masterscnt &&
 			       zone->mastersok[zone->curmaster]) {
@@ -13954,7 +13954,7 @@ refresh_callback(isc_task_t *task, isc_event_t *event) {
 	}
 
 	/*
-	 * if timeout log and next master;
+	 * if timeout log and next primary
 	 */
 
 	isc_sockaddr_format(&zone->masteraddr, master, sizeof(master));
@@ -13967,7 +13967,7 @@ refresh_callback(isc_task_t *task, isc_event_t *event) {
 			DNS_ZONE_SETFLAG(zone, DNS_ZONEFLG_NOEDNS);
 			dns_zone_log(zone, ISC_LOG_DEBUG(1),
 				     "refresh: timeout retrying without EDNS "
-				     "master %s (source %s)",
+				     "primary %s (source %s)",
 				     master, source);
 			goto same_master;
 		}
@@ -13975,9 +13975,9 @@ refresh_callback(isc_task_t *task, isc_event_t *event) {
 		    !dns_request_usedtcp(revent->request)) {
 			dns_zone_log(zone, ISC_LOG_INFO,
 				     "refresh: retry limit for "
-				     "master %s exceeded (source %s)",
+				     "primary %s exceeded (source %s)",
 				     master, source);
-			/* Try with slave with TCP. */
+			/* Try with secondary with TCP. */
 			if ((zone->type == dns_zone_secondary ||
 			     zone->type == dns_zone_mirror ||
 			     zone->type == dns_zone_redirect) &&
@@ -13994,13 +13994,13 @@ refresh_callback(isc_task_t *task, isc_event_t *event) {
 				}
 				dns_zone_log(zone, ISC_LOG_DEBUG(1),
 					     "refresh: skipped tcp fallback "
-					     "as master %s (source %s) is "
+					     "as primary %s (source %s) is "
 					     "unreachable (cached)",
 					     master, source);
 			}
 		} else {
 			dns_zone_log(zone, ISC_LOG_INFO,
-				     "refresh: failure trying master "
+				     "refresh: failure trying primary "
 				     "%s (source %s): %s",
 				     master, source,
 				     dns_result_totext(revent->result));
@@ -14012,7 +14012,7 @@ refresh_callback(isc_task_t *task, isc_event_t *event) {
 	result = dns_request_getresponse(revent->request, msg, 0);
 	if (result != ISC_R_SUCCESS) {
 		dns_zone_log(zone, ISC_LOG_INFO,
-			     "refresh: failure trying master "
+			     "refresh: failure trying primary "
 			     "%s (source %s): %s",
 			     master, source, dns_result_totext(result));
 		goto next_master;
@@ -14052,7 +14052,7 @@ refresh_callback(isc_task_t *task, isc_event_t *event) {
 		{
 			dns_zone_log(zone, ISC_LOG_DEBUG(1),
 				     "refresh: rcode (%.*s) retrying without "
-				     "EDNS master %s (source %s)",
+				     "EDNS primary %s (source %s)",
 				     (int)rb.used, rcode, master, source);
 			DNS_ZONE_SETFLAG(zone, DNS_ZONEFLG_NOEDNS);
 			goto same_master;
@@ -14061,14 +14061,15 @@ refresh_callback(isc_task_t *task, isc_event_t *event) {
 		    msg->rcode == dns_rcode_badvers) {
 			dns_zone_log(zone, ISC_LOG_DEBUG(1),
 				     "refresh: rcode (%.*s) retrying without "
-				     "EDNS EXPIRE OPTION master %s (source %s)",
+				     "EDNS EXPIRE OPTION primary %s "
+				     "(source %s)",
 				     (int)rb.used, rcode, master, source);
 			DNS_ZONE_SETFLAG(zone, DNS_ZONEFLG_NOEDNS);
 			goto same_master;
 		}
 		dns_zone_log(zone, ISC_LOG_INFO,
 			     "refresh: unexpected rcode (%.*s) from "
-			     "master %s (source %s)",
+			     "primary %s (source %s)",
 			     (int)rb.used, rcode, master, source);
 		/*
 		 * Perhaps AXFR/IXFR is allowed even if SOA queries aren't.
@@ -14094,7 +14095,7 @@ refresh_callback(isc_task_t *task, isc_event_t *event) {
 			dns_zone_log(zone, ISC_LOG_INFO,
 				     "refresh: truncated UDP answer, "
 				     "initiating TCP zone xfer "
-				     "for master %s (source %s)",
+				     "for primary %s (source %s)",
 				     master, source);
 			DNS_ZONE_SETFLAG(zone, DNS_ZONEFLG_SOABEFOREAXFR);
 			goto tcp_transfer;
@@ -14103,7 +14104,7 @@ refresh_callback(isc_task_t *task, isc_event_t *event) {
 			if (dns_request_usedtcp(revent->request)) {
 				dns_zone_log(zone, ISC_LOG_INFO,
 					     "refresh: truncated TCP response "
-					     "from master %s (source %s)",
+					     "from primary %s (source %s)",
 					     master, source);
 				goto next_master;
 			}
@@ -14113,12 +14114,12 @@ refresh_callback(isc_task_t *task, isc_event_t *event) {
 	}
 
 	/*
-	 * if non-auth log and next master;
+	 * if non-auth log and next primary
 	 */
 	if ((msg->flags & DNS_MESSAGEFLAG_AA) == 0) {
 		dns_zone_log(zone, ISC_LOG_INFO,
 			     "refresh: non-authoritative answer from "
-			     "master %s (source %s)",
+			     "primary %s (source %s)",
 			     master, source);
 		goto next_master;
 	}
@@ -14134,29 +14135,29 @@ refresh_callback(isc_task_t *task, isc_event_t *event) {
 	if (cnamecnt != 0) {
 		dns_zone_log(zone, ISC_LOG_INFO,
 			     "refresh: CNAME at top of zone "
-			     "in master %s (source %s)",
+			     "in primary %s (source %s)",
 			     master, source);
 		goto next_master;
 	}
 
 	/*
-	 * if referral log and next master;
+	 * if referral log and next primary
 	 */
 	if (soacnt == 0 && soacount == 0 && nscount != 0) {
 		dns_zone_log(zone, ISC_LOG_INFO,
 			     "refresh: referral response "
-			     "from master %s (source %s)",
+			     "from primary %s (source %s)",
 			     master, source);
 		goto next_master;
 	}
 
 	/*
-	 * if nodata log and next master;
+	 * if nodata log and next primary
 	 */
 	if (soacnt == 0 && (nscount == 0 || soacount != 0)) {
 		dns_zone_log(zone, ISC_LOG_INFO,
 			     "refresh: NODATA response "
-			     "from master %s (source %s)",
+			     "from primary %s (source %s)",
 			     master, source);
 		goto next_master;
 	}
@@ -14167,7 +14168,7 @@ refresh_callback(isc_task_t *task, isc_event_t *event) {
 	if (soacnt != 1) {
 		dns_zone_log(zone, ISC_LOG_INFO,
 			     "refresh: answer SOA count (%d) != 1 "
-			     "from master %s (source %s)",
+			     "from primary %s (source %s)",
 			     soacnt, master, source);
 		goto next_master;
 	}
@@ -14182,7 +14183,7 @@ refresh_callback(isc_task_t *task, isc_event_t *event) {
 	if (result != ISC_R_SUCCESS) {
 		dns_zone_log(zone, ISC_LOG_INFO,
 			     "refresh: unable to get SOA record "
-			     "from master %s (source %s)",
+			     "from primary %s (source %s)",
 			     master, source);
 		goto next_master;
 	}
@@ -14221,7 +14222,7 @@ refresh_callback(isc_task_t *task, isc_event_t *event) {
 					    &zone->sourceaddr, &now))
 		{
 			dns_zone_log(zone, ISC_LOG_INFO,
-				     "refresh: skipping %s as master %s "
+				     "refresh: skipping %s as primary %s "
 				     "(source %s) is unreachable (cached)",
 				     (zone->type == dns_zone_secondary ||
 				      zone->type == dns_zone_mirror ||
@@ -14274,7 +14275,7 @@ refresh_callback(isc_task_t *task, isc_event_t *event) {
 		if (!DNS_ZONE_OPTION(zone, DNS_ZONEOPT_MULTIMASTER)) {
 			dns_zone_log(zone, ISC_LOG_INFO,
 				     "serial number (%u) "
-				     "received from master %s < ours (%u)",
+				     "received from primary %s < ours (%u)",
 				     soa.serial, master, oldserial);
 		} else {
 			zone_debuglog(zone, me, 1, "ahead");
@@ -14294,7 +14295,7 @@ next_master:
 	isc_event_free(&event);
 	dns_request_destroy(&zone->request);
 	/*
-	 * Skip to next failed / untried master.
+	 * Skip to next failed / untried primary.
 	 */
 	do {
 		zone->curmaster++;
@@ -14324,7 +14325,7 @@ next_master:
 			DNS_ZONE_SETFLAG(zone, DNS_ZONEFLG_USEALTXFRSRC);
 			zone->curmaster = 0;
 			/*
-			 * Find the next failed master.
+			 * Find the next failed primary.
 			 */
 			while (zone->curmaster < zone->masterscnt &&
 			       zone->mastersok[zone->curmaster]) {
@@ -14443,7 +14444,7 @@ again:
 
 	isc_netaddr_fromsockaddr(&masterip, &zone->masteraddr);
 	/*
-	 * First, look for a tsig key in the master statement, then
+	 * First, look for a tsig key in the primaries statement, then
 	 * try for a server key.
 	 */
 	if ((zone->masterkeynames != NULL) &&
@@ -14651,7 +14652,7 @@ skip_master:
 		dns_message_detach(&message);
 	}
 	/*
-	 * Skip to next failed / untried master.
+	 * Skip to next failed / untried primary.
 	 */
 	do {
 		zone->curmaster++;
@@ -14774,7 +14775,7 @@ ns_query(dns_zone_t *zone, dns_rdataset_t *soardataset, dns_stub_t *stub) {
 
 	isc_netaddr_fromsockaddr(&masterip, &zone->masteraddr);
 	/*
-	 * First, look for a tsig key in the master statement, then
+	 * First, look for a tsig key in the primaries statement, then
 	 * try for a server key.
 	 */
 	if ((zone->masterkeynames != NULL) &&
@@ -15482,7 +15483,7 @@ dns_zone_notifyreceive(dns_zone_t *zone, isc_sockaddr_t *from,
 	}
 
 	/*
-	 * If we are a master zone just succeed.
+	 * If we are a primary zone just succeed.
 	 */
 	if (zone->type == dns_zone_primary) {
 		UNLOCK_ZONE(zone);
@@ -15522,7 +15523,7 @@ dns_zone_notifyreceive(dns_zone_t *zone, isc_sockaddr_t *from,
 	} else if (i >= zone->masterscnt) {
 		UNLOCK_ZONE(zone);
 		dns_zone_log(zone, ISC_LOG_INFO,
-			     "refused notify from non-master: %s", fromtext);
+			     "refused notify from non-primary: %s", fromtext);
 		inc_stats(zone, dns_zonestatscounter_notifyrej);
 		return (DNS_R_REFUSED);
 	}
@@ -17323,7 +17324,7 @@ zone_replacedb(dns_zone_t *zone, dns_db_t *db, bool dump) {
 	dns_db_currentversion(db, &ver);
 
 	/*
-	 * The initial version of a slave zone is always dumped;
+	 * The initial version of a secondary zone is always dumped;
 	 * subsequent versions may be journaled instead if this
 	 * is enabled in the configuration.
 	 */
@@ -17344,7 +17345,7 @@ zone_replacedb(dns_zone_t *zone, dns_db_t *db, bool dump) {
 		}
 
 		/*
-		 * This is checked in zone_postload() for master zones.
+		 * This is checked in zone_postload() for primary zones.
 		 */
 		result = zone_get_from_db(zone, zone->db, NULL, &soacount, NULL,
 					  &oldserial, NULL, NULL, NULL, NULL,
@@ -17671,7 +17672,7 @@ again:
 	default:
 	next_master:
 		/*
-		 * Skip to next failed / untried master.
+		 * Skip to next failed / untried primary.
 		 */
 		do {
 			zone->curmaster++;
@@ -17988,7 +17989,7 @@ got_transfer_quota(isc_task_t *task, isc_event_t *event) {
 		isc_sockaddr_format(&zone->sourceaddr, source, sizeof(source));
 		dns_zone_logc(zone, DNS_LOGCATEGORY_XFER_IN, ISC_LOG_INFO,
 			      "got_transfer_quota: skipping zone transfer as "
-			      "master %s (source %s) is unreachable (cached)",
+			      "primary %s (source %s) is unreachable (cached)",
 			      master, source);
 		CHECK(ISC_R_CANCELED);
 	}
@@ -18060,7 +18061,7 @@ got_transfer_quota(isc_task_t *task, isc_event_t *event) {
 	result = ISC_R_NOTFOUND;
 
 	/*
-	 * First, look for a tsig key in the master statement, then
+	 * First, look for a tsig key in the primaries statement, then
 	 * try for a server key.
 	 */
 	if ((zone->masterkeynames != NULL) &&
@@ -18209,7 +18210,7 @@ sendtomaster(dns_forward_t *forward) {
 	 * Always use TCP regardless of whether the original update
 	 * used TCP.
 	 * XXX The timeout may but a bit small if we are far down a
-	 * transfer graph and the master has to try several masters.
+	 * transfer graph and have to try several primaries.
 	 */
 	switch (isc_sockaddr_pf(&forward->addr)) {
 	case PF_INET:
@@ -19256,7 +19257,7 @@ zmgr_resume_xfrs(dns_zonemgr_t *zmgr, bool multi) {
 			 * Not enough quota.  This is probably the per-server
 			 * quota, because we usually get called when a unit of
 			 * global quota has just been freed.  Try the next
-			 * zone, it may succeed if it uses another master.
+			 * zone, it may succeed if it uses another primary.
 			 */
 			continue;
 		} else {
@@ -19312,7 +19313,7 @@ zmgr_start_xfrin_ifquota(dns_zonemgr_t *zmgr, dns_zone_t *zone) {
 	/*
 	 * Determine the total maximum number of simultaneous
 	 * transfers allowed, and the maximum for this specific
-	 * master.
+	 * primary.
 	 */
 	maxtransfersin = zmgr->transfersin;
 	maxtransfersperns = zmgr->transfersperns;
@@ -19322,9 +19323,9 @@ zmgr_start_xfrin_ifquota(dns_zonemgr_t *zmgr, dns_zone_t *zone) {
 
 	/*
 	 * Count the total number of transfers that are in progress,
-	 * and the number of transfers in progress from this master.
+	 * and the number of transfers in progress from this primary.
 	 * We linearly scan a list of all transfers; if this turns
-	 * out to be too slow, we could hash on the master address.
+	 * out to be too slow, we could hash on the primary address.
 	 */
 	nxfrsin = nxfrsperns = 0;
 	for (x = ISC_LIST_HEAD(zmgr->xfrin_in_progress); x != NULL;

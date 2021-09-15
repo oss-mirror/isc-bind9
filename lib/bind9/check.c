@@ -3247,7 +3247,8 @@ check_zoneconf(const cfg_obj_t *zconfig, const cfg_obj_t *voptions,
 		    !signing) {
 			cfg_obj_log(obj, logctx, ISC_LOG_ERROR,
 				    "dnssec-dnskey-kskonly: requires "
-				    "inline-signing when used in slave zone");
+				    "inline-signing when used in "
+				    "secondary zone");
 			result = ISC_R_FAILURE;
 		}
 		if (res1 == ISC_R_SUCCESS && has_dnssecpolicy) {
@@ -3272,7 +3273,8 @@ check_zoneconf(const cfg_obj_t *zconfig, const cfg_obj_t *voptions,
 		    !signing) {
 			cfg_obj_log(obj, logctx, ISC_LOG_ERROR,
 				    "dnssec-loadkeys-interval: requires "
-				    "inline-signing when used in slave zone");
+				    "inline-signing when used in "
+				    "secondary zone");
 			result = ISC_R_FAILURE;
 		}
 
@@ -3282,7 +3284,8 @@ check_zoneconf(const cfg_obj_t *zconfig, const cfg_obj_t *voptions,
 		    !signing) {
 			cfg_obj_log(obj, logctx, ISC_LOG_ERROR,
 				    "update-check-ksk: requires "
-				    "inline-signing when used in slave zone");
+				    "inline-signing when used in "
+				    "secondary zone");
 			result = ISC_R_FAILURE;
 		}
 		if (res1 == ISC_R_SUCCESS && has_dnssecpolicy) {
@@ -4689,7 +4692,8 @@ check_rpz_catz(const char *rpz_catz, const cfg_obj_t *rpz_obj,
 		    strcasecmp(zonetype, "slave") != 0)
 		{
 			cfg_obj_log(nameobj, logctx, ISC_LOG_ERROR,
-				    "%s '%s'%s%s is not a master or slave zone",
+				    "%s '%s'%s%s is not a primary or "
+				    "secondary zone",
 				    rpz_catz, zonename, forview, viewname);
 			if (result == ISC_R_SUCCESS) {
 				result = ISC_R_FAILURE;

@@ -1026,7 +1026,7 @@ named_zone_configure(const cfg_obj_t *config, const cfg_obj_t *vconfig,
 	}
 
 	/*
-	 * Unless we're using some alternative database, a master zone
+	 * Unless we're using some alternative database, a primary zone
 	 * will be needing a master file.
 	 */
 	if (ztype == dns_zone_primary && cpval == default_dbtype &&
@@ -1238,7 +1238,7 @@ named_zone_configure(const cfg_obj_t *config, const cfg_obj_t *vconfig,
 	}
 
 	/*
-	 * Configure master functionality.  This applies
+	 * Configure primary zone functionality.  This applies
 	 * to primary servers (type "primary") and secondaries
 	 * acting as primaries (type "secondary"), but not to stubs.
 	 */
@@ -1757,7 +1757,7 @@ named_zone_configure(const cfg_obj_t *config, const cfg_obj_t *vconfig,
 	}
 
 	/*%
-	 * Primary master functionality.
+	 * Primary zone functionality.
 	 */
 	if (ztype == dns_zone_primary) {
 		obj = NULL;

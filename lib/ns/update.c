@@ -367,27 +367,27 @@ checkqueryacl(ns_client_t *client, dns_acl_t *queryacl, dns_name_t *zonename,
 /*%
  * Override the default acl logging when checking whether a client
  * can update the zone or whether we can forward the request to the
- * master based on IP address.
+ * primary based on IP address.
  *
  * 'message' contains the type of operation that is being attempted.
- * 'slave' indicates if this is a slave zone.  If 'acl' is NULL then
- * log at debug=3.
+ * 'secondary' indicates if this is a secondary zone.  If 'acl' is NULL
+ * then log at debug=3.
+ *
  * If the zone has no access controls configured ('acl' == NULL &&
- * 'has_ssutable == ISC_FALS) log the attempt at info, otherwise
- * at error.
+ * 'has_ssutable == ISC_FALS) log the attempt at info, otherwise at error.
  *
  * If the request was signed log that we received it.
  */
 static isc_result_t
 checkupdateacl(ns_client_t *client, dns_acl_t *acl, const char *message,
-	       dns_name_t *zonename, bool slave, bool has_ssutable) {
+	       dns_name_t *zonename, bool secondary, bool has_ssutable) {
 	char namebuf[DNS_NAME_FORMATSIZE];
 	char classbuf[DNS_RDATACLASS_FORMATSIZE];
 	int level = ISC_LOG_ERROR;
 	const char *msg = "denied";
 	isc_result_t result;
 
-	if (slave && acl == NULL) {
+	if (secondary && acl == NULL) {
 		result = DNS_R_NOTIMP;
 		level = ISC_LOG_DEBUG(3);
 		msg = "disabled";
@@ -1661,7 +1661,7 @@ ns_update_start(ns_client_t *client, isc_nmhandle_t *handle,
 	case dns_zone_dlz:
 		/*
 		 * We can now fail due to a bad signature as we now know
-		 * that we are the master.
+		 * that we are the primary.
 		 */
 		if (sigresult != ISC_R_SUCCESS) {
 			FAIL(sigresult);
@@ -2898,7 +2898,7 @@ update_action(isc_task_t *task, isc_event_t *event) {
 			unsigned int max = 0;
 
 			/*
-			 * RFC1123 doesn't allow MF and MD in master zones.
+			 * RFC1123 doesn't allow MF and MD in primary zones.
 			 */
 			if (rdata.type == dns_rdatatype_md ||
 			    rdata.type == dns_rdatatype_mf) {
@@ -3381,7 +3381,7 @@ update_action(isc_task_t *task, isc_event_t *event) {
 		dns_zone_markdirty(zone);
 
 		/*
-		 * Notify slaves of the change we just made.
+		 * Notify secondaries of the change we just made.
 		 */
 		dns_zone_notify(zone);
 
