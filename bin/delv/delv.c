@@ -47,7 +47,6 @@
 #include <dns/fixedname.h>
 #include <dns/keytable.h>
 #include <dns/keyvalues.h>
-#include <dns/lib.h>
 #include <dns/log.h>
 #include <dns/masterdump.h>
 #include <dns/name.h>
@@ -1736,12 +1735,14 @@ main(int argc, char *argv[]) {
 	argc--;
 	argv++;
 
-	result = dns_lib_init();
-	if (result != ISC_R_SUCCESS) {
-		fatal("dns_lib_init failed: %d", result);
-	}
-
 	isc_mem_create(&mctx);
+
+	dns_result_register();
+
+	result = dst_lib_init(mctx, NULL);
+	if (result != ISC_R_SUCCESS) {
+		fatal("dst_lib_init failed: %d", result);
+	}
 
 	CHECK(isc_appctx_create(mctx, &actx));
 	isc_managers_create(mctx, 1, 0, 0, &netmgr, &taskmgr, &timermgr,
@@ -1855,7 +1856,7 @@ cleanup:
 	}
 	isc_mem_detach(&mctx);
 
-	dns_lib_shutdown();
+	dst_lib_destroy();
 
 	return (0);
 }

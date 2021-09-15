@@ -37,7 +37,6 @@
 #include <dns/client.h>
 #include <dns/fixedname.h>
 #include <dns/keyvalues.h>
-#include <dns/lib.h>
 #include <dns/name.h>
 #include <dns/rdata.h>
 #include <dns/rdataset.h>
@@ -393,15 +392,15 @@ main(int argc, char *argv[]) {
 		altserveraddr = cp + 1;
 	}
 
-	result = dns_lib_init();
-	if (result != ISC_R_SUCCESS) {
-		fprintf(stderr, "dns_lib_init failed: %u\n", result);
-		exit(1);
-	}
-
 	result = ctxs_init();
 	if (result != ISC_R_SUCCESS) {
 		goto cleanup;
+	}
+
+	result = dst_lib_init(ctxs_mctx, NULL);
+	if (result != ISC_R_SUCCESS) {
+		fprintf(stderr, "dst_lib_init failed: %u\n", result);
+		exit(1);
 	}
 
 	clientopt = 0;
@@ -497,7 +496,7 @@ cleanup:
 	}
 
 	ctxs_destroy();
-	dns_lib_shutdown();
+	dst_lib_destroy();
 
 	return (0);
 }
