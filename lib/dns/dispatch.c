@@ -1189,18 +1189,16 @@ dns_dispatch_gettcp(dns_dispatchmgr_t *mgr, const isc_sockaddr_t *destaddr,
 		UNLOCK(&disp->lock);
 	}
 
-	/* We found connected dispatch */
 	if (disp_connected != NULL) {
+		/* We found connected dispatch */
 		INSIST(disp_connected->handle != NULL);
 
 		*connected = true;
 		dns_dispatch_attach(disp_connected, dispp);
 
 		result = ISC_R_SUCCESS;
-	}
-
-	/* We found matching dispatch */
-	if (disp_fallback != NULL) {
+	} else if (disp_fallback != NULL) {
+		/* We found matching dispatch */
 		*connected = false;
 
 		dns_dispatch_attach(disp_fallback, dispp);
