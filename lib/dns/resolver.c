@@ -457,6 +457,7 @@ typedef struct {
 struct dns_fetch {
 	unsigned int magic;
 	isc_mem_t *mctx;
+	dns_resolver_t *res;
 	fetchctx_t *private;
 };
 
@@ -4345,6 +4346,9 @@ fctx_destroy(fetchctx_t *fctx) {
 	}
 	dns_db_detach(&fctx->cache);
 	dns_adb_detach(&fctx->adb);
+
+	dns_resolver_detach(&fctx->res);
+
 	isc_mem_free(fctx->mctx, fctx->info);
 	isc_mem_putanddetach(&fctx->mctx, fctx, sizeof(*fctx));
 }
@@ -4637,7 +4641,6 @@ fctx_create(dns_resolver_t *res, isc_task_t *task, const dns_name_t *name,
 		.type = type,
 		.qmintype = type,
 		.options = options,
-		.res = res,
 		.task = task,
 		.bucketnum = bucketnum,
 		.dbucketnum = RES_NOBUCKET,
@@ -4648,6 +4651,8 @@ fctx_create(dns_resolver_t *res, isc_task_t *task, const dns_name_t *name,
 		.result = ISC_R_FAILURE,
 		.exitline = -1, /* sentinel */
 	};
+
+	dns_resolver_attach(res, &fctx->res);
 
 	if (qc != NULL) {
 		isc_counter_attach(qc, &fctx->qc);
@@ -4902,6 +4907,7 @@ cleanup_nameservers:
 	isc_counter_detach(&fctx->qc);
 
 cleanup_fetch:
+	dns_resolver_detach(&fctx->res);
 	isc_mem_put(mctx, fctx, sizeof(*fctx));
 
 	return (result);
@@ -10197,10 +10203,8 @@ dns_resolver_attach(dns_resolver_t *source, dns_resolver_t **targetp) {
 
 	RRTRACE(source, "attach");
 
-	LOCK(&source->lock);
 	REQUIRE(!atomic_load_acquire(&source->exiting));
 	isc_refcount_increment(&source->references);
-	UNLOCK(&source->lock);
 
 	*targetp = source;
 }
@@ -10468,7 +10472,9 @@ dns_resolver_createfetch(dns_resolver_t *res, const dns_name_t *name,
 	 * XXXRTH  use a mempool?
 	 */
 	fetch = isc_mem_get(res->mctx, sizeof(*fetch));
-	fetch->mctx = NULL;
+	*fetch = (dns_fetch_t){ 0 };
+
+	dns_resolver_attach(res, &fetch->res);
 	isc_mem_attach(res->mctx, &fetch->mctx);
 
 	bucketnum = dns_name_fullhash(name, false) % res->nbuckets;
@@ -10643,7 +10649,7 @@ dns_resolver_destroyfetch(dns_fetch_t **fetchp) {
 	REQUIRE(DNS_FETCH_VALID(fetch));
 	fctx = fetch->private;
 	REQUIRE(VALID_FCTX(fctx));
-	res = fctx->res;
+	res = fetch->res;
 
 	FTRACE("destroyfetch");
 
@@ -10671,6 +10677,8 @@ dns_resolver_destroyfetch(dns_fetch_t **fetchp) {
 	if (bucket_empty) {
 		empty_bucket(res);
 	}
+
+	dns_resolver_detach(&res);
 }
 
 void
