@@ -17,6 +17,7 @@
 
 #include <openssl/bn.h>
 #include <openssl/conf.h>
+#include <openssl/dh.h>
 #include <openssl/err.h>
 #include <openssl/opensslv.h>
 #include <openssl/rand.h>
@@ -444,6 +445,39 @@ isc_tlsctx_set_protocols(isc_tlsctx_t *ctx, const uint32_t tls_versions) {
 
 	(void)SSL_CTX_set_options(ctx, options);
 	(void)SSL_CTX_clear_options(ctx, clear_options);
+}
+
+bool
+isc_tlsctx_load_dhparams(isc_tlsctx_t *ctx, const char *dhparams_file) {
+	DH *dh = NULL;
+	FILE *paramfile;
+	REQUIRE(ctx != NULL);
+	REQUIRE(dhparams_file != NULL);
+	REQUIRE(*dhparams_file != '\0');
+
+	paramfile = fopen(dhparams_file, "r");
+
+	if (paramfile) {
+		int check = 0;
+		dh = PEM_read_DHparams(paramfile, NULL, NULL, NULL);
+		fclose(paramfile);
+
+		if (dh == NULL) {
+			return (false);
+		} else if (DH_check(dh, &check) != 1 || check != 0) {
+			DH_free(dh);
+			return (false);
+		}
+	} else {
+		return (false);
+	}
+
+	if (SSL_CTX_set_tmp_dh(ctx, dh) != 1) {
+		DH_free(dh);
+		return (false);
+	}
+
+	return (true);
 }
 
 isc_tls_t *
