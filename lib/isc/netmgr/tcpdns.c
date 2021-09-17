@@ -694,7 +694,6 @@ isc__nm_tcpdns_read(isc_nmhandle_t *handle, isc_nm_recv_cb_t cb, void *cbarg) {
 
 	REQUIRE(sock->type == isc_nm_tcpdnssocket);
 	REQUIRE(sock->statichandle == handle);
-	REQUIRE(!sock->recv_read);
 
 	sock->recv_cb = cb;
 	sock->recv_cbarg = cbarg;
