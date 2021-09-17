@@ -1,3 +1,6 @@
+5723.	[bug]		Address potential dead lock when checking zone
+			content consistency. [GL #2908]
+
 5722.	[bug]		Preserve the contents of TCPDNS and TLSDNS receive
 			buffer when growing the buffer size. [GL #2917]
 
