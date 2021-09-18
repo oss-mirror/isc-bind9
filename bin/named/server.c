@@ -4323,7 +4323,8 @@ configure_view(dns_view_t *view, dns_viewlist_t *viewlist, cfg_obj_t *config,
 
 	/* Check-names. */
 	obj = NULL;
-	result = named_checknames_get(maps, "response", &obj);
+	result = named_checknames_get(
+		maps, (const char *const[]){ "response", NULL }, &obj);
 	INSIST(result == ISC_R_SUCCESS);
 
 	str = cfg_obj_asstring(obj);

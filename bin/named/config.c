@@ -354,7 +354,7 @@ named_config_get(cfg_obj_t const *const *maps, const char *name,
 }
 
 isc_result_t
-named_checknames_get(const cfg_obj_t **maps, const char *which,
+named_checknames_get(const cfg_obj_t **maps, const char *const names[],
 		     const cfg_obj_t **obj) {
 	const cfg_listelt_t *element;
 	const cfg_obj_t *checknames;
@@ -363,7 +363,7 @@ named_checknames_get(const cfg_obj_t **maps, const char *which,
 	int i;
 
 	REQUIRE(maps != NULL);
-	REQUIRE(which != NULL);
+	REQUIRE(names != NULL);
 	REQUIRE(obj != NULL && *obj == NULL);
 
 	for (i = 0;; i++) {
@@ -385,10 +385,14 @@ named_checknames_get(const cfg_obj_t **maps, const char *which,
 			{
 				value = cfg_listelt_value(element);
 				type = cfg_tuple_get(value, "type");
-				if (strcasecmp(cfg_obj_asstring(type), which) ==
-				    0) {
-					*obj = cfg_tuple_get(value, "mode");
-					return (ISC_R_SUCCESS);
+
+				for (size_t j = 0; names[j] != NULL; j++) {
+					if (strcasecmp(cfg_obj_asstring(type),
+						       names[j]) == 0) {
+						*obj = cfg_tuple_get(value,
+								     "mode");
+						return (ISC_R_SUCCESS);
+					}
 				}
 			}
 		}

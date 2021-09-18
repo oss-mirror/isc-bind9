@@ -758,16 +758,16 @@ checknames(dns_zonetype_t ztype, const cfg_obj_t **maps,
 	switch (ztype) {
 	case dns_zone_secondary:
 	case dns_zone_mirror:
-		result = named_checknames_get(maps, "secondary", objp);
-		if (result != ISC_R_SUCCESS) {
-			result = named_checknames_get(maps, "slave", objp);
-		}
+		result = named_checknames_get(
+			maps,
+			(const char *const[]){ "slave", "secondary", NULL },
+			objp);
 		break;
 	case dns_zone_primary:
-		result = named_checknames_get(maps, "primary", objp);
-		if (result != ISC_R_SUCCESS) {
-			result = named_checknames_get(maps, "master", objp);
-		}
+		result = named_checknames_get(
+			maps,
+			(const char *const[]){ "master", "primary", NULL },
+			objp);
 		break;
 	default:
 		INSIST(0);
