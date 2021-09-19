@@ -22,5 +22,8 @@ Files: **/*.key
        CHANGES
        Makefile.*
        fuzz/*.in/*
+       doc/man/*.1in
+       doc/man/*.5in
+       doc/man/*.8in
 Copyright: Internet Systems Consortium, Inc. ("ISC")
 License: MPL-2.0
