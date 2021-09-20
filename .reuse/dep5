@@ -8,16 +8,8 @@ Files: **/*.key
        **/.gitignore
        **/Makefile.*
        **/testdata/*
-       **/win32/*
        .gitlab/*
        .github/*
-       .dir-locals.el
-       .gitattributes
-       .gitignore
-       .gitlab-ci.yml
-       .lgtm.yml
-       .pylintrc
-       .uncrustify.cfg
        AUTHORS
        CHANGES
        Makefile.*
@@ -27,3 +19,16 @@ Files: **/*.key
        doc/man/*.8in
 Copyright: Internet Systems Consortium, Inc. ("ISC")
 License: MPL-2.0
+
+Files: **/named.args
+       .clang-format
+       .clang-format.headers
+       .dir-locals.el
+       .gitattributes
+       .gitignore
+       .gitlab-ci.yml
+       .lgtm.yml
+       .pylintrc
+       .uncrustify.cfg
+Copyright: Internet Systems Consortium, Inc. ("ISC")
+License: CC0-1.0
