@@ -8,6 +8,8 @@ Files: **/*.key
        **/.gitignore
        **/Makefile.*
        **/testdata/*
+       **/*.ccache
+       **/*dig.out*
        .gitlab/*
        .github/*
        AUTHORS
@@ -19,6 +21,18 @@ Files: **/*.key
        doc/man/*.8in
 Copyright: Internet Systems Consortium, Inc. ("ISC")
 License: MPL-2.0
+
+Files: m4/libtool.m4
+       m4/ltoptions.m4
+       m4/ltsugar.m4
+       m4/ltversion.m4
+       m4/lt~obsolete.m4
+       m4/ltversion.m4
+Copyright: Free Software Foundation, Inc.
+License:
+ This file is free software; the Free Software Foundation gives unlimited
+ permission to copy and/or distribute it, with or without modifications, as long
+ as this notice is preserved.
 
 Files: **/named.args
        .clang-format
