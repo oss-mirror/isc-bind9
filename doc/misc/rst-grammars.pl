@@ -27,7 +27,7 @@ my $SECTION = shift;
 
 open (FH, "<", $FILE) or die "Can't open $FILE";
 
-print <<END
+print <<END;
 .. Copyright (C) Internet Systems Consortium, Inc. ("ISC")
 ..
 .. SPDX-License-Identifier: MPL-2.0
