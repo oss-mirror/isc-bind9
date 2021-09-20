@@ -2127,7 +2127,7 @@ bind9_check_tls_defintion(const cfg_obj_t *tlsobj, isc_log_t *logctx,
 	const char *name = cfg_obj_asstring(cfg_map_getname(tlsobj));
 	char *tmp = isc_mem_strdup(mctx, name);
 	const cfg_obj_t *tls_proto_list = NULL, *tls_key = NULL,
-			*tls_cert = NULL;
+			*tls_cert = NULL, *tls_ciphers = NULL;
 	uint32_t tls_protos = 0;
 	isc_symvalue_t symvalue;
 
@@ -2223,6 +2223,20 @@ bind9_check_tls_defintion(const cfg_obj_t *tlsobj, isc_log_t *logctx,
 			cfg_obj_log(tlsobj, logctx, ISC_LOG_ERROR,
 				    "tls '%s' does not contain any valid "
 				    "TLS protocol versions definitions",
+				    name);
+			result = ISC_R_FAILURE;
+		}
+	}
+
+	/* Check cipher list string is valid */
+	tresult = cfg_map_get(tlsobj, "ciphers", &tls_ciphers);
+	if (tresult == ISC_R_SUCCESS) {
+		const char *ciphers = cfg_obj_asstring(tls_ciphers);
+		if (!isc_tls_cipherlist_valid(ciphers)) {
+			cfg_obj_log(tls_ciphers, logctx, ISC_LOG_ERROR,
+				    "'ciphers' in the 'tls' clause '%s' is "
+				    "not a "
+				    "valid cipher list string",
 				    name);
 			result = ISC_R_FAILURE;
 		}
@@ -4393,7 +4407,8 @@ check_trust_anchor(const cfg_obj_t *key, bool managed, unsigned int *flagsp,
 		if (result == ISC_R_SUCCESS &&
 		    dns_name_equal(keyname, dns_rootname)) {
 			/*
-			 * Flag any use of a root key, regardless of content.
+			 * Flag any use of a root key, regardless of
+			 * content.
 			 */
 			*flagsp |= (managed ? ROOT_KSK_MANAGED
 					    : ROOT_KSK_STATIC);
@@ -4449,7 +4464,8 @@ check_trust_anchor(const cfg_obj_t *key, bool managed, unsigned int *flagsp,
 		if (result == ISC_R_SUCCESS &&
 		    dns_name_equal(keyname, dns_rootname)) {
 			/*
-			 * Flag any use of a root key, regardless of content.
+			 * Flag any use of a root key, regardless of
+			 * content.
 			 */
 			*flagsp |= (managed ? ROOT_KSK_MANAGED
 					    : ROOT_KSK_STATIC);
@@ -4730,7 +4746,8 @@ check_ta_conflicts(const cfg_obj_t *global_ta, const cfg_obj_t *view_ta,
 
 	/*
 	 * Next, ensure that there's no conflict between the
-	 * static keys and the trust-anchors configured with "initial-key".
+	 * static keys and the trust-anchors configured with
+	 * "initial-key".
 	 */
 	for (elt = cfg_list_first(global_ta); elt != NULL;
 	     elt = cfg_list_next(elt)) {
@@ -4834,7 +4851,8 @@ check_rpz_catz(const char *rpz_catz, const cfg_obj_t *rpz_obj,
 		    strcasecmp(zonetype, "slave") != 0)
 		{
 			cfg_obj_log(nameobj, logctx, ISC_LOG_ERROR,
-				    "%s '%s'%s%s is not a master or slave zone",
+				    "%s '%s'%s%s is not a master or "
+				    "slave zone",
 				    rpz_catz, zonename, forview, viewname);
 			if (result == ISC_R_SUCCESS) {
 				result = ISC_R_FAILURE;
@@ -4876,7 +4894,8 @@ check_catz(const cfg_obj_t *catz_obj, const char *viewname, isc_log_t *logctx) {
 				cfg_obj_log(nameobj, logctx, ISC_LOG_ERROR,
 					    "catalog zone '%s'%s%s: "
 					    "'default-primaries' and "
-					    "'default-masters' can not be both "
+					    "'default-masters' can not be "
+					    "both "
 					    "defined",
 					    zonename, forview, viewname);
 				result = ISC_R_FAILURE;
@@ -4889,7 +4908,8 @@ check_catz(const cfg_obj_t *catz_obj, const char *viewname, isc_log_t *logctx) {
 }
 
 /*%
- * Data structure used for the 'callback_data' argument to check_one_plugin().
+ * Data structure used for the 'callback_data' argument to
+ * check_one_plugin().
  */
 struct check_one_plugin_data {
 	isc_mem_t *mctx;
@@ -4899,11 +4919,11 @@ struct check_one_plugin_data {
 };
 
 /*%
- * A callback for the cfg_pluginlist_foreach() call in check_viewconf() below.
- * Since the point is to check configuration of all plugins even when
- * processing some of them fails, always return ISC_R_SUCCESS and indicate any
- * check failures through the 'check_result' variable passed in via the
- * 'callback_data' structure.
+ * A callback for the cfg_pluginlist_foreach() call in check_viewconf()
+ * below. Since the point is to check configuration of all plugins even
+ * when processing some of them fails, always return ISC_R_SUCCESS and
+ * indicate any check failures through the 'check_result' variable
+ * passed in via the 'callback_data' structure.
  */
 static isc_result_t
 check_one_plugin(const cfg_obj_t *config, const cfg_obj_t *obj,
@@ -4958,7 +4978,8 @@ check_dnstap(const cfg_obj_t *voptions, const cfg_obj_t *config,
 		}
 		if (obj != NULL) {
 			cfg_obj_log(obj, logctx, ISC_LOG_ERROR,
-				    "'dnstap-output' must be set if 'dnstap' "
+				    "'dnstap-output' must be set if "
+				    "'dnstap' "
 				    "is set");
 			return (ISC_R_FAILURE);
 		}
@@ -5197,7 +5218,8 @@ check_viewconf(const cfg_obj_t *config, const cfg_obj_t *voptions,
 			if ((flags & ROOT_KSK_STATIC) != 0) {
 				cfg_obj_log(check_keys[i], logctx,
 					    ISC_LOG_WARNING,
-					    "trusted-keys entry for the root "
+					    "trusted-keys entry for the "
+					    "root "
 					    "zone WILL FAIL after key "
 					    "rollover - use trust-anchors "
 					    "with initial-key "
@@ -5209,7 +5231,8 @@ check_viewconf(const cfg_obj_t *config, const cfg_obj_t *voptions,
 	}
 
 	/*
-	 * Check dnssec/managed-keys. (Only one or the other can be used.)
+	 * Check dnssec/managed-keys. (Only one or the other can be
+	 * used.)
 	 */
 	if ((view_mkeys != NULL || global_mkeys != NULL) &&
 	    (view_ta != NULL || global_ta != NULL))
@@ -5265,8 +5288,10 @@ check_viewconf(const cfg_obj_t *config, const cfg_obj_t *voptions,
 			    (flags & ROOT_KSK_2017) == 0) {
 				cfg_obj_log(check_keys[i], logctx,
 					    ISC_LOG_WARNING,
-					    "initial-key entry for the root "
-					    "zone uses the 2010 key without "
+					    "initial-key entry for the "
+					    "root "
+					    "zone uses the 2010 key "
+					    "without "
 					    "the updated 2017 key");
 			}
 
@@ -5595,7 +5620,8 @@ bind9_check_controls(const cfg_obj_t *config, isc_log_t *logctx,
 			tresult = isc_sockaddr_frompath(&addr, path);
 			if (tresult == ISC_R_NOSPACE) {
 				cfg_obj_log(control, logctx, ISC_LOG_ERROR,
-					    "unix control '%s': path too long",
+					    "unix control '%s': path "
+					    "too long",
 					    path);
 				result = ISC_R_NOSPACE;
 			}
@@ -5604,7 +5630,8 @@ bind9_check_controls(const cfg_obj_t *config, isc_log_t *logctx,
 #ifdef NEED_SECURE_DIRECTORY
 				mask = (0x1 << (i * 3)); /* SEARCH */
 #else  /* ifdef NEED_SECURE_DIRECTORY */
-				mask = (0x6 << (i * 3)); /* READ + WRITE */
+				mask = (0x6 << (i * 3)); /* READ + WRITE
+							  */
 #endif /* ifdef NEED_SECURE_DIRECTORY */
 				if ((perm & mask) == mask) {
 					break;
@@ -5612,12 +5639,14 @@ bind9_check_controls(const cfg_obj_t *config, isc_log_t *logctx,
 			}
 			if (i == 0) {
 				cfg_obj_log(control, logctx, ISC_LOG_WARNING,
-					    "unix control '%s' allows access "
+					    "unix control '%s' allows "
+					    "access "
 					    "to everyone",
 					    path);
 			} else if (i == 3) {
 				cfg_obj_log(control, logctx, ISC_LOG_WARNING,
-					    "unix control '%s' allows access "
+					    "unix control '%s' allows "
+					    "access "
 					    "to nobody",
 					    path);
 			}
@@ -5692,18 +5721,20 @@ bind9_check_namedconf(const cfg_obj_t *config, bool check_plugins,
 			result = ISC_R_FAILURE;
 
 			/*
-			 * Use case insensitive comparison as not all file
-			 * systems are case sensitive. This will prevent people
-			 * using FOO.DB and foo.db on case sensitive file
-			 * systems but that shouldn't be a major issue.
+			 * Use case insensitive comparison as not all
+			 * file systems are case sensitive. This will
+			 * prevent people using FOO.DB and foo.db on
+			 * case sensitive file systems but that
+			 * shouldn't be a major issue.
 			 */
 		}
 	}
 
 	/*
 	 * Use case insensitive comparison as not all file systems are
-	 * case sensitive. This will prevent people using FOO.DB and foo.db
-	 * on case sensitive file systems but that shouldn't be a major issue.
+	 * case sensitive. This will prevent people using FOO.DB and
+	 * foo.db on case sensitive file systems but that shouldn't be a
+	 * major issue.
 	 */
 	tresult = isc_symtab_create(mctx, 100, NULL, NULL, false, &files);
 	if (tresult != ISC_R_SUCCESS) {
@@ -5809,7 +5840,8 @@ bind9_check_namedconf(const cfg_obj_t *config, bool check_plugins,
 				    vclass == dns_rdataclass_in))
 			{
 				cfg_obj_log(view, logctx, ISC_LOG_ERROR,
-					    "attempt to redefine builtin view "
+					    "attempt to redefine "
+					    "builtin view "
 					    "'%s'",
 					    key);
 				result = ISC_R_EXISTS;
@@ -5847,7 +5879,8 @@ bind9_check_namedconf(const cfg_obj_t *config, bool check_plugins,
 							    ISC_LOG_ERROR,
 							    "attempt to "
 							    "redefine "
-							    "builtin acl '%s'",
+							    "builtin acl "
+							    "'%s'",
 							    aclname);
 						result = ISC_R_FAILURE;
 						break;
