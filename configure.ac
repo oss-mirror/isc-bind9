@@ -1059,7 +1059,8 @@ AC_COMPILE_IFELSE(
 AC_MSG_CHECKING([for st_mtim.tv_nsec])
 AC_COMPILE_IFELSE(
   [AC_LANG_PROGRAM(
-     [[#include <sys/fcntl.h>]],
+     [[#include <sys/types.h>
+       #include <sys/stat.h>]],
      [[struct stat s;
        return(s.st_mtim.tv_nsec);
       ]])],
