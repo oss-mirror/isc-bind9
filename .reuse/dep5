@@ -14,6 +14,7 @@ Files: **/*.key
        .github/*
        AUTHORS
        CHANGES
+       cocci/*.spatch
        Makefile.*
        fuzz/*.in/*
        doc/man/*.1in
