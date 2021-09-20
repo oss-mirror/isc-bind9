@@ -1,6 +1,7 @@
 /*
- * Copyright (C) 1997-2002, 2004, 2006, 2007, 2011-2013, 2016  Internet Systems
- * Consortium, Inc. ("ISC")
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
+ *
+ * SPDX-License-Identifier: MPL-2.0
  *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
