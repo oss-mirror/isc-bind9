@@ -11023,6 +11023,7 @@ listenelt_fromconfig(const cfg_obj_t *listener, const cfg_obj_t *config,
 		   *ciphers = NULL;
 	bool tls_prefer_server_ciphers = false,
 	     tls_prefer_server_ciphers_set = false;
+	bool tls_session_tickets = false, tls_session_tickets_set = false;
 	bool do_tls = false, no_tls = false, http = false;
 	ns_listenelt_t *delt = NULL;
 	uint32_t tls_protos = 0;
@@ -11048,6 +11049,7 @@ listenelt_fromconfig(const cfg_obj_t *listener, const cfg_obj_t *config,
 			const cfg_obj_t *tls_proto_list = NULL;
 			const cfg_obj_t *ciphers_obj = NULL;
 			const cfg_obj_t *prefer_server_ciphers_obj = NULL;
+			const cfg_obj_t *session_tickets_obj = NULL;
 
 			do_tls = true;
 
@@ -11105,6 +11107,14 @@ listenelt_fromconfig(const cfg_obj_t *listener, const cfg_obj_t *config,
 					prefer_server_ciphers_obj);
 				tls_prefer_server_ciphers_set = true;
 			}
+
+			if (cfg_map_get(tlsmap, "session-tickets",
+					&session_tickets_obj) == ISC_R_SUCCESS)
+			{
+				tls_session_tickets =
+					cfg_obj_asboolean(session_tickets_obj);
+				tls_session_tickets_set = true;
+			}
 		}
 	}
 
@@ -11116,6 +11126,8 @@ listenelt_fromconfig(const cfg_obj_t *listener, const cfg_obj_t *config,
 		.ciphers = ciphers,
 		.prefer_server_ciphers = tls_prefer_server_ciphers,
 		.prefer_server_ciphers_set = tls_prefer_server_ciphers_set,
+		.session_tickets = tls_session_tickets,
+		.session_tickets_set = tls_session_tickets_set
 	};
 
 	httpobj = cfg_tuple_get(ltup, "http");
