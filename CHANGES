@@ -1,3 +1,6 @@
+5721.	[tests]		Avoid false positive with CVE-2020-8622 regression
+			test. [GL #2915]
+
 5720.	[contrib]	Remove old-style DLZ drivers that had to be enabled
 			during compile time. [GL #2814]
 
