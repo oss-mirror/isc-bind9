@@ -1453,21 +1453,9 @@ __fctx_cancelquery(resquery_t *query, isc_time_t *finish, bool no_response,
 }
 
 static void
-fctx_cancelqueries(fetchctx_t *fctx, bool no_response, bool age_untried) {
-	resquery_t *query = NULL, *next_query = NULL;
-
-	FCTXTRACE("cancelqueries");
-
-	for (query = ISC_LIST_HEAD(fctx->queries); query != NULL;
-	     query = next_query) {
-		next_query = ISC_LIST_NEXT(query, link);
-		fctx_cancelquery(query, NULL, no_response, age_untried);
-	}
-}
-
-static void
-fctx_cleanupfinds(fetchctx_t *fctx) {
-	dns_adbfind_t *find, *next_find;
+fctx_cleanup(fetchctx_t *fctx) {
+	dns_adbfind_t *find = NULL, *next_find = NULL;
+	dns_adbaddrinfo_t *addr = NULL, *next_addr = NULL;
 
 	REQUIRE(ISC_LIST_EMPTY(fctx->queries));
 
@@ -1478,13 +1466,6 @@ fctx_cleanupfinds(fetchctx_t *fctx) {
 		dns_adb_destroyfind(&find);
 	}
 	fctx->find = NULL;
-}
-
-static void
-fctx_cleanupaltfinds(fetchctx_t *fctx) {
-	dns_adbfind_t *find, *next_find;
-
-	REQUIRE(ISC_LIST_EMPTY(fctx->queries));
 
 	for (find = ISC_LIST_HEAD(fctx->altfinds); find != NULL;
 	     find = next_find) {
@@ -1493,13 +1474,6 @@ fctx_cleanupaltfinds(fetchctx_t *fctx) {
 		dns_adb_destroyfind(&find);
 	}
 	fctx->altfind = NULL;
-}
-
-static void
-fctx_cleanupforwaddrs(fetchctx_t *fctx) {
-	dns_adbaddrinfo_t *addr, *next_addr;
-
-	REQUIRE(ISC_LIST_EMPTY(fctx->queries));
 
 	for (addr = ISC_LIST_HEAD(fctx->forwaddrs); addr != NULL;
 	     addr = next_addr) {
@@ -1507,13 +1481,6 @@ fctx_cleanupforwaddrs(fetchctx_t *fctx) {
 		ISC_LIST_UNLINK(fctx->forwaddrs, addr, publink);
 		dns_adb_freeaddrinfo(fctx->adb, &addr);
 	}
-}
-
-static void
-fctx_cleanupaltaddrs(fetchctx_t *fctx) {
-	dns_adbaddrinfo_t *addr, *next_addr;
-
-	REQUIRE(ISC_LIST_EMPTY(fctx->queries));
 
 	for (addr = ISC_LIST_HEAD(fctx->altaddrs); addr != NULL;
 	     addr = next_addr) {
@@ -1523,12 +1490,17 @@ fctx_cleanupaltaddrs(fetchctx_t *fctx) {
 	}
 }
 
-static inline void
-fctx_cleanupall(fetchctx_t *fctx) {
-	fctx_cleanupfinds(fctx);
-	fctx_cleanupaltfinds(fctx);
-	fctx_cleanupforwaddrs(fctx);
-	fctx_cleanupaltaddrs(fctx);
+static void
+fctx_cancelqueries(fetchctx_t *fctx, bool no_response, bool age_untried) {
+	resquery_t *query = NULL, *next_query = NULL;
+
+	FCTXTRACE("cancelqueries");
+
+	for (query = ISC_LIST_HEAD(fctx->queries); query != NULL;
+	     query = next_query) {
+		next_query = ISC_LIST_NEXT(query, link);
+		fctx_cancelquery(query, NULL, no_response, age_untried);
+	}
 }
 
 static void
@@ -1761,7 +1733,6 @@ fctx_done(fetchctx_t *fctx, isc_result_t result, int line) {
 	res = fctx->res;
 
 	if (result == ISC_R_SUCCESS) {
-		no_response = true;
 		if (fctx->qmin_warning != ISC_R_SUCCESS) {
 			isc_log_write(dns_lctx, DNS_LOGCATEGORY_LAME_SERVERS,
 				      DNS_LOGMODULE_RESOLVER, ISC_LOG_INFO,
@@ -1771,6 +1742,17 @@ fctx_done(fetchctx_t *fctx, isc_result_t result, int line) {
 				      fctx->info,
 				      isc_result_totext(fctx->qmin_warning));
 		}
+
+		/*
+		 * A success result indicates we got a response to a
+		 * query. That query should be canceled already. If
+		 * there still are any outstanding queries attached to the
+		 * same fctx, then those have *not* gotten a response,
+		 * so we set 'no_response' to true here: that way, when
+		 * we run fctx_cancelqueries() below, the SRTTs will
+		 * be adjusted.
+		 */
+		no_response = true;
 	} else if (result == ISC_R_TIMEDOUT) {
 		age_untried = true;
 	}
@@ -1778,6 +1760,7 @@ fctx_done(fetchctx_t *fctx, isc_result_t result, int line) {
 	fctx->qmin_warning = ISC_R_SUCCESS;
 
 	fctx_cancelqueries(fctx, no_response, age_untried);
+	fctx_cleanup(fctx);
 
 	LOCK(&res->buckets[fctx->bucketnum].lock);
 
@@ -2821,15 +2804,6 @@ resquery_connected(isc_result_t eresult, isc_region_t *region, void *arg) {
 	}
 
 	if (atomic_load_acquire(&fctx->res->exiting)) {
-		if (eresult == ISC_R_SUCCESS) {
-			/*
-			 * The reading from the socket has already started at
-			 * this point, so we need to properly cancel the reading
-			 * and then detach the final resquery_t
-			 */
-			resquery_attach(query, &(resquery_t *){ NULL });
-			dns_dispatch_cancel(query->dispentry);
-		}
 		eresult = ISC_R_SHUTTINGDOWN;
 	}
 
@@ -2841,8 +2815,7 @@ resquery_connected(isc_result_t eresult, isc_region_t *region, void *arg) {
 
 		result = resquery_send(query);
 		if (result != ISC_R_SUCCESS) {
-			FCTXTRACE("query canceled: "
-				  "resquery_send() failed; "
+			FCTXTRACE("query canceled: resquery_send() failed; "
 				  "responding");
 
 			fctx_cancelquery(query, NULL, false, false);
@@ -3976,7 +3949,7 @@ fctx_try(fetchctx_t *fctx, bool retrying, bool badcache) {
 	if (addrinfo == NULL) {
 		/* We have no more addresses.  Start over. */
 		fctx_cancelqueries(fctx, true, false);
-		fctx_cleanupall(fctx);
+		fctx_cleanup(fctx);
 		result = fctx_getaddresses(fctx, badcache);
 		if (result == DNS_R_WAIT) {
 			/*
@@ -4239,7 +4212,7 @@ resume_qmin(isc_task_t *task, isc_event_t *event) {
 		 * nameservers.
 		 */
 		fctx_cancelqueries(fctx, false, false);
-		fctx_cleanupall(fctx);
+		fctx_cleanup(fctx);
 	}
 
 	fctx_try(fctx, true, false);
@@ -4439,7 +4412,7 @@ fctx_doshutdown(isc_task_t *task, isc_event_t *event) {
 	 * with the ADB, we must do this before we lock the bucket lock.
 	 */
 	fctx_cancelqueries(fctx, false, false);
-	fctx_cleanupall(fctx);
+	fctx_cleanup(fctx);
 
 	LOCK(&res->buckets[bucketnum].lock);
 
@@ -5392,8 +5365,7 @@ validated(isc_task_t *task, isc_event_t *event) {
 		if (fctx->validator != NULL) {
 			dns_validator_send(fctx->validator);
 		} else if (sentresponse) {
-			fctx_done(fctx, result, __LINE__); /* Locks
-							      bucket. */
+			fctx_done(fctx, result, __LINE__); /* Locks bucket */
 		} else if (result == DNS_R_BROKENCHAIN) {
 			isc_result_t tresult;
 			isc_time_t expire;
@@ -5409,10 +5381,9 @@ validated(isc_task_t *task, isc_event_t *event) {
 				dns_resolver_addbadcache(res, fctx->name,
 							 fctx->type, &expire);
 			}
-			fctx_done(fctx, result, __LINE__); /* Locks
-							      bucket. */
+			fctx_done(fctx, result, __LINE__); /* Locks bucket */
 		} else {
-			fctx_try(fctx, true, true); /* Locks bucket. */
+			fctx_try(fctx, true, true); /* Locks bucket */
 		}
 
 		dns_message_detach(&message);
@@ -7754,6 +7725,7 @@ rctx_dispfail(respctx_t *rctx) {
 		 * There's no hope for this response.
 		 */
 		rctx->next_server = true;
+
 		/*
 		 * If this is a network error, mark the server as bad so
 		 * that we won't try it for this fetch again.  Also
@@ -9297,6 +9269,7 @@ static void
 rctx_nextserver(respctx_t *rctx, dns_message_t *message,
 		dns_adbaddrinfo_t *addrinfo, isc_result_t result) {
 	fetchctx_t *fctx = rctx->fctx;
+	bool retrying = true;
 
 	if (result == DNS_R_FORMERR) {
 		rctx->broken_server = DNS_R_FORMERR;
@@ -9361,13 +9334,14 @@ rctx_nextserver(respctx_t *rctx, dns_message_t *message,
 		fctx->ns_ttl = fctx->nameservers.ttl;
 		fctx->ns_ttl_ok = true;
 		fctx_cancelqueries(fctx, true, false);
-		fctx_cleanupall(fctx);
+		fctx_cleanup(fctx);
+		retrying = false;
 	}
 
 	/*
 	 * Try again.
 	 */
-	fctx_try(fctx, !rctx->get_nameservers, false);
+	fctx_try(fctx, retrying, false);
 }
 
 /*
@@ -9441,8 +9415,7 @@ rctx_chaseds(respctx_t *rctx, dns_message_t *message,
 
 	add_bad(fctx, message, addrinfo, result, rctx->broken_type);
 	fctx_cancelqueries(fctx, true, false);
-	fctx_cleanupfinds(fctx);
-	fctx_cleanupforwaddrs(fctx);
+	fctx_cleanup(fctx);
 
 	n = dns_name_countlabels(fctx->name);
 	dns_name_getlabelsequence(fctx->name, 1, n - 1, fctx->nsname);
