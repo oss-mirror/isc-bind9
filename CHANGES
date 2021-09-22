@@ -1,3 +1,6 @@
+5721.	[bug]		Handle duplicate references to the same catalog
+			zone gracefully. [GL #2916]
+
 5720.	[contrib]	Remove old-style DLZ drivers that had to be enabled
 			during compile time. [GL #2814]
 
