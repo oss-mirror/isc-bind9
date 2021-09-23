@@ -4807,6 +4807,11 @@ The following options can be specified in a ``tls`` statement:
     Enables or disables session resumption through TLS session tickets,
     as defined in RFC5077.
 
+The options described above are used to control different aspects of
+TLS functioning. Thus, most of them have no well-defined default
+values, as these depend on the cryptographic library version in use
+and system-wide cryptographic policy.
+
 There are two built-in TLS connection configurations: ``ephemeral``,
 uses a temporary key and certificate created for the current ``named``
 session only, and ``none``, which can be used when setting up an HTTP
