@@ -293,7 +293,7 @@ The following statements are supported:
         Declares communication channels to get access to ``named`` statistics.
 
     ``tls``
-        Specifies configuration information for a TLS connection, including a ``key-file``, ``cert-file``, ``ca-file``, ``dhparam-file``, ``hostname``, ``ciphers``, ``protocols``, and ``prefer-server-ciphers``.
+        Specifies configuration information for a TLS connection, including a ``key-file``, ``cert-file``, ``ca-file``, ``dhparam-file``, ``hostname``, ``ciphers``, ``protocols``, ``prefer-server-ciphers``, and ``session-tickets``.
 
     ``http``
         Specifies configuration information for an HTTP connection, including ``endponts``, ``listener-clients`` and ``streams-per-connection``.
@@ -4802,6 +4802,10 @@ The following options can be specified in a ``tls`` statement:
 
   ``prefer-server-ciphers``
     Specifies that server ciphers should be preferred over client ones.
+
+  ``session-tickets``
+    Enables or disables session resumption through TLS session tickets,
+    as defined in RFC5077.
 
 There are two built-in TLS connection configurations: ``ephemeral``,
 uses a temporary key and certificate created for the current ``named``
