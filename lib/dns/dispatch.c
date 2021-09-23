@@ -1654,6 +1654,8 @@ tcp_connected(isc_nmhandle_t *handle, isc_result_t eresult, void *arg) {
 		}
 		dispentry_detach(&resp);
 	}
+
+	dns_dispatch_detach(&disp);
 }
 
 static void
@@ -1710,6 +1712,7 @@ dns_dispatch_connect(dns_dispentry_t *resp) {
 			INSIST(ISC_LIST_EMPTY(disp->pending));
 			ISC_LIST_APPEND(disp->pending, resp, plink);
 			UNLOCK(&disp->lock);
+			dns_dispatch_attach(disp, &(dns_dispatch_t *){ NULL });
 			isc_nm_tcpdnsconnect(disp->mgr->nm, &disp->local,
 					     &disp->peer, tcp_connected, disp,
 					     resp->timeout, 0);
@@ -1829,6 +1832,7 @@ dns_dispatch_cancel(dns_dispentry_t *resp) {
 		ISC_LIST_UNLINK(resp->disp->pending, resp, plink);
 		if (resp->connected != NULL) {
 			resp->connected(ISC_R_CANCELED, NULL, resp->arg);
+			dispentry_detach(&resp);
 		}
 	} else if (ISC_LINK_LINKED(resp, alink)) {
 		ISC_LIST_UNLINK(resp->disp->active, resp, alink);
