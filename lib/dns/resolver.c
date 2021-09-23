@@ -1128,12 +1128,14 @@ munge:
 
 static inline void
 resquery_destroy(resquery_t *query) {
-	dns_resolver_t *res;
-	bool empty;
-	fetchctx_t *fctx;
+	fetchctx_t *fctx = query->fctx;
+	dns_resolver_t *res = fctx->res;
 	unsigned int bucket;
+	bool empty;
 
-	REQUIRE(!ISC_LINK_LINKED(query, link));
+	if (ISC_LINK_LINKED(query, link)) {
+		ISC_LIST_UNLINK(fctx->queries, query, link);
+	}
 
 	if (query->tsig != NULL) {
 		isc_buffer_free(&query->tsig);
@@ -1153,7 +1155,6 @@ resquery_destroy(resquery_t *query) {
 
 	isc_refcount_destroy(&query->references);
 
-	fctx = query->fctx;
 	res = fctx->res;
 	bucket = fctx->bucketnum;
 

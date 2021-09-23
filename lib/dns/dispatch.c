@@ -239,8 +239,6 @@ static void
 qid_allocate(dns_dispatchmgr_t *mgr, dns_qid_t **qidp);
 static void
 qid_destroy(isc_mem_t *mctx, dns_qid_t **qidp);
-static inline isc_nmhandle_t *
-getentryhandle(dns_dispentry_t *resp);
 static void
 startrecv(isc_nmhandle_t *handle, dns_dispatch_t *disp, dns_dispentry_t *resp);
 void
@@ -1787,8 +1785,6 @@ dns_dispatch_send(dns_dispentry_t *resp, isc_region_t *r, isc_dscp_t dscp) {
 
 	UNUSED(dscp);
 
-	handle = getentryhandle(resp);
-
 #if 0
 	/* XXX: no DSCP support */
 	if (dscp == -1) {
@@ -1803,6 +1799,12 @@ dns_dispatch_send(dns_dispentry_t *resp, isc_region_t *r, isc_dscp_t dscp) {
 	}
 #endif
 
+	if (resp->disp->socktype == isc_socktype_tcp) {
+		handle = resp->disp->handle;
+	} else {
+		handle = resp->handle;
+	}
+
 	dispentry_attach(resp, &(dns_dispentry_t *){ NULL });
 	isc_nm_send(handle, r, send_done, resp);
 }
@@ -1813,28 +1815,30 @@ dns_dispatch_cancel(dns_dispentry_t *resp) {
 
 	resp->canceled = true;
 
-	if (resp->handle) {
+	/* UDP case. */
+	if (resp->handle != NULL) {
 		isc_nm_cancelread(resp->handle);
-	} else if (resp->disp->handle != NULL) {
-		isc_nm_cancelread(resp->disp->handle);
-	}
-}
-
-static inline isc_nmhandle_t *
-getentryhandle(dns_dispentry_t *resp) {
-	isc_nmhandle_t *handle = NULL;
-
-	REQUIRE(VALID_RESPONSE(resp));
-
-	if (resp->disp->socktype == isc_socktype_tcp) {
-		handle = resp->disp->handle;
-	} else {
-		handle = resp->handle;
+		return;
 	}
 
-	INSIST(handle != NULL);
-
-	return (handle);
+	/*
+	 * TCP case. We only want to cancel if this is the last resp
+	 * listening on this TCP connection.
+	 */
+	if (ISC_LINK_LINKED(resp, plink)) {
+		ISC_LIST_UNLINK(resp->disp->pending, resp, plink);
+		if (resp->connected != NULL) {
+			resp->connected(ISC_R_CANCELED, NULL, resp->arg);
+		}
+	} else if (ISC_LINK_LINKED(resp, alink)) {
+		ISC_LIST_UNLINK(resp->disp->active, resp, alink);
+		if (ISC_LIST_EMPTY(resp->disp->active) &&
+		    resp->disp->handle != NULL) {
+			isc_nm_cancelread(resp->disp->handle);
+		} else if (resp->response != NULL) {
+			resp->response(ISC_R_CANCELED, NULL, resp->arg);
+		}
+	}
 }
 
 isc_result_t
