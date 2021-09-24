@@ -15,12 +15,12 @@
 set -e
 
 if [ -z "$SOFTHSM2_CONF" ] ; then
-	echo_i "softhsm2 configuration not found, required for test"
+	echo_i "softhsm2 configuration not set, required for test"
 	exit 1
 fi
 
 if [ -z "$SOFTHSM2_MODULE" ] ; then
-	echo_i "softhsm2 module not found, required for test"
+	echo_i "softhsm2 module not set, required for test"
 	exit 1
 fi
 
@@ -40,6 +40,11 @@ if [ -f "/var/tmp/engines/pkcs11.so" ]; then
 	echo_i "dynamic_path pkcs11.so ok"
 else
 	echo_i "pkcs11.so not found, required for test"
+	exit 1
+fi
+
+if [ -f "$SOFTHSM2_MODULE" ] ; then
+	echo_i "softhsm2 module not found, required for test"
 	exit 1
 fi
 
