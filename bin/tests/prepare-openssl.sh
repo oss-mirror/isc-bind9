@@ -26,7 +26,8 @@ cd ../../..
 OPENSSL_DIR=$(dirname "$OPENSSL_CONF")
 mkdir -p ${OPENSSL_DIR}
 echo 'openssl_conf = openssl_init' > ${OPENSSL_CONF}
-grep -v "openssl_conf = " ${SSLCNF} >> ${OPENSSL_CONF}
+# grep -v "openssl_conf = " ${SSLCNF} >> ${OPENSSL_CONF}
+cat ${SSLCNF} >> ${OPENSSL_CONF}
 cat >> ${OPENSSL_CONF} <<EOF
 
 [openssl_init]
