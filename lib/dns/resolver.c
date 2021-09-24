@@ -157,6 +157,7 @@
 
 #define US_PER_SEC  1000000U
 #define US_PER_MSEC 1000U
+#define NS_PER_US   1000U
 /*
  * The maximum time we will wait for a single query.
  */
@@ -1295,7 +1296,7 @@ __fctx_cancelquery(resquery_t *query, isc_time_t *finish, bool no_response,
 							       &query->start);
 			factor = DNS_ADB_RTTADJDEFAULT;
 
-			rttms = rtt / 1000;
+			rttms = rtt / US_PER_MSEC;
 			if (rttms < DNS_RESOLVER_QRYRTTCLASS0) {
 				inc_stats(fctx->res,
 					  dns_resstatscounter_queryrtt0);
@@ -1851,11 +1852,11 @@ fctx_setretryinterval(fetchctx_t *fctx, unsigned int rtt) {
 	 */
 	isc_time_now(&now);
 	limit = isc_time_microdiff(&fctx->expires, &now);
-	if (limit == 0) {
+	if (limit < US_PER_MSEC) {
 		isc_interval_set(&fctx->interval, 0, 0);
 	}
 
-	us = fctx->res->retryinterval * 1000;
+	us = fctx->res->retryinterval * US_PER_MSEC;
 
 	/*
 	 * Exponential backoff after the first few tries.
@@ -1889,12 +1890,12 @@ fctx_setretryinterval(fetchctx_t *fctx, unsigned int rtt) {
 
 	/*
 	 * But don't wait past the stale timeout (if any), the final
-	 * expiration of the fetch, or for more than 10 seconds.
+	 * expiration of the fetch, or for more than 10 seconds total.
 	 */
 	if ((fctx->options & DNS_FETCHOPT_TRYSTALE_ONTIMEOUT) != 0) {
 		uint64_t stale = isc_time_microdiff(&fctx->expires_try_stale,
 						    &now);
-		if (stale != 0 && us > stale) {
+		if (stale >= US_PER_MSEC && us > stale) {
 			us = stale;
 		}
 	}
@@ -1907,7 +1908,7 @@ fctx_setretryinterval(fetchctx_t *fctx, unsigned int rtt) {
 
 	seconds = us / US_PER_SEC;
 	us -= seconds * US_PER_SEC;
-	isc_interval_set(&fctx->interval, seconds, us * 1000);
+	isc_interval_set(&fctx->interval, seconds, us * NS_PER_US);
 	isc_time_nowplusinterval(&fctx->next_timeout, &fctx->interval);
 }
 
@@ -1921,7 +1922,7 @@ resquery_timeout(resquery_t *query) {
 	FCTXTRACE("timeout");
 
 	/*
-	 * If canceled, not configured for serve-stale, do nothing.
+	 * If not configured for serve-stale, do nothing.
 	 */
 	if ((fctx->options & DNS_FETCHOPT_TRYSTALE_ONTIMEOUT) == 0) {
 		return (ISC_R_SUCCESS);
@@ -1929,9 +1930,12 @@ resquery_timeout(resquery_t *query) {
 
 	/*
 	 * If we haven't reached the serve-stale timeout, do nothing.
+	 * (Note that netmgr timeouts have millisecond accuracy, so
+	 * anything less than 1000 microseconds is close enough to zero.)
 	 */
 	isc_time_now(&now);
-	if (isc_time_microdiff(&fctx->expires_try_stale, &now) > 0) {
+	timeleft = isc_time_microdiff(&fctx->expires_try_stale, &now);
+	if (timeleft >= US_PER_MSEC) {
 		return (ISC_R_SUCCESS);
 	}
 
@@ -1956,10 +1960,11 @@ resquery_timeout(resquery_t *query) {
 	UNLOCK(&fctx->res->buckets[fctx->bucketnum].lock);
 
 	/*
-	 * Resume waiting.
+	 * If the next timeout is more than 1ms in the future,
+	 * resume waiting.
 	 */
 	timeleft = isc_time_microdiff(&fctx->next_timeout, &now);
-	if (timeleft == 0) {
+	if (timeleft < US_PER_MSEC) {
 		return (ISC_R_SUCCESS);
 	}
 
@@ -7229,14 +7234,14 @@ resquery_response(isc_result_t eresult, isc_region_t *region, void *arg) {
 	fctx = query->fctx;
 	REQUIRE(VALID_FCTX(fctx));
 
+	QTRACE("response");
+
 	if (eresult == ISC_R_TIMEDOUT) {
 		result = resquery_timeout(query);
 		if (result == ISC_R_COMPLETE) {
 			return;
 		}
 	}
-
-	QTRACE("response");
 
 	if (isc_sockaddr_pf(&query->addrinfo->sockaddr) == PF_INET) {
 		inc_stats(fctx->res, dns_resstatscounter_responsev4);
@@ -7256,6 +7261,7 @@ resquery_response(isc_result_t eresult, isc_region_t *region, void *arg) {
 
 	result = rctx_timedout(&rctx);
 	if (result == ISC_R_COMPLETE) {
+		FCTXTRACE("timed out");
 		return;
 	}
 
@@ -7280,7 +7286,7 @@ resquery_response(isc_result_t eresult, isc_region_t *region, void *arg) {
 		}
 	}
 
-	if (query->tsigkey) {
+	if (query->tsigkey != NULL) {
 		result = dns_message_settsigkey(query->rmessage,
 						query->tsigkey);
 		if (result != ISC_R_SUCCESS) {
@@ -7622,6 +7628,7 @@ resquery_response(isc_result_t eresult, isc_region_t *region, void *arg) {
 	 */
 	rctx_ncache(&rctx);
 
+	FCTXTRACE("resquery_response done");
 	rctx_done(&rctx, result);
 }
 
@@ -7767,7 +7774,8 @@ rctx_timedout(respctx_t *rctx) {
 		fctx->timeouts++;
 
 		isc_time_now(&now);
-		if (isc_time_microdiff(&fctx->expires, &now) == 0) {
+		/* netmgr timeouts are accurate to the millisecond */
+		if (isc_time_microdiff(&fctx->expires, &now) < US_PER_MSEC) {
 			FCTXTRACE("stopped trying to make fetch happen");
 		} else {
 			FCTXTRACE("query timed out; no response");
@@ -8115,6 +8123,7 @@ rctx_answer(respctx_t *rctx) {
 			 */
 			rctx->broken_server = DNS_R_LAME;
 			rctx->next_server = true;
+			FCTXTRACE3("rctx_answer lame", result);
 			rctx_done(rctx, result);
 			return (ISC_R_COMPLETE);
 		}
@@ -8124,6 +8133,7 @@ rctx_answer(respctx_t *rctx) {
 		if (result == DNS_R_FORMERR) {
 			rctx->next_server = true;
 		}
+		FCTXTRACE3("rctx_answer failed", result);
 		rctx_done(rctx, result);
 		return (ISC_R_COMPLETE);
 	}
@@ -9460,7 +9470,7 @@ rctx_done(respctx_t *rctx, isc_result_t result) {
 	 */
 	dns_message_attach(query->rmessage, &message);
 
-	FCTXTRACE4("query canceled in rctx_done(); ",
+	FCTXTRACE4("query canceled in rctx_done();",
 		   rctx->no_response ? "no response" : "responding", result);
 
 #ifdef ENABLE_AFL
