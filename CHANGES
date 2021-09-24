@@ -1,3 +1,7 @@
+5723.	[bug]		Ignore the missing zones when doing a reload on a
+			catalog zone, and make sure to recreate them later on.
+			[GL #2308]
+
 5722.	[bug]		Preserve the contents of TCPDNS and TLSDNS receive
 			buffer when growing the buffer size. [GL #2917]
 

@@ -65,3 +65,6 @@ Bug Fixes
 
 - Under specific circumstances, zone transfers over TCP and TLS could be
   interrupted prematurely. This has been fixed. :gl:`#2917`
+
+- Doing a reload on a catalog zone which is referencing a missing/deleted zone
+  was causing a crash. This has been fixed. :gl:`#2308`
