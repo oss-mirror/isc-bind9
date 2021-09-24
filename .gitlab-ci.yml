@@ -8,9 +8,8 @@ variables:
   CCACHE_DIR: "/ccache"
   SOFTHSM2_CONF: "/var/tmp/softhsm2/softhsm2.conf"
   SOFTHSM2_MODULE: "/usr/lib/softhsm/libsofthsm2.so"
-  ENGINES_DIR: "/var/tmp/engines"
   OPENSSL_ENGINES: "/var/tmp/engines"
-  SSLCNF: "/etc/ssl/openssl.cnf"
+  DEFAULT_OPENSSL_CONF: "/etc/ssl/openssl.cnf"
   OPENSSL_CONF: "/var/tmp/etc/openssl.cnf"
 
   GIT_DEPTH: 1

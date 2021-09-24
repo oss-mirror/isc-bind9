@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/sh -e
 #
 # Copyright (C) Internet Systems Consortium, Inc. ("ISC")
 #
@@ -9,26 +9,27 @@
 # See the COPYRIGHT file distributed with this work for additional
 # information regarding copyright ownership.
 
-set -e
-
 # Installing OpenSC
 apt-get -y install opensc
 
-git clone https://github.com/OpenSC/libp11.git /var/tmp/libp11
-cd /var/tmp/libp11
-./bootstrap
-./configure --with-enginesdir=${ENGINES_DIR}
-make
-make install
-cd ../../..
+(
+	git clone https://github.com/OpenSC/libp11.git /var/tmp/libp11
+	cd /var/tmp/libp11
+	./bootstrap
+	./configure --with-enginesdir="${OPENSSL_ENGINES}"
+	make
+	make install
+	ldconfig
+)
 
 # Configuring OpenSSL
 OPENSSL_DIR=$(dirname "$OPENSSL_CONF")
-mkdir -p ${OPENSSL_DIR}
-echo 'openssl_conf = openssl_init' > ${OPENSSL_CONF}
-# grep -v "openssl_conf = " ${SSLCNF} >> ${OPENSSL_CONF}
-cat ${SSLCNF} >> ${OPENSSL_CONF}
-cat >> ${OPENSSL_CONF} <<EOF
+mkdir -p "${OPENSSL_DIR}"
+(
+	echo "openssl_conf = openssl_init"
+	grep -v "^openssl_conf = " "${DEFAULT_OPENSSL_CONF}"
+	# cat "${DEFAULT_OPENSSL_CONF}"
+	cat <<EOF
 
 [openssl_init]
 engines=engine_section
@@ -38,10 +39,10 @@ pkcs11 = pkcs11_section
 
 [pkcs11_section]
 engine_id = pkcs11
-dynamic_path = "${ENGINES_DIR}/pkcs11.so"
+dynamic_path = "${OPENSSL_ENGINES}/pkcs11.so"
 MODULE_PATH = "${SOFTHSM2_MODULE}"
 init = 0
 EOF
+) > "${OPENSSL_CONF}"
 
-cp ${OPENSSL_CONF} ${SSLCNF}
 exit 0
