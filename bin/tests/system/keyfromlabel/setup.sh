@@ -24,6 +24,11 @@ if [ -z "$SOFTHSM2_MODULE" ] ; then
 	exit 1
 fi
 
+if [ -z "$OPENSSL_ENGINES" ] ; then
+	echo_i "openssl engines path not set, required for test"
+	exit 1
+fi
+
 printf '%s' "${HSMPIN:-1234}" > pin
 PWD=$(pwd)
 
@@ -37,16 +42,6 @@ else
 	echo_i "pkcs11.so not found, required for test"
 	exit 1
 fi
-
-if [ -f "$SOFTHSM2_MODULE" ]; then
-	echo_i "softhsm2 module $SOFTHSM2_MODULE ok"
-else
-	echo_i "softhsm22 module $SOFTHSM2_MODULE not found, required for test"
-	exit 1
-fi
-
-
-
 
 echo_i "Initialize softhsm2 token..."
 
