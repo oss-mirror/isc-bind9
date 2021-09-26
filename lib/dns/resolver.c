@@ -10450,11 +10450,12 @@ dns_resolver_createfetch(dns_resolver_t *res, const dns_name_t *name,
 	REQUIRE(sigrdataset == NULL || !dns_rdataset_isassociated(sigrdataset));
 	REQUIRE(fetchp != NULL && *fetchp == NULL);
 
+	if (atomic_load_acquire(&res->exiting)) {
+		return (ISC_R_SHUTTINGDOWN);
+	}
+
 	log_fetch(name, type);
 
-	/*
-	 * XXXRTH  use a mempool?
-	 */
 	fetch = isc_mem_get(res->mctx, sizeof(*fetch));
 	*fetch = (dns_fetch_t){ 0 };
 
